@@ -8,30 +8,56 @@ import { isPremium } from "./subscription.js";
 /**
  * Meal analysis — the port of `analyzeMeal`.
  *
- * The OpenAI key lives in this Worker and only here. That was always the
+ * The model API key lives in this Worker and only here. That was always the
  * reason the server leg existed; the only thing that changed is which server.
  *
- * The `openai` npm package is not used: the call is one POST, and going
- * through `fetch` keeps the bundle small and the wire format visible. It does
- * mean `output_text` has to be assembled by hand — that convenience property
- * is synthesised by the SDK, not returned by the API.
+ * ---------------------------------------------------------------------------
+ * Chat Completions, not the Responses API
+ * ---------------------------------------------------------------------------
+ * The Cloud Function version used OpenAI's Responses API. This calls
+ * `/chat/completions` instead, because the default provider is now OpenRouter
+ * and OpenRouter exposes Chat Completions only. That is not a downgrade for
+ * this use: strict `json_schema` structured outputs, reasoning effort and image
+ * input are all available on it, so every property the pipeline depends on
+ * survives — including the one that matters most, that under strict mode the
+ * model emits fields in schema order, which is why `observations` is first.
+ *
+ * It is also the more portable choice: Chat Completions works against OpenAI
+ * directly too, so moving off OpenRouter is a `baseUrl` change in `config/scan`
+ * rather than a rewrite. The two parameters that differ between them are noted
+ * at their use sites.
+ *
+ * No SDK: the call is one POST, and going through `fetch` keeps the bundle
+ * small and the wire format visible.
  */
-
-const OPENAI_URL = "https://api.openai.com/v1/responses";
 
 const DEFAULTS = {
   /**
-   * `gpt-5.6-luna` — vision, structured outputs, and the cheapest of the 5.6
-   * family at $0.20/$1.20 per MTok. Published evaluations put ~99.6% of
-   * accuracy variance on model choice rather than prompt wording, so this is
-   * the field to change first if results disappoint. `gpt-5.6-terra`
-   * ($2/$12) is the accuracy upgrade.
+   * Where the model lives. OpenRouter by default; `https://api.openai.com/v1`
+   * talks to OpenAI directly. Server-side config, like the model itself, so
+   * switching provider needs no app release.
    */
-  model: "gpt-5.6-luna",
+  baseUrl: "https://openrouter.ai/api/v1",
+
+  /**
+   * `openai/gpt-5.6-luna` — vision, structured outputs, and the cheapest of the
+   * 5.6 family. Published evaluations put ~99.6% of accuracy variance on model
+   * choice rather than prompt wording, so this is the field to change first if
+   * results disappoint. `openai/gpt-5.6-terra` is the accuracy upgrade.
+   *
+   * OpenRouter requires the organisation prefix; against OpenAI directly, drop
+   * the `openai/`.
+   */
+  model: "openai/gpt-5.6-luna",
   /** Reasoning models. Low keeps the 10-second target reachable. */
   reasoningEffort: "low",
   /** Covers reasoning tokens as well as the visible answer — both are billed. */
   maxOutputTokens: 4000,
+  /**
+   * USD per million tokens, used only when the provider does not report its own
+   * cost. OpenRouter always returns `usage.cost`, which is the real figure and
+   * is preferred — model prices move faster than anyone updates a constant.
+   */
   inputPricePerMTok: 0.2,
   outputPricePerMTok: 1.2,
   monthlyQuota: 100,
@@ -124,43 +150,19 @@ export interface ScanRequest {
   description?: string;
 }
 
-interface ResponsesBody {
-  status?: string;
-  incomplete_details?: { reason?: string };
-  output_text?: string;
-  output?: Array<{
-    type: string;
-    content?: Array<{ type: string; text?: string; refusal?: string }>;
+interface ChatBody {
+  choices?: Array<{
+    finish_reason?: string;
+    message?: { content?: string | null; refusal?: string | null };
   }>;
   usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    output_tokens_details?: { reasoning_tokens?: number };
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    completion_tokens_details?: { reasoning_tokens?: number };
+    /** OpenRouter reports the real cost in USD. OpenAI does not. */
+    cost?: number;
   };
-}
-
-/** The SDK's `output_text`, assembled from the raw output items. */
-function outputText(body: ResponsesBody): string {
-  if (body.output_text) return body.output_text;
-  let text = "";
-  for (const item of body.output ?? []) {
-    if (item.type !== "message") continue;
-    for (const part of item.content ?? []) {
-      if (part.type === "output_text" && part.text) text += part.text;
-    }
-  }
-  return text;
-}
-
-/** A refusal arrives as its own content part, not as schema-shaped output. */
-function refusalOf(body: ResponsesBody): string | null {
-  for (const item of body.output ?? []) {
-    if (item.type !== "message") continue;
-    for (const part of item.content ?? []) {
-      if (part.type === "refusal") return part.refusal ?? "refused";
-    }
-  }
-  return null;
+  error?: { message?: string };
 }
 
 export async function analyzeMeal(
@@ -195,38 +197,54 @@ export async function analyzeMeal(
   try {
     const content = isPhoto
       ? [
-          { type: "input_text", text: photoPrompt(hint) },
+          { type: "text", text: photoPrompt(hint) },
           {
-            type: "input_image",
-            image_url: `data:${mimeType ?? "image/jpeg"};base64,${imageBase64}`,
-            detail: config.imageDetail,
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType ?? "image/jpeg"};base64,${imageBase64}`,
+              // "low" downsamples to a flat, small token count; portion
+              // estimation depends on exactly the fine texture that destroys.
+              detail: config.imageDetail,
+            },
           },
         ]
-      : [{ type: "input_text", text: describePrompt(description!.trim()) }];
+      : [{ type: "text", text: describePrompt(description!.trim()) }];
 
-    // The Responses API rather than Chat Completions: reasoning models take
-    // `reasoning.effort` and `max_output_tokens` here, and reject the
-    // `temperature` that a non-reasoning model would want.
-    const response = await fetch(OPENAI_URL, {
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        authorization: `Bearer ${modelApiKey(env)}`,
         "content-type": "application/json",
+        // Attribution on OpenRouter's app rankings. Ignored elsewhere.
+        "X-OpenRouter-Title": "Carbsai",
       },
       body: JSON.stringify({
         model: config.model,
-        instructions: SYSTEM_PROMPT,
-        input: [{ role: "user", content }],
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content },
+        ],
+        // OpenRouter's unified shape. Against OpenAI directly this is the
+        // top-level string `reasoning_effort` instead. These are reasoning
+        // models, and they reject the `temperature` a non-reasoning model
+        // would want — so none is sent.
         reasoning: { effort: config.reasoningEffort },
-        max_output_tokens: config.maxOutputTokens,
-        text: {
-          format: {
-            type: "json_schema",
+        // Reasoning tokens are billed as output and count against this, so it
+        // has to cover both the thinking and the answer.
+        max_tokens: config.maxOutputTokens,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
             name: "meal_analysis",
             strict: true,
             schema: MEAL_ANALYSIS_SCHEMA,
           },
         },
+        // Only route to providers that actually honour strict structured
+        // outputs and reasoning. Without this OpenRouter may fall through to an
+        // endpoint that treats the schema as a suggestion, which fails as
+        // unparseable JSON later instead of as a clear error now.
+        provider: { require_parameters: true },
       }),
     });
 
@@ -234,9 +252,12 @@ export async function analyzeMeal(
       throw new UpstreamError(response.status, await response.text());
     }
 
-    const body = (await response.json()) as ResponsesBody;
+    const body = (await response.json()) as ChatBody;
+    const choice = body.choices?.[0];
 
-    const refusal = refusalOf(body);
+    // A refusal arrives in its own field rather than as schema-shaped output,
+    // so it has to be looked for explicitly.
+    const refusal = choice?.message?.refusal;
     if (refusal) {
       console.warn("model refused", uid, refusal);
       throw new HttpsError(
@@ -248,15 +269,15 @@ export async function analyzeMeal(
     // Running out of tokens mid-object leaves nothing usable. With reasoning
     // billed as output, this most often means effort is set too high for the
     // budget rather than the meal being complicated.
-    if (body.status === "incomplete") {
-      console.error("incomplete response", uid, body.incomplete_details?.reason);
+    if (choice?.finish_reason === "length") {
+      console.error("truncated response", uid, config.maxOutputTokens);
       throw new HttpsError(
         "resource-exhausted",
         "That one took too long to work out. Try a closer photo.",
       );
     }
 
-    const text = outputText(body);
+    const text = choice?.message?.content;
     if (!text) throw new HttpsError("internal", "The analyser returned nothing.");
 
     // Guaranteed parseable under strict mode; the guard is for the window
@@ -272,12 +293,19 @@ export async function analyzeMeal(
     const analysis = sanitize(parsed);
     const latencyMs = Date.now() - started;
 
-    const inputTokens = body.usage?.input_tokens ?? 0;
-    const outputTokens = body.usage?.output_tokens ?? 0;
-    const reasoningTokens = body.usage?.output_tokens_details?.reasoning_tokens ?? 0;
+    const inputTokens = body.usage?.prompt_tokens ?? 0;
+    const outputTokens = body.usage?.completion_tokens ?? 0;
+    const reasoningTokens =
+      body.usage?.completion_tokens_details?.reasoning_tokens ?? 0;
+
+    // Prefer the provider's own figure. OpenRouter always reports it, and it is
+    // the amount actually charged — the constants below are a stale-price
+    // estimate kept only for providers that report nothing.
     const costUsd =
-      (inputTokens / 1_000_000) * config.inputPricePerMTok +
-      (outputTokens / 1_000_000) * config.outputPricePerMTok;
+      typeof body.usage?.cost === "number"
+        ? body.usage.cost
+        : (inputTokens / 1_000_000) * config.inputPricePerMTok +
+          (outputTokens / 1_000_000) * config.outputPricePerMTok;
 
     // The scan log is the eval set and the cost dashboard in one. The image is
     // never written here — only what it cost and what came back. `observations`
@@ -300,6 +328,8 @@ export async function analyzeMeal(
       outputTokens,
       reasoningTokens,
       costUsd,
+      /** Whether costUsd came from the provider or from our own price table. */
+      costReported: typeof body.usage?.cost === "number",
       latencyMs,
       createdAt: serverTimestamp(),
     });
@@ -350,6 +380,17 @@ export async function analyzeMeal(
       "We could not read that one. Try again, or describe your meal.",
     );
   }
+}
+
+/**
+ * The key for whatever [DEFAULTS.baseUrl] points at.
+ *
+ * `OPENAI_API_KEY` is the historical name and currently holds an OpenRouter
+ * key, which is a trap worth naming: set `OPENROUTER_API_KEY` instead and it
+ * takes precedence, so the secret's name can match its contents.
+ */
+function modelApiKey(env: Env): string {
+  return env.OPENROUTER_API_KEY || env.OPENAI_API_KEY;
 }
 
 class UpstreamError extends Error {

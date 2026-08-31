@@ -8,7 +8,15 @@ export interface Env {
   // ---- secrets (wrangler secret put) ----
   /** The whole service-account JSON, as one string. */
   FIREBASE_SERVICE_ACCOUNT: string;
+  /**
+   * The model API key, for whatever `config/scan.baseUrl` points at.
+   *
+   * `OPENAI_API_KEY` is the historical name and may hold an OpenRouter key;
+   * `OPENROUTER_API_KEY` takes precedence if set, so the name can match the
+   * contents. One of the two must exist.
+   */
   OPENAI_API_KEY: string;
+  OPENROUTER_API_KEY?: string;
   /** Mixed into the OTP HMAC. Never stored in Firestore. */
   OTP_PEPPER: string;
   /** Transactional email provider key. See email.ts. */

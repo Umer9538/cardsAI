@@ -79,10 +79,25 @@ The client still calls these through `cloud_functions`, using `httpsCallableFrom
 the ID token and every error-message translation in the repositories keeps working.
 The Worker's half of that bargain is speaking the callable wire protocol exactly.
 
-It uses the **Responses API**, not Chat Completions: `gpt-5.6-*` are reasoning
-models, which take `reasoning.effort` and `max_output_tokens` and **reject
-`temperature`**. Reasoning tokens are billed as output, so `maxOutputTokens` has to
-cover both.
+The provider is **OpenRouter** by default, over **Chat Completions**. The Cloud
+Function used OpenAI's Responses API; OpenRouter exposes Chat Completions only, and
+nothing the pipeline depends on is lost by moving — strict `json_schema` structured
+outputs, reasoning effort and image input are all on it, including the ordering
+property that makes `observations` work. It is also the more portable of the two:
+Chat Completions reaches OpenAI directly as well, so switching provider is a
+`config/scan.baseUrl` change rather than a rewrite.
+
+Two parameters differ between the two providers and are commented at their use site:
+OpenRouter takes `reasoning: {effort}` where OpenAI direct takes a top-level
+`reasoning_effort`, and model ids need the organisation prefix (`openai/gpt-5.6-luna`)
+on OpenRouter but not on OpenAI. These are reasoning models either way, so they
+**reject `temperature`** and none is sent. Reasoning tokens are billed as output and
+count against `max_tokens`, so it has to cover both the thinking and the answer.
+
+`provider: {require_parameters: true}` is sent so OpenRouter only routes to endpoints
+that actually honour strict structured outputs. Without it a request can fall through
+to a provider that treats the schema as a suggestion, which then fails as unparseable
+JSON rather than as a clear error.
 
 **Strict** structured outputs mean the response cannot come back unparseable. Three
 rules, each a 400 rather than a silent degradation if broken: every key in
@@ -92,10 +107,16 @@ object; optionality is a nullable type, never omission. That is why
 enforces `minimum`/`maximum`, so the physical bounds live in the schema and a
 decimal-place slip is rejected at generation.
 
-Model, reasoning effort, prices, quota and image detail come from the `config/scan`
-Firestore document, falling back per-field to `DEFAULTS` in `index.ts` — the model is
-switchable without an app release, which the PRD requires. Model names and prices
-move; verify before trusting the cost figures in the scan log.
+Base URL, model, reasoning effort, prices, quota and image detail come from the
+`config/scan` Firestore document, falling back per-field to `DEFAULTS` in `scan.ts` —
+the model and now the provider are switchable without an app release, which the PRD
+requires.
+
+Cost in the scan log prefers **the provider's own reported figure**: OpenRouter
+returns `usage.cost` on every response, and that is what was actually charged. The
+per-MTok constants are only a fallback for a provider that reports nothing, and
+`costReported` on each scan record says which of the two produced the number — so a
+stale price table can no longer quietly corrupt the cost history.
 
 ### What the prompt is built on
 
@@ -107,8 +128,8 @@ worst. Four findings shape `prompt.ts`, and each is commented at its use site:
 1. **Model choice dominates.** One study attributed ~99.6% of accuracy variance to
    architecture, with prompt effects not significant after correction. **If results
    disappoint, change `config/scan.model` before rewriting the prompt.**
-   `gpt-5.6-luna` ($0.20/$1.20) is the default; `gpt-5.6-terra` ($2/$12) is the
-   accuracy upgrade.
+   `openai/gpt-5.6-luna` is the default; `openai/gpt-5.6-terra` is the accuracy
+   upgrade. (Drop the `openai/` prefix when pointing `baseUrl` at OpenAI directly.)
 2. **Systematic underestimation that worsens with portion size** — measured bias
    slopes of −0.23 to −0.50. The prompt pushes back explicitly on large portions.
 3. **Weight first, then composition.** Deriving macros from an estimated weight

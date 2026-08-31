@@ -114,9 +114,30 @@ spirit is kept by putting the entire provider surface in one function in
 `fetch`. Brevo is the default because it was already the suggested provider and
 its free tier (300/day, no expiry) is the same over HTTP.
 
-**The OpenAI SDK is gone.** The call is one POST, so it goes through `fetch`.
-That keeps the bundle small, but it means `output_text` is assembled by hand —
-that property is synthesised by the SDK, not returned by the API.
+**The model provider is OpenRouter, over Chat Completions.** The Cloud Function
+used OpenAI's Responses API; OpenRouter exposes Chat Completions only. Strict
+`json_schema` structured outputs, reasoning effort and image input are all
+available on it, so nothing the pipeline relies on is lost — and Chat Completions
+reaches OpenAI directly too, so switching back is a `config/scan.baseUrl` change
+rather than a rewrite.
+
+Consequences worth knowing:
+
+- Model ids need the organisation prefix on OpenRouter: `openai/gpt-5.6-luna`.
+- Reasoning effort is `reasoning: {effort}` here and `reasoning_effort` against
+  OpenAI directly.
+- `provider: {require_parameters: true}` is sent so a request cannot be routed to
+  an endpoint that treats the schema as a suggestion.
+- Cost in the scan log comes from OpenRouter's own `usage.cost` when present —
+  the real charged amount — rather than from a price table that goes stale.
+  `costReported` on each record says which was used.
+
+**No SDK.** The call is one POST, so it goes through `fetch`; that keeps the
+bundle small.
+
+**The key secret is still named `OPENAI_API_KEY`** and may hold an OpenRouter
+key. Set `OPENROUTER_API_KEY` instead if you would rather the name matched the
+contents — it takes precedence when present.
 
 ## Still not done
 
