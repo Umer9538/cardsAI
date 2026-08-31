@@ -44,5 +44,10 @@ PHOTO_PUBLIC_BASE = ""
 # binding = "PHOTOS"
 # bucket_name = "carbsai-photos"
 
+# Daily food-catalogue refresh. FDC publishes a few times a year, so this is
+# about keeping the mirror from drifting, not about freshness in minutes.
+[triggers]
+crons = ["17 4 * * *"]
+
 [observability]
 enabled = true

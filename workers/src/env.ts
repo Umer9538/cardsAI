@@ -27,6 +27,12 @@ export interface Env {
    * key that has been published.
    */
   USDA_API_KEY: string;
+  /**
+   * Gates `/syncFoods`, which rewrites the whole food catalogue. Not a normal
+   * callable: any signed-in user could otherwise trigger tens of thousands of
+   * Firestore writes.
+   */
+  SYNC_KEY: string;
   /** e.g. "Carbsai <no-reply@yourdomain>" */
   EMAIL_FROM: string;
 

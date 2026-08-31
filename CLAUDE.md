@@ -368,6 +368,53 @@ genuinely have none, and a 0 kcal food in a diary is worse than no result.
 Every FDC dataset here reports **per 100g**, so that is the portion offered; the
 result screen's ½×–2× control takes it from there.
 
+### The food catalogue is mirrored into Firestore
+
+Searching FDC live was slow (1-5s) and unreliable, so the generic datasets are
+**copied into a shared `foods` collection** and searched from there. The client
+queries Firestore directly — one round trip instead of two, and Firestore's offline
+cache answers a repeat search with no connection at all.
+
+`workers/src/catalogue.ts` does the sync, driven by a **daily cron** (`17 4 * * *`)
+and by `POST /syncFoods`, which is gated on a `SYNC_KEY` header rather than a user
+session — it is an operator action, and a signed-in user triggering tens of thousands
+of Firestore writes is not a feature. Progress lives in `config/foodSync`, so each
+run takes a slice and resumes rather than restarting; FDC has no "changed since"
+filter, so the walk wraps around and re-reads continuously.
+
+Daily is deliberate and 20-second polling was rejected: Cloudflare's cron minimum is
+one minute, FDC publishes a few times a year, and 20s would be 4,320 calls a day
+against a 1000/hour key that real searches also draw on. Nothing is lost — search
+reads Firestore, so a sync is visible to every client the moment it lands.
+
+**Nutrients come back in two different shapes**, and this cost a full debugging pass:
+
+```
+search      { nutrientId: 1008, nutrientNumber: "208", value: 135 }
+list/full   { number: "208", amount: 135 }            <- no id at all
+```
+
+The *number* is the only key present in both, so that is what both extractors key on.
+Keying on the id worked against search and silently matched nothing against list —
+storing zero foods out of 394 that every one of which had complete nutrition.
+
+Search has **no full-text index**, because Firestore has none. Each food stores a
+`tokens` array — its description as lowercase words over two characters — and the
+client queries `array-contains-any`, then ranks the candidates itself in
+`FirestoreFoodRepository._score`. Two consequences:
+
+- **Whole words only, no prefixes.** Indexing prefixes would let "chick" find
+  chicken, but a three-letter token matches thousands of documents and
+  `array-contains-any` returns an arbitrary page of them rather than the best — so a
+  partial word would make results actively worse.
+- `tokenize` exists **twice**, in `catalogue.ts` and `FirestoreFoodRepository`. They
+  must agree: a token written by one and not produced by the other is a food that can
+  never be found.
+
+Search falls through three layers, each only when the one before has nothing:
+Firestore mirror → Worker/live USDA → Open Food Facts. Barcode skips straight to Open
+Food Facts.
+
 **FDC's search endpoint is genuinely flaky**, and it is not our request: roughly half
 of otherwise-identical calls return HTTP 400 carrying an *nginx* HTML error page, and
 the same query succeeds on retry. An application-level rejection would be JSON, so

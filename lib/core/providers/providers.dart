@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/firebase/firebase_auth_repository.dart';
+import '../../data/firebase/firestore_food_repository.dart';
 import '../../data/firebase/firestore_repositories.dart';
 import '../../data/firebase/firestore_subscription_repository.dart';
 import '../../data/firebase/functions_scan_repository.dart';
@@ -185,10 +186,20 @@ final notificationSettingsRepositoryProvider =
 /// which keeps the whole app runnable offline with nothing configured.
 final foodDatabaseProvider = Provider<FoodDatabaseRepository>((ref) {
   final openFoodFacts = OpenFoodFactsRepository();
-  if (ref.watch(backendProvider) == AppBackend.firebase) {
-    return WorkerFoodRepository(ref.watch(functionsProvider), openFoodFacts);
-  }
-  return openFoodFacts;
+  if (ref.watch(backendProvider) != AppBackend.firebase) return openFoodFacts;
+
+  // Three layers, cheapest and most reliable first:
+  //
+  //   Firestore mirror   ~100-200ms, offline-capable, cannot be broken by FDC
+  //   Worker -> USDA     live, 1-5s, drops one call in twelve
+  //   Open Food Facts    keyless, and where barcode goes regardless
+  //
+  // Each falls through to the next only when it has nothing to offer, so a
+  // search always answers with something.
+  return FirestoreFoodRepository(
+    ref.watch(firestoreProvider),
+    WorkerFoodRepository(ref.watch(functionsProvider), openFoodFacts),
+  );
 });
 
 /// Meal photos go to Cloudflare R2 through the Worker, not Cloud Storage.

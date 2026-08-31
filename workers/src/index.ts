@@ -1,4 +1,6 @@
 import { requireAuth } from "./auth.js";
+import { timingSafeEqual, utf8 } from "./bytes.js";
+import { syncCatalogue } from "./catalogue.js";
 import { HttpsError, callableData, json } from "./callable.js";
 import type { Env } from "./env.js";
 import { sendEmailOtp, verifyEmailOtp } from "./otp.js";
@@ -56,6 +58,17 @@ export default {
     }
     return withCors(await route(request, env));
   },
+
+  // Module syntax looks for `scheduled` on the default export. Declared as a
+  // separate named export it is simply never called, and the cron fires into
+  // nothing — silently, which is the worst way to find out.
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<void> {
+    await refreshCatalogue(env, ctx);
+  },
 };
 
 /**
@@ -70,6 +83,20 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   try {
     if (path === "health") return json({ ok: true });
+
+    // Rewrites the food catalogue. Gated by a shared key rather than a user
+    // session: this is an operator action, and a signed-in user triggering tens
+    // of thousands of Firestore writes is not a feature.
+    if (path === "syncFoods") {
+      const offered = utf8(request.headers.get("x-sync-key") ?? "");
+      const expected = utf8(env.SYNC_KEY ?? "");
+      if (expected.length === 0 || !timingSafeEqual(offered, expected)) {
+        throw new HttpsError("permission-denied", "Not allowed.");
+      }
+      const params = new URL(request.url).searchParams;
+      const budget = Number(params.get("budget")) || undefined;
+      return json(await syncCatalogue(env, budget, params.get("reset") === "1"));
+    }
 
     if (path === "photos") {
       const uid = await requireAuth(request, env);
@@ -91,6 +118,20 @@ async function route(request: Request, env: Env): Promise<Response> {
     console.error("unhandled", error instanceof Error ? error.stack : error);
     return new HttpsError("internal", "Something went wrong. Please try again.").toResponse();
   }
+}
+
+/**
+ * Daily catalogue refresh.
+ *
+ * Daily, not faster: FDC publishes these datasets a few times a year, and the
+ * key allows 1000 requests an hour that real searches also draw on. Each run
+ * takes a slice and records where it stopped, so the catalogue is walked
+ * continuously rather than rebuilt in one go.
+ */
+async function refreshCatalogue(env: Env, ctx: ExecutionContext): Promise<void> {
+  ctx.waitUntil(
+    syncCatalogue(env).catch((error) => console.error("scheduled sync failed", error)),
+  );
 }
 
 function withCors(response: Response): Response {
