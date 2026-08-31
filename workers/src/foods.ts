@@ -38,6 +38,47 @@ const NUTRIENTS = {
   sugar: 2000,
 } as const;
 
+/**
+ * FDC's search endpoint fails intermittently, and it is not our request.
+ *
+ * Roughly half of otherwise-identical calls come back HTTP 400 carrying an
+ * *nginx* HTML error page rather than a JSON error — and the same query
+ * succeeds on immediate retry. An application-level rejection would be JSON, so
+ * this is the edge dropping requests, not a malformed URL.
+ *
+ * Measured against the live API, in order of what was tried:
+ *
+ *     1 attempt                     ~50% failed
+ *     3 attempts                    ~22% failed
+ *     5 attempts, %20 encoding       ~8% failed  (11/12), 1.0-4.7s
+ *
+ * The last two changes went in together, so how much each contributed is not
+ * separable — `%20` was adopted because it is unambiguous, not because it was
+ * proven to help.
+ *
+ * Five is where this stops. The delays stay small deliberately: this sits
+ * behind someone typing in a search box, and a slow answer is its own kind of
+ * failure. The residual few percent is caught by `WorkerFoodRepository`, which
+ * falls back to Open Food Facts, so a search always returns something.
+ *
+ * 429 is never retried — that is a real rate limit and hammering it is rude.
+ */
+const ATTEMPTS = 5;
+const BACKOFF_MS = [150, 300, 600, 1000];
+
+async function fetchSearch(url: string): Promise<Response> {
+  let last!: Response;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    last = await fetch(url, { headers: { accept: "application/json" } });
+    if (last.ok || last.status === 429) return last;
+    if (attempt < ATTEMPTS - 1) {
+      console.warn(`fdc search ${last.status}, retrying (${attempt + 1}/${ATTEMPTS - 1})`);
+      await new Promise((resolve) => setTimeout(resolve, BACKOFF_MS[attempt]));
+    }
+  }
+  return last;
+}
+
 interface FdcNutrient {
   nutrientId?: number;
   unitName?: string;
@@ -65,20 +106,29 @@ export async function searchFoods(
     throw new HttpsError("failed-precondition", "Food search is not configured yet.");
   }
 
-  const url = new URL(BASE);
-  url.searchParams.set("api_key", env.USDA_API_KEY);
-  url.searchParams.set("query", query);
-  url.searchParams.set("dataType", DATA_TYPES);
-  url.searchParams.set("pageSize", String(Math.min(Math.max(data.limit ?? 20, 1), 50)));
+  // Built by hand rather than with URLSearchParams, which encodes a space as
+  // `+`. That is correct for form bodies and merely legal in a query string;
+  // `%20` is unambiguous, and this endpoint is fussy enough not to hand it
+  // anything it might interpret twice.
+  const pageSize = Math.min(Math.max(data.limit ?? 20, 1), 50);
+  const url =
+    `${BASE}?api_key=${encodeURIComponent(env.USDA_API_KEY)}` +
+    `&query=${encodeURIComponent(query)}` +
+    `&dataType=${encodeURIComponent(DATA_TYPES)}` +
+    `&pageSize=${pageSize}`;
 
-  const response = await fetch(url, { headers: { accept: "application/json" } });
+  const response = await fetchSearch(url);
 
   if (response.status === 429) {
     // FDC allows 1000 requests per hour per key.
     throw new HttpsError("resource-exhausted", "Food search is busy. Try again shortly.");
   }
   if (!response.ok) {
-    console.error("fdc search failed", response.status, (await response.text()).slice(0, 300));
+    console.error(
+      `fdc search failed after ${ATTEMPTS} attempts`,
+      response.status,
+      (await response.text()).slice(0, 200),
+    );
     throw new HttpsError("unavailable", "Food search is unavailable. Try again.");
   }
 

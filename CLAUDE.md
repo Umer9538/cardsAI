@@ -368,6 +368,13 @@ genuinely have none, and a 0 kcal food in a diary is worse than no result.
 Every FDC dataset here reports **per 100g**, so that is the portion offered; the
 result screen's ½×–2× control takes it from there.
 
+**FDC's search endpoint is genuinely flaky**, and it is not our request: roughly half
+of otherwise-identical calls return HTTP 400 carrying an *nginx* HTML error page, and
+the same query succeeds on retry. An application-level rejection would be JSON, so
+this is the edge dropping requests. `searchFoods` retries five times with a short
+backoff, which measured ~50% → ~8% failure at 1.0-4.7s. Do not read a failing query
+as a bug in the filter — it was noise both times it looked like a pattern.
+
 `WorkerFoodRepository` falls back to Open Food Facts when the Worker cannot answer —
 an unset key, FDC's 1000/hour rate limit, or an outage. Search is the path that is
 meant to always work, and is what someone reaches for once their scans have run out,
