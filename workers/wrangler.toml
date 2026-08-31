@@ -1,0 +1,34 @@
+# Carbsai backend, on Cloudflare Workers.
+#
+# This replaces the Firebase Cloud Functions in `functions/` so the project can
+# stay on the Spark plan: Spark blocks outbound calls to any non-Google host,
+# which is what made `analyzeMeal` undeployable there. A Worker has no such
+# restriction, so OpenAI, the email provider and R2 are all reachable.
+#
+# Firebase is still the system of record — Auth issues the tokens this Worker
+# verifies, and Firestore holds every document. The Worker reaches both over
+# their REST APIs with a service-account token, which is exactly what the Admin
+# SDK did, minus the SDK.
+#
+#   npx wrangler deploy
+#   npx wrangler secret put OPENAI_API_KEY
+#   ...see workers/README.md for the full list
+
+name = "carbsai-api"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "carbsai-8cca8"
+# Public base URL for meal photos. Set to the R2 bucket's custom domain once it
+# has one; until then uploads still work and reads fall back to the local file.
+PHOTO_PUBLIC_BASE = ""
+
+# Meal photos. Replaces Cloud Storage — R2 has zero egress fees, which is the
+# whole reason it is here rather than in Firebase.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "carbsai-photos"
+
+[observability]
+enabled = true

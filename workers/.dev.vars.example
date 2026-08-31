@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit the real file.
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"carbsai-8cca8","client_email":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"}
+OPENAI_API_KEY=sk-...
+OTP_PEPPER=replace-with-a-long-random-string
+EMAIL_API_KEY=xkeysib-...
+EMAIL_FROM=Carbsai <no-reply@yourdomain>

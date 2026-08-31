@@ -1,0 +1,90 @@
+rules_version = '2';
+
+// Carbsai — everything a person owns lives under users/{uid}.
+//
+// Subcollections are enumerated rather than covered by a recursive wildcard.
+// That is deliberate and load-bearing: Firestore rules are OR'd, so a broad
+// `match /{document=**} { allow write: if isOwner(...) }` cannot be narrowed
+// by a more specific deny underneath it. With a wildcard, a user could write
+// their own quota document and hand themselves unlimited scans.
+//
+// Client-writable:  meals, plans, notifications, prefs
+// Server-only:      scans, quota   (written by Cloud Functions via the Admin
+//                                   SDK, which bypasses these rules entirely)
+//
+// Deploy:  firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      // The profile document itself.
+      allow read, write: if isOwner(userId);
+
+      match /meals/{mealId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /plans/{planId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /notifications/{notificationId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /prefs/{prefId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // The scan log — the eval set and the cost record. Readable so the app
+      // can show scan history; never client-writable, because an edited scan
+      // record is a corrupted eval set.
+      match /scans/{scanId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // Monthly scan allowance. Readable so the UI can show what is left.
+      // Writable only by the server, or the quota means nothing.
+      match /quota/{period} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // Entitlement. Readable so the UI can show plan and renewal date;
+      // never client-writable, or premium is free for anyone who can open a
+      // debugger. Written only by activateSubscription / cancelSubscription.
+      match /subscription/{doc} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // users/{uid}/private/** holds the email OTP (the code's HMAC, its
+      // expiry, the attempt counter) and the rewarded-ad payout counters. NOT
+      // readable or writable even by its owner — being able to read the
+      // attempt counter, or delete either document to reset it, would defeat
+      // both the brute-force limit and the daily ad cap. Only the Admin SDK
+      // touches it, and that bypasses these rules.
+      //
+      // There is no match block for it on purpose: rules v2 does not extend a
+      // document's permissions to its subcollections, so the unmatched path
+      // falls through to the catch-all deny below. Stated here so nobody
+      // "helpfully" adds one.
+    }
+
+    // `config/scan` (model id, prices, quota) is read by Cloud Functions
+    // through the Admin SDK and is intentionally unreachable from any client —
+    // it falls through to the catch-all below.
+    //
+    // Anything not matched above is denied. Listed explicitly so a collection
+    // added later fails closed and gets noticed, rather than inheriting an
+    // allow from somewhere.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

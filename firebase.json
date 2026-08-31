@@ -1,0 +1,63 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "carbsai-8cca8",
+          "appId": "1:539925326951:android:8e4942c7e90734daaab8c2",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "carbsai-8cca8",
+          "appId": "1:539925326951:ios:95257d120a37b3f8aab8c2",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "carbsai-8cca8",
+          "appId": "1:539925326951:ios:416dfc7f85910501aab8c2",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "carbsai-8cca8",
+          "configurations": {
+            "android": "1:539925326951:android:8e4942c7e90734daaab8c2",
+            "ios": "1:539925326951:ios:95257d120a37b3f8aab8c2",
+            "macos": "1:539925326951:ios:416dfc7f85910501aab8c2",
+            "web": "1:539925326951:web:7d8b1438dd253221aab8c2",
+            "windows": "1:539925326951:web:f4856e7d177845ceaab8c2"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

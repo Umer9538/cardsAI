@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Carbsai — meal photos, at users/{uid}/meals/{mealId}.jpg
+//
+// Same shape as the Firestore rules: you reach your own subtree and nothing
+// else. Uploads are additionally bounded, because a storage bucket someone can
+// write arbitrary bytes to at arbitrary size is a bill waiting to happen.
+//
+// Deploy:  firebase deploy --only storage
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /users/{userId}/meals/{file} {
+      allow read, delete: if isOwner(userId);
+
+      // The client downsizes to a 1280px long edge at q80, which lands at
+      // 150-300KB. 5MB is generous headroom and still far below what an
+      // unbounded upload could cost.
+      allow write: if isOwner(userId)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Fail closed for anything else.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

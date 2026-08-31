@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+# Local secrets for `wrangler dev`. Holds the service-account key and the
+# OpenAI key — never commit it.
+.dev.vars

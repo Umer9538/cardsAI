@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "539925326951",
+    "project_id": "carbsai-8cca8",
+    "storage_bucket": "carbsai-8cca8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:539925326951:android:8e4942c7e90734daaab8c2",
+        "android_client_info": {
+          "package_name": "com.carbsai.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDzGTnrFx4oQPVjrTh5Y2G3iNnGmyK7yM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

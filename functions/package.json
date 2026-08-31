@@ -1,0 +1,27 @@
+{
+  "name": "carbsai-functions",
+  "description": "Cloud Functions for Carbsai — the meal analysis pipeline.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "@types/nodemailer": "^8.0.1",
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.0",
+    "nodemailer": "^9.0.5",
+    "openai": "^7.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
