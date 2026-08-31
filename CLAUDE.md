@@ -450,15 +450,20 @@ the Analysis charts, camera capture, gallery pick, persistence, offline.
 
 **Not yet real:**
 
-- **The scan pipeline is written and typechecks, but is not deployed.**
-  `FunctionsScanRepository` calls `analyzeMeal` on the Worker; on `BACKEND=local` you
-  still get `LocalScanRepository`, which waits ~2.2s and returns the same three foods
-  whatever you photograph. Deploying needs a Cloudflare account, an R2 bucket, and the
-  secrets in `workers/README.md`. It no longer needs Blaze.
-- **The Worker has never run against the live project.** It typechecks and the logic
-  is a line-for-line port, but the Firestore REST client, the ID-token verification
-  and the callable protocol have not been exercised end to end. Expect the first
-  deploy to shake something out — start with `GET /health`, then a scan.
+- **The photo scan path has not been run.** The Worker is deployed at
+  `https://carbsai-api.quranai.workers.dev` and a **text** scan works end to end —
+  ID-token verification, the service-account token, the Firestore REST client, the
+  quota transaction, the OpenRouter call under a strict schema, and the scan-log
+  write. The photo path shares all of that and differs only in the content part it
+  sends (`image_url` rather than `text`), so it is likely fine, but it is untested.
+- **The app has never called the Worker.** The end-to-end test used raw HTTP with a
+  Bearer token; the app goes through `cloud_functions`'
+  `httpsCallableFromUri`. That the SDK attaches the ID token when the callable is
+  built from a URL is read from the source, not observed. If a scan returns
+  "Sign in to scan a meal" with a valid session, this is why — and the fallback is a
+  plain `http` client, about 30 lines.
+- On `BACKEND=local` you still get `LocalScanRepository`, which waits ~2.2s and
+  returns the same three foods whatever you photograph.
 - **No eval set yet.** The PRD wants ≥150 labelled photos with an accuracy bar before
   UI polish. Nothing has measured this prompt's accuracy.
 - **In-app purchases fail** until subscription products with ids `monthly` and

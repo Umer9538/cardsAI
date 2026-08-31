@@ -20,9 +20,17 @@ import { HttpsError } from "./callable.js";
  *   - `sub` present and non-empty — it becomes the uid
  */
 
-/** Google rotates these; the response's own max-age says for how long. */
+/**
+ * Google's public keys for Firebase ID tokens.
+ *
+ * The path segment is `jwk`, singular — `jwks` is a 404, which surfaces as
+ * "Could not fetch Google signing keys" and rejects every request as
+ * unauthenticated.
+ *
+ * Google rotates these; the response's own max-age says for how long.
+ */
 const JWKS_URL =
-  "https://www.googleapis.com/service_accounts/v1/jwks/securetoken@system.gserviceaccount.com";
+  "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
 interface Jwk {
   kid: string;
@@ -39,7 +47,11 @@ async function publicKeys(): Promise<Map<string, Jwk>> {
   if (keyCache && keyCache.expiresAt > now) return keyCache.keys;
 
   const response = await fetch(JWKS_URL);
-  if (!response.ok) throw new Error("Could not fetch Google signing keys.");
+  // Status included: without it this reads as a network problem when it is
+  // usually a wrong URL, and every request fails as unauthenticated either way.
+  if (!response.ok) {
+    throw new Error(`Could not fetch Google signing keys: HTTP ${response.status}`);
+  }
 
   const body = (await response.json()) as { keys: Jwk[] };
   const maxAge = /max-age=(\d+)/.exec(response.headers.get("cache-control") ?? "");
