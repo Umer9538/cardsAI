@@ -97,6 +97,20 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (error, stack) {
+      // A shutter tap that does nothing at all is the worst failure this screen
+      // has: there is no message, nothing to retry against, and no way to tell
+      // a dead button from a slow one. The tap is fire-and-forget, so anything
+      // not converted to a [RepositoryException] below this point would
+      // disappear into an unawaited Future — which is exactly what a raw
+      // PlatformException out of the compressor does.
+      debugPrint('capture failed: $error\n$stack');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('That photo could not be taken. Try again.'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -83,7 +83,15 @@ class CameraSession extends AsyncNotifier<CameraController?> {
         code: 'camera-not-ready',
       );
     }
-    final shot = await controller.takePicture();
+    // Wrapped for the same reason `initialize()` is: the plugin throws a raw
+    // [CameraException] here too, and a screen that only knows about
+    // [RepositoryException] would let it escape into the void.
+    final XFile shot;
+    try {
+      shot = await controller.takePicture();
+    } on CameraException catch (e) {
+      throw RepositoryException(_translate(e), code: e.code);
+    }
     return ref.read(imageCaptureProvider).prepare(shot.path);
   }
 
