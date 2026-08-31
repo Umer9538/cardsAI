@@ -43,7 +43,7 @@ and base64-ing a photo through JSON would inflate it by a third for nothing.
 ### 1. Create the R2 bucket
 
 ```bash
-npx wrangler r2 bucket create carbsai-photos
+npm run r2:create
 ```
 
 Optionally attach a custom domain to it in the Cloudflare dashboard, then set
@@ -60,11 +60,11 @@ it like the OpenAI key: never commit it.
 ### 3. Set the secrets
 
 ```bash
-npx wrangler secret put FIREBASE_SERVICE_ACCOUNT   # paste the whole JSON file
-npx wrangler secret put OPENAI_API_KEY
-npx wrangler secret put OTP_PEPPER                 # any long random string
-npx wrangler secret put EMAIL_API_KEY              # Brevo API key
-npx wrangler secret put EMAIL_FROM                 # "Carbsai <no-reply@yourdomain>"
+npm run secret FIREBASE_SERVICE_ACCOUNT   # paste the whole JSON file
+npm run secret OPENAI_API_KEY
+npm run secret OTP_PEPPER                 # any long random string
+npm run secret EMAIL_API_KEY              # Brevo API key
+npm run secret EMAIL_FROM                 # "Carbsai <no-reply@yourdomain>"
 ```
 
 `OTP_PEPPER` must never change once codes are in flight — every stored HMAC is
@@ -75,7 +75,7 @@ keyed by it, so rotating it invalidates outstanding codes.
 ```bash
 npm install
 npm run typecheck
-npx wrangler deploy
+npm run deploy
 ```
 
 ### 5. Point the app at it
@@ -116,6 +116,24 @@ Both of these carried over from the Cloud Functions version unchanged:
    them, which the Spark plan could not.
 2. **No store server notifications.** A lapsed or refunded subscription stays
    active until `renewsAt` passes. Needs one more route per store.
+
+## Why the npm scripts set `NODE_OPTIONS`
+
+Every wrangler script here runs with
+`NODE_OPTIONS=--no-network-family-autoselection`, and that is not decoration.
+
+Without it, wrangler fails on this network with `ETIMEDOUT` while fetching its
+auth token — a ~20-30 second hang, then `fetch failed`. It looks like an
+outbound block, and is not: the browser reaches `dash.cloudflare.com` fine, and
+so does `curl`. Cloudflare is dual-stack, and Node races the IPv6 and IPv4
+addresses ("happy eyeballs"); when the IPv6 route does not actually work, that
+race stalls rather than falling back. This flag disables the race.
+
+`--dns-result-order=ipv4first` does **not** fix it — that reorders DNS results
+but still lets Node race the families.
+
+Use `npm run deploy` / `npm run tail` / `npm run secret NAME` rather than
+calling `npx wrangler` directly, or the hang comes back.
 
 ## Watch for
 
