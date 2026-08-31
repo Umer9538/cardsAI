@@ -1,4 +1,14 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "_comment": "Food search. array-contains-any alone returns an arbitrary page of matches, so the query orders by rank to pull the generic reference foods in ahead of restaurant dishes. That ordering needs this composite index.",
+      "collectionGroup": "foods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "rank", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

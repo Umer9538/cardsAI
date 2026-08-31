@@ -41,6 +41,25 @@ const LIST_URL = "https://api.nal.usda.gov/fdc/v1/foods/list";
 export const DATASETS = ["Foundation", "SR Legacy", "Survey (FNDDS)"] as const;
 export type Dataset = (typeof DATASETS)[number];
 
+/**
+ * How generic a dataset's foods are. Lower sorts first.
+ *
+ * This is what makes search usable, and it is not a cosmetic preference.
+ * `array-contains-any` returns an *arbitrary* page of matches, so without an
+ * ordering the ranker only ever sees 60 random foods that share a word — which
+ * is how "olive oil" came back as OLIVE GARDEN lasagna and "banana" as banana
+ * split. Ordering the query by this pulls the reference foods into the page,
+ * and the text ranking then chooses between them.
+ *
+ * Survey (FNDDS) is not junk — "Chicken breast, grilled without sauce" lives
+ * there — it just also holds every restaurant dish, so it goes last.
+ */
+const RANK: Record<Dataset, number> = {
+  Foundation: 0,
+  "SR Legacy": 1,
+  "Survey (FNDDS)": 2,
+};
+
 /** FDC's maximum. Fewer pages means fewer chances to be dropped mid-sync. */
 const PAGE_SIZE = 200;
 
@@ -166,6 +185,7 @@ function toDocument(food: FdcFood): Record<string, unknown> | null {
     name: name.length > 120 ? `${name.slice(0, 117)}...` : name,
     tokens: tokenize(name),
     dataType: food.dataType ?? "",
+    rank: RANK[(food.dataType ?? "") as Dataset] ?? 3,
     // Every dataset mirrored here reports per 100g.
     portionGrams: 100,
     calories,

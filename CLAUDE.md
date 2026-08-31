@@ -407,6 +407,16 @@ client queries `array-contains-any`, then ranks the candidates itself in
   chicken, but a three-letter token matches thousands of documents and
   `array-contains-any` returns an arbitrary page of them rather than the best — so a
   partial word would make results actively worse.
+- **The query is ordered by `rank`**, and that is what makes search usable rather
+  than a nicety. `array-contains-any` returns an *arbitrary* page, so the first
+  attempt at this ranked 60 random foods that happened to share a word: "olive oil"
+  came back as OLIVE GARDEN lasagna and "banana" as banana split, because "Oil,
+  olive" and "Bananas, raw" were never in the page for the ranker to see. `rank` is
+  0 for Foundation, 1 for SR Legacy, 2 for Survey (FNDDS), so the generic reference
+  foods are pulled in first and the text scoring chooses between them. It needs the
+  composite index in `firestore.indexes.json`.
+- Survey (FNDDS) is not junk — "Chicken breast, grilled without sauce" lives there —
+  it simply also holds every restaurant dish, so it sorts last.
 - `tokenize` exists **twice**, in `catalogue.ts` and `FirestoreFoodRepository`. They
   must agree: a token written by one and not produced by the other is a food that can
   never be found.

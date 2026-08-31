@@ -72,9 +72,18 @@ class FirestoreFoodRepository implements FoodDatabaseRepository {
     if (tokens.isEmpty) return _fallback.search(trimmed, limit: limit);
 
     try {
+      // Ordered by `rank`, which is what makes this usable at all.
+      //
+      // `arrayContainsAny` returns an arbitrary page of matches, so without an
+      // ordering the ranking below only ever saw 60 random foods sharing a
+      // word — "olive oil" came back as OLIVE GARDEN lasagna, "banana" as
+      // banana split, because "Oil, olive" and "Bananas, raw" were simply not
+      // in the page. Ordering by rank pulls the generic reference foods in
+      // first; the scoring then chooses between them.
       final snapshot = await _firestore
           .collection('foods')
           .where('tokens', arrayContainsAny: tokens.take(_maxTokens).toList())
+          .orderBy('rank')
           .limit(_candidates)
           .get();
 
