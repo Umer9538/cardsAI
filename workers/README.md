@@ -24,6 +24,7 @@ reachable here and nowhere else. `firestore.rules` is unchanged.
 | `POST /verifyEmailOtp` | callable | `verifyEmailOtp` |
 | `POST /activateSubscription` | callable | `activateSubscription` |
 | `POST /cancelSubscription` | callable | `cancelSubscription` |
+| `POST /searchFoods` | callable | — (new: USDA FoodData Central) |
 | `POST /grantBonusScans` | callable | `grantBonusScans` |
 | `POST /photos`, `DELETE /photos` | plain HTTP | Cloud Storage |
 | `GET /health` | plain HTTP | — |
@@ -77,7 +78,12 @@ npm run secret OPENAI_API_KEY
 npm run secret OTP_PEPPER                 # any long random string
 npm run secret EMAIL_API_KEY              # Brevo API key
 npm run secret EMAIL_FROM                 # "Carbsai <no-reply@yourdomain>"
+npm run secret USDA_API_KEY               # fdc.nal.usda.gov/api-key-signup
 ```
+
+Only `FIREBASE_SERVICE_ACCOUNT` and the model key are needed for a scan.
+`USDA_API_KEY` powers food search — without it search still works, falling back
+to Open Food Facts, just with worse results for whole foods.
 
 `OTP_PEPPER` must never change once codes are in flight — every stored HMAC is
 keyed by it, so rotating it invalidates outstanding codes.

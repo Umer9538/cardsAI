@@ -342,15 +342,38 @@ place the design leaves room for them.
 
 ### Barcode and search do not use the model
 
-Both go to **Open Food Facts** (`OpenFoodFactsRepository`) rather than the scan
-pipeline. A barcode identifies a product exactly and a search is someone telling us
-what they ate — guessing at either would be worse *and* billable.
+Neither goes near the scan pipeline. A barcode identifies a product exactly and a
+search is someone telling us what they ate — guessing at either would be worse *and*
+billable.
 
-It needs no API key, so unlike the photo pipeline there is nothing to hide behind a
-Cloud Function: the client calls it directly, and **both paths work on the free
-Firebase plan and in both backends**. Coverage is crowd-sourced — excellent for
-packaged goods, patchy for loose produce — so a missing product is a normal outcome,
-not an error, and the UI says so.
+They go to **different databases**, because they are different questions:
+
+- **Search → USDA FoodData Central**, through the Worker's `searchFoods` route.
+  FDC holds the lab-analysed reference foods, and it is already what `prompt.ts`
+  tells the model to match its composition against — so a searched food and an
+  estimated one now agree on what chicken breast is. It needs an API key, which is
+  why it sits behind the Worker: a key in the binary is a key that has been
+  published.
+- **Barcode → Open Food Facts** (`OpenFoodFactsRepository`), straight from the
+  client. It is the stronger database for packaged goods, which is exactly what a
+  barcode identifies, and it needs no key so there is nothing to hide.
+
+`searchFoods` filters to `Foundation, SR Legacy, Survey (FNDDS)` and **excludes
+Branded**. That is not a detail: Branded is by far the largest FDC dataset and
+dominates the ranking, so unfiltered, "grilled chicken breast" returns a frozen
+dinner and a deli pack before it returns chicken. Packaged goods are reachable by
+barcode instead. Entries with no energy figure are dropped — some Foundation records
+genuinely have none, and a 0 kcal food in a diary is worse than no result.
+
+Every FDC dataset here reports **per 100g**, so that is the portion offered; the
+result screen's ½×–2× control takes it from there.
+
+`WorkerFoodRepository` falls back to Open Food Facts when the Worker cannot answer —
+an unset key, FDC's 1000/hour rate limit, or an outage. Search is the path that is
+meant to always work, and is what someone reaches for once their scans have run out,
+so it degrades to a worse database rather than to a dead end. On `BACKEND=local`
+Open Food Facts serves both, which keeps the app runnable offline with nothing
+configured.
 
 Two packages cannot hold the same camera at once, so selecting barcode mode
 invalidates `cameraSessionProvider` to release the photo camera before the reader

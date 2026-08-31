@@ -2,6 +2,7 @@ import { requireAuth } from "./auth.js";
 import { HttpsError, callableData, json } from "./callable.js";
 import type { Env } from "./env.js";
 import { sendEmailOtp, verifyEmailOtp } from "./otp.js";
+import { searchFoods } from "./foods.js";
 import { deletePhoto, uploadPhoto } from "./photos.js";
 import { grantBonusScans } from "./rewards.js";
 import { analyzeMeal, type ScanRequest } from "./scan.js";
@@ -35,6 +36,8 @@ const CALLABLES: Record<string, Callable> = {
   activateSubscription: (env, uid, data) =>
     activateSubscription(env, uid, data as { planId?: string }),
   cancelSubscription: (env, uid) => cancelSubscription(env, uid),
+  searchFoods: (env, uid, data) =>
+    searchFoods(env, uid, data as { query?: string; limit?: number }),
   grantBonusScans: (env, uid) => grantBonusScans(env, uid),
 };
 

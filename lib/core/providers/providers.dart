@@ -20,6 +20,7 @@ import '../../data/local/local_scan_repository.dart';
 import '../../data/local/local_subscription_repository.dart';
 import '../../data/store/store_subscription_repository.dart';
 import '../../data/worker/r2_photo_repository.dart';
+import '../../data/worker/worker_food_repository.dart';
 import '../app_config.dart';
 import '../models/models.dart';
 import '../repositories/repositories.dart';
@@ -171,13 +172,24 @@ final notificationSettingsRepositoryProvider =
   return LocalNotificationSettingsRepository(ref.watch(jsonStoreProvider));
 });
 
-/// Barcode and search, straight from the client.
+/// Food search and barcode lookup.
 ///
-/// Open Food Facts needs no key, so unlike the photo pipeline there is nothing
-/// to hide behind a Cloud Function — and these two paths therefore work on the
-/// free plan and in both backends.
-final foodDatabaseProvider =
-    Provider<FoodDatabaseRepository>((ref) => OpenFoodFactsRepository());
+/// Two databases, because they answer different questions. Search goes to USDA
+/// FoodData Central through the Worker — it holds the reference foods, and it
+/// is what the scan prompt already tells the model to match against, so a
+/// searched food and an estimated one agree. Barcode stays on Open Food Facts,
+/// which is stronger for packaged goods and needs no key, so it remains a
+/// direct client call.
+///
+/// On the local backend there is no Worker, so Open Food Facts serves both —
+/// which keeps the whole app runnable offline with nothing configured.
+final foodDatabaseProvider = Provider<FoodDatabaseRepository>((ref) {
+  final openFoodFacts = OpenFoodFactsRepository();
+  if (ref.watch(backendProvider) == AppBackend.firebase) {
+    return WorkerFoodRepository(ref.watch(functionsProvider), openFoodFacts);
+  }
+  return openFoodFacts;
+});
 
 /// Meal photos go to Cloudflare R2 through the Worker, not Cloud Storage.
 ///

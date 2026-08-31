@@ -21,6 +21,12 @@ export interface Env {
   OTP_PEPPER: string;
   /** Transactional email provider key. See email.ts. */
   EMAIL_API_KEY: string;
+  /**
+   * USDA FoodData Central key, for food search. Free, and rate-limited to 1000
+   * requests an hour. Behind the Worker because a key in the app binary is a
+   * key that has been published.
+   */
+  USDA_API_KEY: string;
   /** e.g. "Carbsai <no-reply@yourdomain>" */
   EMAIL_FROM: string;
 
