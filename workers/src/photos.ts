@@ -18,6 +18,24 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 const keyFor = (uid: string, mealId: string) => `users/${uid}/meals/${mealId}.jpg`;
 
+/**
+ * The bucket, or a clear failure.
+ *
+ * R2 is enabled per account, so a Worker can be deployed and fully working with
+ * no bucket bound. Saying so is better than a 500: the client turns this into
+ * "your meal was saved, but the photo could not be uploaded", which is exactly
+ * what happened.
+ */
+function bucket(env: Env): R2Bucket {
+  if (!env.PHOTOS) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Photo storage is not configured yet.",
+    );
+  }
+  return env.PHOTOS;
+}
+
 /** Rejects anything that could escape the caller's own prefix. */
 function requireMealId(value: string | null): string {
   if (!value || !/^[A-Za-z0-9_-]{1,64}$/.test(value)) {
@@ -27,6 +45,7 @@ function requireMealId(value: string | null): string {
 }
 
 export async function uploadPhoto(env: Env, uid: string, request: Request): Promise<Response> {
+  const store = bucket(env);
   const mealId = requireMealId(request.headers.get("x-meal-id"));
 
   const contentType = request.headers.get("content-type") ?? "";
@@ -46,7 +65,7 @@ export async function uploadPhoto(env: Env, uid: string, request: Request): Prom
   }
 
   const key = keyFor(uid, mealId);
-  await env.PHOTOS.put(key, body, {
+  await store.put(key, body, {
     httpMetadata: {
       contentType: "image/jpeg",
       // Immutable: the key is derived from the meal id, so a given URL always
@@ -63,8 +82,9 @@ export async function uploadPhoto(env: Env, uid: string, request: Request): Prom
 }
 
 export async function deletePhoto(env: Env, uid: string, request: Request): Promise<Response> {
+  const store = bucket(env);
   const mealId = requireMealId(new URL(request.url).searchParams.get("mealId"));
   // Already gone, or never uploaded. Nothing depends on this.
-  await env.PHOTOS.delete(keyFor(uid, mealId)).catch(() => undefined);
+  await store.delete(keyFor(uid, mealId)).catch(() => undefined);
   return json({ deleted: true });
 }

@@ -17,5 +17,8 @@ export interface Env {
   EMAIL_FROM: string;
 
   // ---- bindings ----
-  PHOTOS: R2Bucket;
+  /// Optional: absent until R2 is enabled on the account and the binding is
+  /// uncommented in wrangler.toml. `/photos` reports that plainly rather than
+  /// throwing, because a missing photo is not worth failing a logged meal over.
+  PHOTOS?: R2Bucket;
 }

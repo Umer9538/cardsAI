@@ -26,9 +26,23 @@ PHOTO_PUBLIC_BASE = ""
 
 # Meal photos. Replaces Cloud Storage — R2 has zero egress fees, which is the
 # whole reason it is here rather than in Firebase.
-[[r2_buckets]]
-binding = "PHOTOS"
-bucket_name = "carbsai-photos"
+#
+# COMMENTED OUT until R2 is enabled on the account. Enabling it is a one-off in
+# the Cloudflare dashboard (R2 → Overview) and asks for a payment method, even
+# though the free tier — 10 GB stored, zero egress — covers this app. Workers
+# themselves need no card, which is why everything else deploys without this.
+#
+# Without the binding the Worker deploys and runs normally; only `/photos`
+# returns "photo storage is not configured". The app already treats a failed
+# upload as non-fatal — the meal is logged and the diary keeps showing the
+# local file — so this degrades exactly the way a Storage outage would.
+#
+# To turn photos on: enable R2, `npm run r2:create`, uncomment the three lines
+# below, then `npm run deploy`.
+#
+# [[r2_buckets]]
+# binding = "PHOTOS"
+# bucket_name = "carbsai-photos"
 
 [observability]
 enabled = true

@@ -40,16 +40,28 @@ and base64-ing a photo through JSON would inflate it by a third for nothing.
 
 ## Setup
 
-### 1. Create the R2 bucket
+### 1. Meal photos — optional, skip on the first deploy
+
+The R2 binding in `wrangler.toml` is **commented out**, so everything else
+deploys without it. R2 is enabled per account in the Cloudflare dashboard
+(R2 → Overview) and that asks for a payment method, even though the free tier —
+10 GB stored, zero egress — covers this app. Workers themselves need no card.
+
+Without it the Worker runs normally and `/photos` reports "photo storage is not
+configured". The app already treats a failed upload as non-fatal: the meal is
+logged and the diary keeps showing the local file.
+
+To turn photos on:
 
 ```bash
-npm run r2:create
+npm run r2:create                 # after enabling R2 in the dashboard
+# uncomment the [[r2_buckets]] block in wrangler.toml
+npm run deploy
 ```
 
-Optionally attach a custom domain to it in the Cloudflare dashboard, then set
-`PHOTO_PUBLIC_BASE` in `wrangler.toml` to that origin. Until you do, uploads
-still succeed but return no URL, and the diary keeps showing the local file —
-the same degradation the Cloud Storage path had.
+Then attach a custom domain to the bucket and set `PHOTO_PUBLIC_BASE` in
+`wrangler.toml` to that origin. Until you do, uploads succeed but return no
+URL, and the diary keeps showing the local file.
 
 ### 2. Generate a Firebase service account key
 
