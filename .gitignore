@@ -49,3 +49,10 @@ node_modules/
 .wrangler/
 # Local Worker secrets: service-account key, OpenAI key. Never commit.
 .dev.vars
+
+# Firebase service-account keys — full admin access to the project. These
+# belong in a Worker secret, never in the repo. Named broadly on purpose:
+# the console's download filename varies.
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceaccount*.json
