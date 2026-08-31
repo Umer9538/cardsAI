@@ -446,22 +446,27 @@ guards small/large viewports.
 
 Real: navigation, auth (Firebase email/password, with readable error mapping), the
 diary and its totals, plans and favourites, notifications and preferences, profile,
-the Analysis charts, camera capture, gallery pick, persistence, offline.
+the Analysis charts, camera capture, gallery pick, persistence, offline — and **the
+scan pipeline**, deployed at `https://carbsai-api.quranai.workers.dev` and verified
+from a device: photo capture → Worker → OpenRouter → 7 items in 8.6s for $0.0012.
+
+That run exercised the whole stack: `httpsCallableFromUri` attaching the ID token,
+JWKS verification of it, the service-account OAuth token, the Firestore REST client,
+the transactional quota reserve, a strict `json_schema` response, and the scan-log
+write.
 
 **Not yet real:**
 
-- **The photo scan path has not been run.** The Worker is deployed at
-  `https://carbsai-api.quranai.workers.dev` and a **text** scan works end to end —
-  ID-token verification, the service-account token, the Firestore REST client, the
-  quota transaction, the OpenRouter call under a strict schema, and the scan-log
-  write. The photo path shares all of that and differs only in the content part it
-  sends (`image_url` rather than `text`), so it is likely fine, but it is untested.
-- **The app has never called the Worker.** The end-to-end test used raw HTTP with a
-  Bearer token; the app goes through `cloud_functions`'
-  `httpsCallableFromUri`. That the SDK attaches the ID token when the callable is
-  built from a URL is read from the source, not observed. If a scan returns
-  "Sign in to scan a meal" with a valid session, this is why — and the fallback is a
-  plain `http` client, about 30 lines.
+- **Meal photos are stored nowhere.** `/photos` returns "photo storage is not
+  configured yet" until R2 is enabled and the binding uncommented — see
+  `workers/README.md`. The upload failure is swallowed by design, so the meal logs
+  and the diary renders from the local file. Enabling R2 asks for a payment method,
+  which is the thing this backend exists to avoid, so it is deliberately parked.
+- **Email verification codes** need `EMAIL_API_KEY` / `EMAIL_FROM` set on the Worker.
+  Untested; the screens are unreachable in `main.dart` anyway.
+- **`grantBonusScans` and the subscription routes are untested** against the live
+  Worker. They share the auth and Firestore paths a scan already proved, so the
+  remaining risk is in their own logic rather than the plumbing.
 - On `BACKEND=local` you still get `LocalScanRepository`, which waits ~2.2s and
   returns the same three foods whatever you photograph.
 - **No eval set yet.** The PRD wants ≥150 labelled photos with an accuracy bar before
