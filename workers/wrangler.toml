@@ -44,10 +44,15 @@ PHOTO_PUBLIC_BASE = ""
 # binding = "PHOTOS"
 # bucket_name = "carbsai-photos"
 
-# Daily food-catalogue refresh. FDC publishes a few times a year, so this is
-# about keeping the mirror from drifting, not about freshness in minutes.
+# Weekly food-catalogue refresh, Sunday.
+#
+# Weekly rather than daily because of Firestore's free-tier write quota, not
+# because of FDC. A full walk is ~13,300 document writes and the free plan
+# allows 20,000 a day — a daily sync would spend two thirds of that budget every
+# day, competing with the writes real users make. FDC publishes these datasets a
+# few times a year, so weekly is already far more often than the data changes.
 [triggers]
-crons = ["17 4 * * *"]
+crons = ["17 4 * * SUN"]
 
 [observability]
 enabled = true

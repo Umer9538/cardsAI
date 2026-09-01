@@ -42,8 +42,13 @@ class FirestoreFoodRepository implements FoodDatabaseRepository {
   /// query for a food.
   static const int _maxTokens = 10;
 
-  /// Candidates fetched before ranking. Wide enough that a common word still
-  /// leaves the ranker a real choice, narrow enough to stay one cheap read.
+  /// Candidates fetched before ranking.
+  ///
+  /// Wide enough that a common word still leaves the ranker a real choice, and
+  /// bounded because it is the read cost of every single search: Firestore's
+  /// free tier allows 50,000 document reads a day across the *whole app*, so at
+  /// this width roughly 800 searches a day is the ceiling before the diary
+  /// starts competing with the search box for quota.
   static const int _candidates = 60;
 
   /// Words worth searching on.

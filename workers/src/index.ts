@@ -95,7 +95,25 @@ async function route(request: Request, env: Env): Promise<Response> {
       }
       const params = new URL(request.url).searchParams;
       const budget = Number(params.get("budget")) || undefined;
-      return json(await syncCatalogue(env, budget, params.get("reset") === "1"));
+      try {
+        return json(await syncCatalogue(env, budget, params.get("reset") === "1"));
+      } catch (error) {
+        // Reported rather than swallowed into a generic 500. This route is
+        // already behind SYNC_KEY, so the caller is an operator who needs to
+        // know what broke — and a sync that fails silently mid-catalogue is
+        // the hardest kind of failure to chase.
+        if (error instanceof HttpsError) throw error;
+        console.error("sync failed", error);
+        return json(
+          {
+            error: {
+              status: "INTERNAL",
+              message: error instanceof Error ? error.message.slice(0, 800) : String(error),
+            },
+          },
+          500,
+        );
+      }
     }
 
     if (path === "photos") {

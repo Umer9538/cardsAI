@@ -60,8 +60,18 @@ const RANK: Record<Dataset, number> = {
   "Survey (FNDDS)": 2,
 };
 
-/** FDC's maximum. Fewer pages means fewer chances to be dropped mid-sync. */
-const PAGE_SIZE = 200;
+/**
+ * Deliberately well under FDC's 200 maximum.
+ *
+ * `format=full` returns every nutrient FDC holds — around fifty per food — and
+ * a 200-food page weighs 3.5MB and takes ten seconds. Parsing several of those
+ * in one invocation is what killed the second sync partway through: the cost is
+ * CPU and memory inside the Worker, not anything FDC did wrong.
+ *
+ * The `nutrients` filter below trims the same response to the six values that
+ * are actually stored, and this halves what is left.
+ */
+const PAGE_SIZE = 100;
 
 /** Firestore allows 500 writes per commit; 200 keeps the payload comfortable. */
 const COMMIT_SIZE = 200;
@@ -235,6 +245,9 @@ export async function syncPage(
       // every record unusable here — a food with no energy figure cannot be
       // logged.
       format: "full",
+      // Only the six that get stored. FDC returns roughly fifty otherwise, and
+      // the other forty-four are pure weight: parsed, walked, and discarded.
+      nutrients: Object.values(NUTRIENTS).map(Number),
     }),
   });
 
@@ -291,7 +304,7 @@ export async function syncPage(
  */
 export async function syncCatalogue(
   env: Env,
-  budget = 25,
+  budget = 12,
   reset = false,
 ): Promise<Record<string, unknown>> {
   const db = new Firestore(env);

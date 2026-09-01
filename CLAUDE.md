@@ -421,6 +421,25 @@ client queries `array-contains-any`, then ranks the candidates itself in
   must agree: a token written by one and not produced by the other is a food that can
   never be found.
 
+**Firestore's free-tier quotas are the binding constraint here**, and they were
+discovered the hard way — a sync died mid-catalogue with
+`429 RESOURCE_EXHAUSTED` on commit:
+
+| | Free/day | This costs |
+|---|---|---|
+| Writes | 20,000 | a full sync is **~13,300** |
+| Reads | 50,000 | a search is up to **60**, so ~800 searches/day |
+
+Hence the **weekly** cron, not daily: a daily full walk would spend two thirds of
+the write budget every day, competing with the writes real users make. And the read
+figure is shared with the diary, plans and everything else, so `_candidates` is a
+quota decision as much as a quality one.
+
+If search volume ever makes that ceiling real, the collection is the one part of this
+app that does not belong in Firestore — Cloudflare D1's free tier is 5M row-reads and
+100k writes a day, and its FTS5 index would also fix the ranking problem below
+outright.
+
 Search falls through three layers, each only when the one before has nothing:
 Firestore mirror → Worker/live USDA → Open Food Facts. Barcode skips straight to Open
 Food Facts.
