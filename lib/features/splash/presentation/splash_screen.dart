@@ -64,7 +64,7 @@ class _SplashCanvas extends StatelessWidget {
       children: [
         // Paint order below mirrors the child order of the Figma frame.
         _Art(asset: 'card_healthy.png', left: 189, top: 720, width: 120.67, height: 120.67),
-        _Art(asset: 'logo_nutriai.png', left: 133, top: 156, width: 162, height: 54),
+        _Art(asset: 'logo_carbsai.png', left: 133, top: 156, width: 162, height: 54),
         _Art(asset: 'card_pink.png', left: 193, top: 828, width: 145.33, height: 98),
         _Art(asset: 'card_purple.png', left: 275, top: 718, width: 153, height: 208),
         _Art(asset: 'card_orange.png', left: 60.89, top: 741, width: 157.33, height: 185),

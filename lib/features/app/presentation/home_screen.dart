@@ -59,14 +59,15 @@ class HomeScreen extends ConsumerWidget {
         (count - 1) * _mealGap;
   }
 
-  /// Full height of the content, which now grows with the day's meals.
+  /// Full height of the content, which grows with the day's meals.
   ///
   /// The artboard's own content ends at 1109, with the diet card's macro row
-  /// flush against it. Scrolled to the bottom that row sits on the screen edge,
-  /// under the system gesture bar, so 72 of breathing room is added — that part
-  /// is not design.
+  /// flush against it. The floating tab bar is pinned to the viewport rather
+  /// than to this canvas, so without trailing room that row can never be
+  /// scrolled out from under it — see [AppBottomNav.clearance]. That part is
+  /// not design.
   static double contentHeightFor(int mealCount) =>
-      1109 + 72 + _mealsHeight(mealCount) + 24;
+      1109 + _mealsHeight(mealCount) + 24 + AppBottomNav.clearance;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

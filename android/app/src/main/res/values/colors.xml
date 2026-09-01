@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppColors.primary. The app's most recognisable colour. -->
+    <color name="ic_launcher_background">#FF5A16</color>
+    <!-- AppColors.background, so the native splash does not flash white before
+         Flutter's own splash paints. -->
+    <color name="splash_background">#121212</color>
+</resources>

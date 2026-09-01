@@ -502,6 +502,19 @@ starts. That is why switching modes takes a beat.
 Still missing: nothing from this list — but the streak is the only History surface, so
 there is no calendar or per-day detail beyond swiping the week strip.
 
+### The floating tab bar needs clearance, and it is a constant
+
+`AppBottomNav` is pinned to the **viewport**, not to the scrolling canvas, so the
+bottom `designHeight - top` = 120 artboard units of every scroll sit underneath it. A
+canvas that ends flush with its content therefore has a last row that cannot be read
+however far you scroll — the bar simply sits on it.
+
+Home, Diets and Analysis each add `AppBottomNav.clearance` (140: the 120 it covers,
+plus 20 so the last row clears rather than touches). They previously used three
+different ad-hoc numbers — 72+24, 96, and a round 1000 — all of them short, which is
+why the bar looked like it was covering content on a device. **Any new screen with the
+tab bar owes the same clearance.**
+
 ### Where fidelity was traded for usability
 
 Each of these was found by running the app on a real device, and each is a place the
@@ -634,8 +647,12 @@ write.
   soon as it is deployed, but `PHOTO_PUBLIC_BASE` must name a custom domain on the
   bucket before a durable URL comes back. Until then the upload succeeds, the URL is
   null, and the diary keeps showing the local file.
-- The splash logo `assets/images/splash/logo_nutriai.png` is still the **old NutriAI
-  wordmark** and needs re-export under the Carbsai name.
+- **The app icon and wordmark are placeholders, not an identity.** Both are generated
+  from the design system rather than designed — a "C" monogram on `AppColors.primary`,
+  and a wordmark set in the app's own Space Grotesk Bold with the "ai" in orange, the
+  same treatment the old NutriAI mark used. Masters live in `assets/images/brand/`;
+  regenerating every platform size from a real logo is a scripted pass, not a
+  redraw.
 
 ## Firebase setup still needed
 

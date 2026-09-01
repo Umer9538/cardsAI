@@ -29,7 +29,11 @@ class AnalysisScreen extends ConsumerWidget {
   /// obvious the moment it holds figures someone needs to read. Giving the
   /// canvas room to scroll lets the card clear the bar, which is the same
   /// treatment Home already uses for its Diet Plan section.
-  static const double contentHeight = 1000;
+  static const double contentHeight =
+      _macroCardTop + MacroDistributionCard.height + AppBottomNav.clearance;
+
+  /// Where the Macro Distribution card starts — the lowest thing on the screen.
+  static const double _macroCardTop = 665;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -112,7 +116,7 @@ class AnalysisScreen extends ConsumerWidget {
                 ),
                 Positioned(
                   left: 20,
-                  top: 665,
+                  top: _macroCardTop,
                   width: MacroDistributionCard.width,
                   height: MacroDistributionCard.height,
                   child: MacroDistributionCard(summary: summary),

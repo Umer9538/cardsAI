@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/design_canvas.dart';
 import '../../../../core/theme/app_colors.dart';
 
 /// The five destinations in the floating tab bar.
@@ -34,6 +35,19 @@ class AppBottomNav extends StatelessWidget {
   static const double top = 806;
   static const double width = 314;
   static const double height = 66;
+
+  /// Room a scrolling canvas must leave beneath its last content.
+  ///
+  /// The bar is pinned to the *viewport*, not to the canvas, so the bottom
+  /// `designHeight - top` units of every scroll sit underneath it. A canvas
+  /// that ends flush with its content therefore has a final row that cannot be
+  /// read however far you scroll — the bar simply sits on it. Screens were
+  /// leaving 96, which is 24 short before any breathing room at all.
+  ///
+  /// The extra 20 is that breathing room, so the last row clears the bar rather
+  /// than touching it.
+  static const double clearance =
+      DesignCanvas.designHeight - top + 20;
 
   @override
   Widget build(BuildContext context) {

@@ -51,8 +51,12 @@ class DietsScreen extends ConsumerWidget {
 
   double _contentHeight(List<DietPlan> plans) {
     if (plans.isEmpty) return DesignCanvas.designHeight;
-    final bottom =
-        _listTop + plans.length * _cardHeight + (plans.length - 1) * _cardGap + 96;
+    // The floating tab bar is pinned to the viewport, so the last card needs
+    // room to scroll clear of it rather than stopping underneath.
+    final bottom = _listTop +
+        plans.length * _cardHeight +
+        (plans.length - 1) * _cardGap +
+        AppBottomNav.clearance;
     return bottom < DesignCanvas.designHeight
         ? DesignCanvas.designHeight
         : bottom;
