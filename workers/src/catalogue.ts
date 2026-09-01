@@ -248,6 +248,40 @@ function toDocument(food: FdcFood): Record<string, unknown> | null {
 }
 
 /**
+ * The list call, retried.
+ *
+ * FDC is as unreliable here as it is for search — a full walk reliably meets at
+ * least one `522`, which is Cloudflare reporting that FDC's own origin stopped
+ * answering. Without a retry that ends the whole sync, which is how a pass died
+ * after one round having stored 977 foods.
+ *
+ * Backoff is far longer than the search path's, because nothing is waiting on
+ * this: it runs on a cron, and a slow sync is not a slow app. 429 is never
+ * retried — that is a real rate limit on a key real searches also draw on.
+ */
+async function listWithRetry(
+  env: Env,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const backoff = [500, 1500, 3000];
+  let last!: Response;
+
+  for (let attempt = 0; attempt <= backoff.length; attempt++) {
+    last = await fetch(`${LIST_URL}?api_key=${encodeURIComponent(env.USDA_API_KEY)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (last.ok || last.status === 429) return last;
+    if (attempt < backoff.length) {
+      console.warn(`fdc list ${last.status}, retrying (${attempt + 1})`);
+      await new Promise((resolve) => setTimeout(resolve, backoff[attempt]));
+    }
+  }
+  return last;
+}
+
+/**
  * Fetches one page of one dataset and writes it to `foods/{fdcId}`.
  *
  * Deliberately one page per call. A full sync is tens of thousands of foods
@@ -273,10 +307,7 @@ export async function syncPage(
     throw new HttpsError("failed-precondition", "USDA_API_KEY is not set.");
   }
 
-  const response = await fetch(`${LIST_URL}?api_key=${encodeURIComponent(env.USDA_API_KEY)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
+  const response = await listWithRetry(env, {
       dataType: [dataset],
       pageSize: PAGE_SIZE,
       pageNumber,
@@ -287,7 +318,6 @@ export async function syncPage(
       // Only the six that get stored. FDC returns roughly fifty otherwise, and
       // the other forty-four are pure weight: parsed, walked, and discarded.
       nutrients: Object.values(NUTRIENTS).map(Number),
-    }),
   });
 
   if (!response.ok) {
