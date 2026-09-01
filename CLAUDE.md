@@ -330,7 +330,25 @@ Protein and fat are set from **bodyweight** (1.8 g/kg, 0.9 g/kg) and carbohydrat
 takes the remaining energy. Fixed macro percentages would give a very light person
 too little protein and a heavy one more than they can use.
 
-`OnboardingQuizScreen` collects the five inputs. **It is not in the Figma file** — the
+`OnboardingQuizScreen` collects the five inputs, and eight more besides. Five feed
+the arithmetic; the rest are context, and **each one changes something the person
+sees** — the plan Home features (`dietPreference` -> `_featuredPlan`), the tip the plan
+screen closes on (`obstacle`), whether meal reminders are on (`wantsReminders` ->
+the `mealReminders` preference). There are deliberately no questions whose answers go
+nowhere: that is drop-off bought for nothing.
+
+The engagement is in three places and all of it is cheap. The **running estimate**
+appears the moment there is enough to compute one and moves as later answers land, so
+the plan assembles out of the person's own answers rather than arriving at the end as
+an assertion. **Selection is animated and haptic**, because a tick and a colour change
+over a beat is most of what makes answering feel responsive. And the **build step** is
+theatre — the work behind it is a few multiplications — but a number that appears
+instantly reads as a lookup while one that is worked out reads as a plan. The stages
+it names are the ones actually being performed.
+
+`QuizOptions` **measures its own cards** against the space it is given rather than
+using a fixed height. Fixed heights are how the five-option activity step ended up
+10pt over its box; the six-option diet step would have been 34pt over. **It is not in the Figma file** — the
 design has three marketing onboarding pages and no quiz — but without it every account
 gets `UserProfile.defaultTargets`, so a 22-year-old athlete and a sedentary
 55-year-old see the same 2000 kcal ring. It is built entirely from what the design

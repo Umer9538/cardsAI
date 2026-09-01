@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,26 +12,49 @@ import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import 'quiz_answers.dart';
+import 'widgets/quiz_controls.dart';
 import 'widgets/round_next_button.dart';
 
-/// The steps, in order. The goal-weight step is skipped when maintaining.
-enum _Step { gender, age, height, weight, activity, goal, goalWeight, plan }
+/// The steps, in order. `goalWeight` is skipped when maintaining.
+enum _Step {
+  motivation,
+  gender,
+  age,
+  height,
+  weight,
+  activity,
+  goal,
+  goalWeight,
+  diet,
+  meals,
+  obstacle,
+  reminders,
+  building,
+  plan,
+}
 
 /// Personalisation quiz — **not in the Figma file**.
 ///
 /// The design has three marketing onboarding pages and no quiz, but the app
 /// cannot do its central job without one: every profile was getting
 /// [UserProfile.defaultTargets], so a 22-year-old athlete and a sedentary
-/// 55-year-old saw the same 2000 kcal ring on Home. The PRD asks for this in
-/// §5.1, and every comparable tracker asks the same six things.
+/// 55-year-old saw the same 2000 kcal ring on Home.
 ///
 /// Built entirely from what the design does define — the onboarding artboard's
 /// canvas, palette, type ramp, `blob.png` and the round CTA — so it reads as
-/// the next three screens of onboarding rather than as something bolted on.
-/// Same approach as `DescribeMealScreen` and `FoodSearchScreen`.
+/// the next stretch of onboarding rather than something bolted on.
 ///
-/// Every step is skippable: skipping leaves [UserProfile.defaultTargets] in
-/// place, which is the same number the app showed before this screen existed.
+/// ---------------------------------------------------------------------------
+/// Why this many questions
+/// ---------------------------------------------------------------------------
+/// Five of them feed the arithmetic. The rest are context, and each one changes
+/// something the person actually sees: the plan Home features, the tip the plan
+/// screen closes with, whether meal reminders are on. A quiz question whose
+/// answer goes nowhere is drop-off bought for nothing, so there are none of
+/// those here.
+///
+/// Every step is skippable. Skipping leaves [UserProfile.defaultTargets], which
+/// is what the app showed before this screen existed.
 class OnboardingQuizScreen extends ConsumerStatefulWidget {
   const OnboardingQuizScreen({super.key, this.onFinished});
 
@@ -46,58 +71,80 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   int _index = 0;
   bool _saving = false;
 
-  /// Maintaining has no goal weight to ask about, so that step disappears
-  /// rather than showing a slider with nothing to do.
+  /// Which way the step transition slides, so going back reads as going back.
+  bool _forward = true;
+
   List<_Step> get _steps => [
+        _Step.motivation,
         _Step.gender,
         _Step.age,
         _Step.height,
         _Step.weight,
         _Step.activity,
         _Step.goal,
+        // Maintaining has no goal weight to ask about, so the step disappears
+        // rather than showing a slider with nothing to set.
         if (_answers.goal != null && _answers.goal != WeightGoal.maintain)
           _Step.goalWeight,
+        _Step.diet,
+        _Step.meals,
+        _Step.obstacle,
+        _Step.reminders,
+        _Step.building,
         _Step.plan,
       ];
 
   _Step get _step => _steps[_index.clamp(0, _steps.length - 1)];
 
-  /// The profile the plan screen previews, and the one that gets saved.
   UserProfile get _draft =>
       _answers.applyTo(ref.read(profileProvider).value ?? _blankProfile);
 
-  static final _blankProfile =
-      UserProfile(id: 'draft', name: '', email: '');
+  static final _blankProfile = UserProfile(id: 'draft', name: '', email: '');
 
   bool get _canAdvance => switch (_step) {
+        _Step.motivation => _answers.motivation != null,
         _Step.gender => _answers.gender != null,
         _Step.activity => _answers.activity != null,
         _Step.goal => _answers.goal != null,
+        _Step.diet => _answers.dietPreference != null,
+        _Step.obstacle => _answers.obstacle != null,
         _ => true,
       };
 
   void _set(QuizAnswers next) => setState(() => _answers = next);
 
-  Future<void> _advance() async {
-    if (_step == _Step.plan) return _finish();
-    setState(() => _index = (_index + 1).clamp(0, _steps.length - 1));
+  void _advance() {
+    if (_step == _Step.plan) {
+      _finish();
+      return;
+    }
+    setState(() {
+      _forward = true;
+      _index = (_index + 1).clamp(0, _steps.length - 1);
+    });
   }
 
   void _back() {
     if (_index == 0) return;
-    setState(() => _index -= 1);
+    setState(() {
+      _forward = false;
+      _index -= 1;
+    });
   }
 
-  /// Saves the answers and the targets computed from them.
+  /// Saves the answers, the targets computed from them, and the one preference
+  /// the quiz collects on another screen's behalf.
   ///
-  /// The write is not awaited for its server round trip — `ProfileRepository`
-  /// resolves locally and the SDK guarantees delivery — but a failure must not
-  /// strand someone on the quiz, so it falls through to [onFinished] either way.
+  /// A failure must not strand someone on the quiz, so this falls through to
+  /// [onFinished] either way.
   Future<void> _finish() async {
     if (_saving) return;
     setState(() => _saving = true);
     try {
       await ref.read(profileRepositoryProvider).save(_draft);
+      await ref
+          .read(notificationSettingsRepositoryProvider)
+          .setEnabled('mealReminders', enabled: _answers.wantsReminders);
     } catch (error) {
       debugPrint('could not save quiz answers: $error');
     }
@@ -107,10 +154,11 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   @override
   Widget build(BuildContext context) {
     final isPlan = _step == _Step.plan;
-    final background = isPlan ? AppColors.accentGreen : AppColors.lilac;
+    final isBuilding = _step == _Step.building;
+    final background =
+        isPlan || isBuilding ? AppColors.accentGreen : AppColors.lilac;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Both quiz backgrounds are light, like the onboarding pages.
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: background,
@@ -121,21 +169,25 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
         body: DesignCanvas(
           background: background,
           children: [
-            _Progress(step: _index + 1, total: _steps.length),
-            if (_index > 0)
+            Positioned(
+              left: 20,
+              top: 71,
+              width: 388,
+              height: 6,
+              child: QuizProgress(fraction: (_index + 1) / _steps.length),
+            ),
+            if (_index > 0 && !isBuilding)
               Positioned(
                 left: 20,
                 top: 96,
                 child: _TextButton(label: 'Back', onTap: _back),
               ),
-            Positioned(
-              right: 20,
-              top: 96,
-              child: _TextButton(
-                label: isPlan ? '' : 'Skip',
-                onTap: isPlan ? null : widget.onFinished,
+            if (!isPlan && !isBuilding)
+              Positioned(
+                right: 20,
+                top: 96,
+                child: _TextButton(label: 'Skip', onTap: widget.onFinished),
               ),
-            ),
             Positioned(
               left: 20,
               top: 148,
@@ -158,20 +210,43 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 _subtitle,
                 style: AppTypography.onboardingBody(),
                 textAlign: TextAlign.center,
-                // The box is two lines tall. Without this a longer string is
-                // clipped mid-word by the Stack and simply loses its ending —
-                // which is how "…a goal you will not meet." shipped as "…a
-                // goal you will not".
+                // The box is two lines tall, inside a hard-clipped Stack, so
+                // without this a longer string is cut off mid-word and simply
+                // loses its ending.
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            // The running estimate. It moves while you answer, so the plan
+            // assembles out of your own answers rather than arriving at the end
+            // as an assertion.
+            if (_answers.canEstimate && !isPlan && !isBuilding)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 296,
+                child: Center(
+                  child: QuizLiveTarget(calories: _draft.targets.calories),
+                ),
+              ),
             Positioned(
               left: 20,
-              top: 312,
+              top: _answers.canEstimate && !isPlan && !isBuilding ? 348 : 312,
               width: 388,
-              height: 410,
-              child: _body(),
+              height: _answers.canEstimate && !isPlan && !isBuilding ? 374 : 410,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) => SlideTransition(
+                  position: Tween(
+                    begin: Offset(_forward ? 0.12 : -0.12, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: KeyedSubtree(key: ValueKey(_step), child: _body()),
+              ),
             ),
             const DesignImage(
               asset: 'assets/images/onboarding/blob.png',
@@ -180,18 +255,19 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
               width: 212,
               height: 188,
             ),
-            Positioned(
-              left: 165,
-              top: 788,
-              width: 100,
-              height: 100,
-              child: RoundNextButton(
-                onTap: _advance,
-                label: isPlan ? 'Start\nTracking' : 'Next',
-                showArrow: !isPlan,
-                enabled: _canAdvance && !_saving,
+            if (!isBuilding)
+              Positioned(
+                left: 165,
+                top: 788,
+                width: 100,
+                height: 100,
+                child: RoundNextButton(
+                  onTap: _advance,
+                  label: isPlan ? 'Start\nTracking' : 'Next',
+                  showArrow: !isPlan,
+                  enabled: _canAdvance && !_saving,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -199,6 +275,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   }
 
   String get _title => switch (_step) {
+        _Step.motivation => 'What brings you here?',
         _Step.gender => 'Tell us about you',
         _Step.age => 'How old are you?',
         _Step.height => 'How tall are you?',
@@ -206,12 +283,19 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
         _Step.activity => 'How active are you?',
         _Step.goal => 'What is your goal?',
         _Step.goalWeight => 'Where are you heading?',
+        _Step.diet => 'How do you eat?',
+        _Step.meals => 'How many meals a day?',
+        _Step.obstacle => 'What trips you up?',
+        _Step.reminders => 'Want a nudge?',
+        _Step.building => 'Building your plan',
         _Step.plan => 'Your daily plan',
       };
 
   String get _subtitle => switch (_step) {
+        _Step.motivation => 'So the plan we build answers the thing you '
+            'actually came for.',
         _Step.gender => 'Your body uses energy differently, so this changes '
-            'the number we work out.',
+            'the number.',
         _Step.age => 'Energy needs fall gradually with age.',
         _Step.height => 'Used only to work out your daily energy.',
         _Step.weight => 'You can change this any time in your profile.',
@@ -220,21 +304,33 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
         _Step.goal => 'This decides whether your target sits above or below '
             'what you burn.',
         _Step.goalWeight => 'A steady pace is easier to keep than a fast one.',
-        _Step.plan => 'Worked out from your height, weight, age and how much '
-            'you move.',
+        _Step.diet => 'We will lead with a plan that suits how you eat.',
+        _Step.meals => 'Used to space out reminders, not to police anything.',
+        _Step.obstacle => 'Everyone has one. Yours decides the tip we leave '
+            'you with.',
+        _Step.reminders => 'A quiet reminder around mealtimes. Off is fine.',
+        _Step.building => 'Working out what you burn, and what to eat.',
+        _Step.plan => 'From your height, weight, age and how much you move.',
       };
 
   Widget _body() => switch (_step) {
-        _Step.gender => _Options<Gender>(
+        _Step.motivation => QuizOptions<Motivation>(
+            value: _answers.motivation,
+            options: [
+              for (final m in Motivation.values) (m, m.label, m.detail),
+            ],
+            onChanged: (v) => _set(_answers.copyWith(motivation: v)),
+          ),
+        _Step.gender => QuizOptions<Gender>(
             value: _answers.gender,
             options: const [
               (Gender.female, 'Female', null),
               (Gender.male, 'Male', null),
-              (Gender.unspecified, 'Prefer not to say', 'We will use an average'),
+              (Gender.unspecified, 'Prefer not to say', 'We use an average'),
             ],
             onChanged: (v) => _set(_answers.copyWith(gender: v)),
           ),
-        _Step.age => _NumberSlider(
+        _Step.age => QuizNumberSlider(
             value: _answers.age.toDouble(),
             min: 13,
             max: 90,
@@ -243,7 +339,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             format: (v) => v.round().toString(),
             onChanged: (v) => _set(_answers.copyWith(age: v.round())),
           ),
-        _Step.height => _NumberSlider(
+        _Step.height => QuizNumberSlider(
             value: _answers.heightCm,
             min: 120,
             max: 220,
@@ -252,7 +348,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             format: (v) => v.round().toString(),
             onChanged: (v) => _set(_answers.copyWith(heightCm: v)),
           ),
-        _Step.weight => _NumberSlider(
+        _Step.weight => QuizNumberSlider(
             value: _answers.weightKg,
             min: 35,
             max: 200,
@@ -261,7 +357,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             format: (v) => v.toStringAsFixed(1),
             onChanged: (v) => _set(_answers.copyWith(weightKg: v)),
           ),
-        _Step.activity => _Options<ActivityLevel>(
+        _Step.activity => QuizOptions<ActivityLevel>(
             value: _answers.activity,
             options: [
               for (final level in ActivityLevel.values)
@@ -269,7 +365,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             ],
             onChanged: (v) => _set(_answers.copyWith(activity: v)),
           ),
-        _Step.goal => _Options<WeightGoal>(
+        _Step.goal => QuizOptions<WeightGoal>(
             value: _answers.goal,
             options: const [
               (WeightGoal.lose, 'Lose weight', null),
@@ -279,8 +375,6 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(
               _answers.copyWith(
                 goal: v,
-                // Seed a sensible destination so the next step opens somewhere
-                // near where they are rather than at the slider's floor.
                 goalWeightKg: _answers.goalWeightKg ??
                     (v == WeightGoal.lose
                         ? _answers.weightKg - 5
@@ -293,49 +387,43 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onWeight: (v) => _set(_answers.copyWith(goalWeightKg: v)),
             onRate: (v) => _set(_answers.copyWith(weeklyRateKg: v)),
           ),
-        _Step.plan => _Plan(profile: _draft),
+        _Step.diet => QuizOptions<DietPreference>(
+            value: _answers.dietPreference,
+            options: [
+              for (final d in DietPreference.values) (d, d.label, null),
+            ],
+            onChanged: (v) => _set(_answers.copyWith(dietPreference: v)),
+          ),
+        _Step.meals => QuizNumberSlider(
+            value: _answers.mealsPerDay.toDouble(),
+            min: 2,
+            max: 6,
+            divisions: 4,
+            unit: 'a day',
+            format: (v) => v.round().toString(),
+            onChanged: (v) => _set(_answers.copyWith(mealsPerDay: v.round())),
+          ),
+        _Step.obstacle => QuizOptions<Obstacle>(
+            value: _answers.obstacle,
+            options: [for (final o in Obstacle.values) (o, o.label, null)],
+            onChanged: (v) => _set(_answers.copyWith(obstacle: v)),
+          ),
+        _Step.reminders => QuizOptions<bool>(
+            value: _answers.wantsReminders,
+            options: const [
+              (true, 'Yes, remind me', 'Around your mealtimes'),
+              (false, 'No thanks', 'You can turn this on later'),
+            ],
+            onChanged: (v) => _set(_answers.copyWith(wantsReminders: v)),
+          ),
+        _Step.building => _Building(onDone: _advance),
+        _Step.plan => _Plan(profile: _draft, answers: _answers),
       };
 }
 
 // ---------------------------------------------------------------------------
 // Pieces
 // ---------------------------------------------------------------------------
-
-/// How far through, as a bar rather than a count.
-class _Progress extends StatelessWidget {
-  const _Progress({required this.step, required this.total});
-
-  final int step;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: 20,
-      top: 71,
-      width: 388,
-      height: 6,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(3),
-        child: Stack(
-          children: [
-            const ColoredBox(
-              color: Color(0x1F121212),
-              child: SizedBox(width: 388, height: 6),
-            ),
-            AnimatedFractionallySizedBox(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOut,
-              widthFactor: step / total,
-              alignment: Alignment.centerLeft,
-              child: const ColoredBox(color: AppColors.ink),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _TextButton extends StatelessWidget {
   const _TextButton({required this.label, this.onTap});
@@ -345,7 +433,6 @@ class _TextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (label.isEmpty) return const SizedBox.shrink();
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -356,158 +443,6 @@ class _TextButton extends StatelessWidget {
           style: AppTypography.socialLabel(color: AppColors.inkMuted),
         ),
       ),
-    );
-  }
-}
-
-/// A single-choice list. Selected is the ink fill the round CTA uses, so the
-/// two read as the same control family.
-class _Options<T> extends StatelessWidget {
-  const _Options({
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final T? value;
-
-  /// (value, label, optional detail line)
-  final List<(T, String, String?)> options;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    // Gaps go BETWEEN cards, not after every one. A trailing gap put the
-    // five-option activity step 10pt over its 410pt body — 5x72 + 5x12 — which
-    // renders as the overflow stripes rather than as anything subtle.
-    return Column(
-      children: [
-        for (var i = 0; i < options.length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
-          _OptionCard(
-            label: options[i].$2,
-            detail: options[i].$3,
-            selected: options[i].$1 == value,
-            onTap: () => onChanged(options[i].$1),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _OptionCard extends StatelessWidget {
-  const _OptionCard({
-    required this.label,
-    required this.detail,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final String? detail;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.ink : AppColors.white,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: detail == null ? 64 : 72,
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected ? AppColors.ink : const Color(0x1F121212),
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTypography.body(
-                  color: selected ? AppColors.white : AppColors.ink,
-                ),
-              ),
-              if (detail != null)
-                Text(
-                  detail!,
-                  style: AppTypography.socialLabel(
-                    color: selected
-                        ? const Color(0xB3FFFFFF)
-                        : AppColors.inkMuted,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A big number over a slider — no keyboard, which is the whole point.
-class _NumberSlider extends StatelessWidget {
-  const _NumberSlider({
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.unit,
-    required this.format,
-    required this.onChanged,
-  });
-
-  final double value;
-  final double min;
-  final double max;
-  final int divisions;
-  final String unit;
-  final String Function(double) format;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const SizedBox(height: 40),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(format(value), style: AppTypography.onboardingTitle()),
-            const SizedBox(width: 8),
-            Text(unit, style: AppTypography.onboardingBody()),
-          ],
-        ),
-        const SizedBox(height: 24),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 6,
-            activeTrackColor: AppColors.ink,
-            inactiveTrackColor: const Color(0x1F121212),
-            thumbColor: AppColors.ink,
-            overlayColor: const Color(0x14121212),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
-          ),
-          child: Slider(
-            value: value.clamp(min, max),
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -529,7 +464,7 @@ class _GoalWeight extends StatelessWidget {
     final rate = answers.weeklyRateKg;
     return Column(
       children: [
-        _NumberSlider(
+        QuizNumberSlider(
           value: answers.goalWeightKg ?? answers.weightKg,
           min: 35,
           max: 200,
@@ -538,12 +473,12 @@ class _GoalWeight extends StatelessWidget {
           format: (v) => v.toStringAsFixed(1),
           onChanged: onWeight,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Row(
           children: [
-            // 0.25 to 0.75 kg a week. Nothing faster is offered: the arithmetic
-            // would happily produce it and the deficit cap would then quietly
-            // override it, which is a worse experience than not offering it.
+            // 0.25 to 0.75 kg a week. Nothing faster is offered: the deficit
+            // cap would quietly override it, and a control that does not do
+            // what it says is worse than one that is not there.
             for (final option in const [0.25, 0.5, 0.75]) ...[
               Expanded(
                 child: _RateChip(
@@ -577,21 +512,24 @@ class _RateChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.ink : AppColors.white,
-      borderRadius: BorderRadius.circular(16),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      height: 64,
+      decoration: BoxDecoration(
+        color: selected ? AppColors.ink : AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected ? AppColors.ink : const Color(0x1F121212),
+        ),
+      ),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 64,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? AppColors.ink : const Color(0x1F121212),
-            ),
-          ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -604,9 +542,8 @@ class _RateChip extends StatelessWidget {
               Text(
                 detail,
                 style: AppTypography.divider(
-                  color: selected
-                      ? const Color(0xB3FFFFFF)
-                      : AppColors.inkMuted,
+                  color:
+                      selected ? const Color(0xB3FFFFFF) : AppColors.inkMuted,
                 ),
               ),
             ],
@@ -617,15 +554,122 @@ class _RateChip extends StatelessWidget {
   }
 }
 
-/// The payoff screen: the number the whole quiz was for.
+/// The beat between the last answer and the plan.
 ///
-/// It counts up rather than appearing, which is the one piece of theatre worth
-/// keeping from how these apps do it — the plan visibly assembles itself out of
-/// the answers just given, rather than arriving as a fact.
+/// It is theatre, and it is deliberate: the work behind it is a few
+/// multiplications, but arriving at a number instantly reads as a lookup, while
+/// watching it be worked out reads as a plan. The steps named are the ones
+/// actually being performed.
+class _Building extends StatefulWidget {
+  const _Building({required this.onDone});
+
+  final VoidCallback onDone;
+
+  @override
+  State<_Building> createState() => _BuildingState();
+}
+
+class _BuildingState extends State<_Building> {
+  static const _stages = [
+    'Working out what you burn at rest',
+    'Adding what you burn moving',
+    'Setting your daily target',
+    'Splitting it into protein, carbs and fat',
+  ];
+
+  int _stage = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 550), (t) {
+      if (!mounted) return;
+      if (_stage == _stages.length - 1) {
+        t.cancel();
+        HapticFeedback.mediumImpact();
+        widget.onDone();
+        return;
+      }
+      setState(() => _stage++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 40),
+        const SizedBox(
+          width: 56,
+          height: 56,
+          child: CircularProgressIndicator(
+            strokeWidth: 5,
+            valueColor: AlwaysStoppedAnimation(AppColors.ink),
+            backgroundColor: Color(0x1F121212),
+          ),
+        ),
+        const SizedBox(height: 32),
+        for (var i = 0; i < _stages.length; i++)
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 260),
+            opacity: i <= _stage ? 1 : 0.25,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    i < _stage ? Icons.check_circle : Icons.circle_outlined,
+                    size: 18,
+                    color: AppColors.ink,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _stages[i],
+                      style: AppTypography.socialLabel(color: AppColors.ink),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The payoff: the number the whole quiz was for.
 class _Plan extends StatelessWidget {
-  const _Plan({required this.profile});
+  const _Plan({required this.profile, required this.answers});
 
   final UserProfile profile;
+  final QuizAnswers answers;
+
+  /// The tip is chosen by the obstacle they named, and every one of them points
+  /// at something the app can actually do.
+  String get _tip => switch (answers.obstacle) {
+        Obstacle.snacking =>
+          'Log the snack before you eat it — that is the one that gets '
+              'forgotten.',
+        Obstacle.portions =>
+          'Use the portion buttons on a scan. An estimate you correct beats '
+              'one you accept.',
+        Obstacle.eatingOut =>
+          'No photo? Describe the meal instead — same result, no camera.',
+        Obstacle.consistency =>
+          'Two meals logged keeps your streak. Missing one does not end it.',
+        null => 'Scan a meal to get started.',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -634,7 +678,6 @@ class _Plan extends StatelessWidget {
 
     return Column(
       children: [
-        const SizedBox(height: 12),
         TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: targets.calories),
           duration: const Duration(milliseconds: 900),
@@ -645,7 +688,7 @@ class _Plan extends StatelessWidget {
           ),
         ),
         Text('calories a day', style: AppTypography.onboardingBody()),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
         Row(
           children: [
             _Macro(label: 'Protein', grams: targets.protein),
@@ -653,17 +696,32 @@ class _Plan extends StatelessWidget {
             _Macro(label: 'Fat', grams: targets.fat),
           ],
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 20),
         if (goalDate != null)
           Text(
             'On track for ${profile.goalWeightKg!.toStringAsFixed(0)} kg by '
             '${DateFormat('d MMMM y').format(goalDate)}.',
             style: AppTypography.socialLabel(color: AppColors.inkMuted),
             textAlign: TextAlign.center,
+            maxLines: 2,
           ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0x1F121212),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            _tip,
+            style: AppTypography.socialLabel(color: AppColors.ink),
+            textAlign: TextAlign.center,
+            maxLines: 3,
+          ),
+        ),
+        const SizedBox(height: 10),
         Text(
-          'An estimate, not medical advice. You can change any of this later.',
+          'An estimate, not medical advice.',
           style: AppTypography.divider(color: AppColors.inkMuted),
           textAlign: TextAlign.center,
         ),

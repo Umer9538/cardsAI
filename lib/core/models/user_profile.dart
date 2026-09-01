@@ -24,6 +24,52 @@ enum ActivityLevel {
   final double multiplier;
 }
 
+/// What brought someone to the app.
+///
+/// Does not enter the arithmetic — it selects the line of copy the plan screen
+/// closes on, so the number arrives as an answer to what they actually asked.
+enum Motivation {
+  lose('Lose weight', 'Take it off and keep it off'),
+  muscle('Build muscle', 'Eat enough to train hard'),
+  healthier('Eat healthier', 'Better food, not less of it'),
+  understand('Understand my food', 'See what is actually on the plate');
+
+  const Motivation(this.label, this.detail);
+
+  final String label;
+  final String detail;
+}
+
+/// How someone eats, which decides the plan Home leads with.
+enum DietPreference {
+  anything('No restrictions', null),
+  vegetarian('Vegetarian', null),
+  vegan('Vegan', 'vegan'),
+  keto('Keto', 'keto'),
+  lowCarb('Low carb', 'low-carb'),
+  mediterranean('Mediterranean', 'mediterranean');
+
+  const DietPreference(this.label, this.planMatch);
+
+  final String label;
+
+  /// Matched against [DietPlan.name] to pick the featured plan. Null means no
+  /// preference, so the catalogue order stands.
+  final String? planMatch;
+}
+
+/// The thing most likely to derail them. Chooses the plan screen's one tip.
+enum Obstacle {
+  snacking('Snacking between meals'),
+  portions('Judging portion sizes'),
+  eatingOut('Eating out and takeaways'),
+  consistency('Staying consistent');
+
+  const Obstacle(this.label);
+
+  final String label;
+}
+
 /// Which direction the daily calorie target moves from maintenance.
 enum WeightGoal {
   lose('Lose weight'),
@@ -51,6 +97,11 @@ class UserProfile {
     this.goal,
     this.goalWeightKg,
     this.weeklyRateKg = 0.5,
+    this.motivation,
+    this.dietPreference,
+    this.mealsPerDay = 3,
+    this.obstacle,
+    this.wantsReminders = false,
     this.targets = defaultTargets,
     this.isPremium = false,
   });
@@ -94,6 +145,16 @@ class UserProfile {
   /// unsafe.
   final double weeklyRateKg;
 
+  /// Context rather than arithmetic. Each of these changes something the person
+  /// sees — the plan's closing line, the plan Home features, the tip it
+  /// offers — because a quiz question whose answer goes nowhere is drop-off
+  /// bought for nothing.
+  final Motivation? motivation;
+  final DietPreference? dietPreference;
+  final int mealsPerDay;
+  final Obstacle? obstacle;
+  final bool wantsReminders;
+
   /// Whether there is enough here to compute a real target.
   ///
   /// What decides whether the quiz is shown. Everything else about a profile is
@@ -135,6 +196,11 @@ class UserProfile {
     WeightGoal? goal,
     double? goalWeightKg,
     double? weeklyRateKg,
+    Motivation? motivation,
+    DietPreference? dietPreference,
+    int? mealsPerDay,
+    Obstacle? obstacle,
+    bool? wantsReminders,
     Nutrition? targets,
     bool? isPremium,
   }) =>
@@ -151,6 +217,11 @@ class UserProfile {
         goal: goal ?? this.goal,
         goalWeightKg: goalWeightKg ?? this.goalWeightKg,
         weeklyRateKg: weeklyRateKg ?? this.weeklyRateKg,
+        motivation: motivation ?? this.motivation,
+        dietPreference: dietPreference ?? this.dietPreference,
+        mealsPerDay: mealsPerDay ?? this.mealsPerDay,
+        obstacle: obstacle ?? this.obstacle,
+        wantsReminders: wantsReminders ?? this.wantsReminders,
         targets: targets ?? this.targets,
         isPremium: isPremium ?? this.isPremium,
       );
@@ -168,6 +239,11 @@ class UserProfile {
         'goal': goal?.name,
         'goalWeightKg': goalWeightKg,
         'weeklyRateKg': weeklyRateKg,
+        'motivation': motivation?.name,
+        'dietPreference': dietPreference?.name,
+        'mealsPerDay': mealsPerDay,
+        'obstacle': obstacle?.name,
+        'wantsReminders': wantsReminders,
         'targets': targets.toJson(),
         'isPremium': isPremium,
       };
@@ -195,6 +271,16 @@ class UserProfile {
             .firstOrNull,
         goalWeightKg: (json['goalWeightKg'] as num?)?.toDouble(),
         weeklyRateKg: (json['weeklyRateKg'] as num?)?.toDouble() ?? 0.5,
+        motivation: Motivation.values
+            .where((m) => m.name == json['motivation'])
+            .firstOrNull,
+        dietPreference: DietPreference.values
+            .where((d) => d.name == json['dietPreference'])
+            .firstOrNull,
+        mealsPerDay: (json['mealsPerDay'] as num?)?.toInt() ?? 3,
+        obstacle:
+            Obstacle.values.where((o) => o.name == json['obstacle']).firstOrNull,
+        wantsReminders: json['wantsReminders'] as bool? ?? false,
         targets: json['targets'] == null
             ? defaultTargets
             : Nutrition.fromJson(

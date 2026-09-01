@@ -185,13 +185,27 @@ class HomeScreen extends ConsumerWidget {
     return day == DateTime(now.year, now.month, now.day);
   }
 
-  /// The plan to feature: the first one the user has saved, else the first in
-  /// the catalogue. Null only before either stream has produced anything.
+  /// The plan to feature: one the user has saved, else one that matches how
+  /// they said they eat, else the first in the catalogue.
+  ///
+  /// The diet preference the quiz collects is spent here. It is a small thing,
+  /// but it is the difference between asking a question and using the answer —
+  /// someone who said "keto" should not be shown a vegan plan on their first
+  /// screen.
   DietPlan? _featuredPlan(WidgetRef ref) {
     final mine = ref.watch(myDietsProvider).value ?? const [];
     if (mine.isNotEmpty) return mine.first;
+
     final all = ref.watch(allDietsProvider).value ?? const [];
-    return all.isEmpty ? null : all.first;
+    if (all.isEmpty) return null;
+
+    final match = ref.watch(profileProvider).value?.dietPreference?.planMatch;
+    if (match != null) {
+      for (final plan in all) {
+        if (plan.name.toLowerCase().contains(match)) return plan;
+      }
+    }
+    return all.first;
   }
 }
 

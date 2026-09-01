@@ -52,6 +52,7 @@ void main() {
     // The lose branch is walked because it is the longest: it adds the goal
     // weight step the maintain branch skips.
     const walk = <(String, String?)>[
+      ('motivation', 'Understand my food'),
       ('gender', 'Female'),
       ('age', null),
       ('height', null),
@@ -59,20 +60,30 @@ void main() {
       ('activity', 'Moderately active'),
       ('goal', 'Lose weight'),
       ('goal weight', null),
-      ('plan', null),
+      ('diet', 'Mediterranean'),
+      ('meals', null),
+      ('obstacle', 'Judging portion sizes'),
+      ('reminders', 'Yes, remind me'),
     ];
 
     for (final (name, choice) in walk) {
       await checkVisibleCopy(tester, name);
-
-      if (name == 'plan') break;
       if (choice != null) {
         await tester.tap(find.text(choice));
-        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
       }
       await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
     }
+
+    // Building advances itself. Bounded pumps because its progress indicator
+    // never settles.
+    await checkVisibleCopy(tester, 'building');
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+    await checkVisibleCopy(tester, 'plan');
   });
 
   testWidgets('every activity level label fits its card', (tester) async {
@@ -87,11 +98,17 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
 
+    // motivation, gender, then the three sliders, to reach activity.
+    await tester.tap(find.text('Eat healthier'));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.text('Next'));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('Female'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     for (var i = 0; i < 4; i++) {
       await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
     }
 
     for (final level in ActivityLevel.values) {

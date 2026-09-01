@@ -20,6 +20,11 @@ class QuizAnswers {
     this.goal,
     this.goalWeightKg,
     this.weeklyRateKg = 0.5,
+    this.motivation,
+    this.dietPreference,
+    this.mealsPerDay = 3,
+    this.obstacle,
+    this.wantsReminders = true,
   });
 
   final Gender? gender;
@@ -30,6 +35,11 @@ class QuizAnswers {
   final WeightGoal? goal;
   final double? goalWeightKg;
   final double weeklyRateKg;
+  final Motivation? motivation;
+  final DietPreference? dietPreference;
+  final int mealsPerDay;
+  final Obstacle? obstacle;
+  final bool wantsReminders;
 
   QuizAnswers copyWith({
     Gender? gender,
@@ -40,6 +50,11 @@ class QuizAnswers {
     WeightGoal? goal,
     double? goalWeightKg,
     double? weeklyRateKg,
+    Motivation? motivation,
+    DietPreference? dietPreference,
+    int? mealsPerDay,
+    Obstacle? obstacle,
+    bool? wantsReminders,
   }) =>
       QuizAnswers(
         gender: gender ?? this.gender,
@@ -50,7 +65,16 @@ class QuizAnswers {
         goal: goal ?? this.goal,
         goalWeightKg: goalWeightKg ?? this.goalWeightKg,
         weeklyRateKg: weeklyRateKg ?? this.weeklyRateKg,
+        motivation: motivation ?? this.motivation,
+        dietPreference: dietPreference ?? this.dietPreference,
+        mealsPerDay: mealsPerDay ?? this.mealsPerDay,
+        obstacle: obstacle ?? this.obstacle,
+        wantsReminders: wantsReminders ?? this.wantsReminders,
       );
+
+  /// Enough answered to compute a target, which is what the running estimate
+  /// waits for before it appears.
+  bool get canEstimate => activity != null && goal != null;
 
   /// A profile to compute against, so the plan screen can show real numbers
   /// before anything is saved.
@@ -69,6 +93,11 @@ class QuizAnswers {
       goal: goal,
       goalWeightKg: goalWeight,
       weeklyRateKg: weeklyRateKg,
+      motivation: motivation,
+      dietPreference: dietPreference,
+      mealsPerDay: mealsPerDay,
+      obstacle: obstacle,
+      wantsReminders: wantsReminders,
     );
     return draft.copyWith(targets: TargetCalculator.forProfile(draft));
   }

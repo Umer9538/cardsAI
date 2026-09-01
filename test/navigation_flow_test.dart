@@ -25,15 +25,19 @@ Finder assetFinder(String name) => find.byWidgetPredicate(
 void main() {
   setUpAll(loadDesignFonts);
 
-  /// Answers one step and moves on. The Next button carries no text of its own
-  /// on the answer steps, so it is found by the label the artboard gives it.
+  /// Answers one step and moves on.
+  ///
+  /// Bounded pumps rather than `pumpAndSettle`: the step that builds the plan
+  /// carries a progress indicator, which never settles, so settling would hang
+  /// the moment the walk reached it.
   Future<void> answerAndAdvance(WidgetTester tester, String? choice) async {
     if (choice != null) {
       await tester.tap(find.text(choice));
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
     }
     await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
   }
 
   Future<void> boot(WidgetTester tester) async {
@@ -89,22 +93,33 @@ void main() {
 
     // Signing in with a profile that has no height, weight or activity level
     // must not drop straight into an app measuring against a made-up goal.
-    expect(find.text('Tell us about you'), findsOneWidget);
+    expect(find.text('What brings you here?'), findsOneWidget);
 
-    await answerAndAdvance(tester, 'Female');        // gender
+    await answerAndAdvance(tester, 'Eat healthier');
+    await answerAndAdvance(tester, 'Female');
     await answerAndAdvance(tester, null);            // age, slider default
     await answerAndAdvance(tester, null);            // height
     await answerAndAdvance(tester, null);            // weight
     await answerAndAdvance(tester, 'Lightly active');
     await answerAndAdvance(tester, 'Maintain weight');
+    // Maintaining has no goal weight to ask about, so that step is skipped.
+    await answerAndAdvance(tester, 'No restrictions');
+    await answerAndAdvance(tester, null);            // meals a day
+    await answerAndAdvance(tester, 'Snacking between meals');
+    await answerAndAdvance(tester, 'Yes, remind me');
 
-    // Maintaining has no goal weight to ask about, so that step is skipped and
-    // the plan comes next.
+    // The plan-building step advances itself, so no tap here — only time.
+    expect(find.text('Building your plan'), findsOneWidget);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
     expect(find.text('Your daily plan'), findsOneWidget);
     expect(find.text('calories a day'), findsOneWidget);
 
     await tester.tap(find.text('Start\nTracking'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
 
     expect(find.text(_homeMarker), findsOneWidget);
   });
