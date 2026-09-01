@@ -11,7 +11,6 @@ import '../../../core/nutrition/target_calculator.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../auth/presentation/widgets/auth_widgets.dart';
 import 'quiz_answers.dart';
 import 'widgets/quiz_controls.dart';
 
@@ -96,6 +95,10 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
 
   _Step get _step => _steps[_index.clamp(0, _steps.length - 1)];
 
+  /// One colour per question, cycled, so moving through the quiz is visibly
+  /// moving rather than the same screen with new words.
+  Color get _accent => QuizPalette.accentFor(_index);
+
   UserProfile get _draft =>
       _answers.applyTo(ref.read(profileProvider).value ?? _blankProfile);
 
@@ -157,10 +160,10 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     final isBuilding = _step == _Step.building;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
+      value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: QuizPalette.ground,
-        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
         backgroundColor: QuizPalette.ground,
@@ -171,8 +174,11 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
               left: 20,
               top: 71,
               width: 388,
-              height: 6,
-              child: QuizProgress(fraction: (_index + 1) / _steps.length),
+              height: 16,
+              child: QuizProgress(
+                fraction: (_index + 1) / _steps.length,
+                accent: _accent,
+              ),
             ),
             if (_index > 0 && !isBuilding)
               Positioned(
@@ -197,7 +203,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 step: _step,
                 child: Text(
                   _title,
-                  style: AppTypography.authTitle(color: QuizPalette.text),
+                  style: AppTypography.authTitle(color: QuizPalette.ink),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -213,7 +219,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 step: _step,
                 child: Text(
                   _subtitle,
-                  style: AppTypography.body(color: QuizPalette.muted),
+                  style: AppTypography.body(color: AppColors.inkMuted),
                   textAlign: TextAlign.center,
                   // The box is two lines tall, inside a hard-clipped Stack, so
                   // without this a longer string is cut off mid-word and simply
@@ -261,17 +267,14 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             if (!isBuilding)
               Positioned(
                 left: 20,
-                top: 800,
+                top: 796,
                 width: 388,
-                height: 50,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: _canAdvance ? 1 : 0.4,
-                  child: PrimaryButton(
-                    label: isPlan ? 'Start tracking' : 'Continue',
-                    busy: _saving,
-                    onPressed: _canAdvance && !_saving ? _advance : null,
-                  ),
+                height: 58,
+                child: StickerButton(
+                  label: isPlan ? "Let's go" : 'Continue',
+                  accent: _accent,
+                  busy: _saving,
+                  onPressed: _canAdvance && !_saving ? _advance : null,
                 ),
               ),
           ],
@@ -321,6 +324,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
 
   Widget _body() => switch (_step) {
         _Step.motivation => QuizOptions<Motivation>(
+            accent: _accent,
             value: _answers.motivation,
             options: [
               for (final m in Motivation.values) (m, m.label, m.detail),
@@ -328,6 +332,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(motivation: v)),
           ),
         _Step.gender => QuizOptions<Gender>(
+            accent: _accent,
             value: _answers.gender,
             options: const [
               (Gender.female, 'Female', null),
@@ -337,6 +342,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(gender: v)),
           ),
         _Step.age => QuizNumberSlider(
+            accent: _accent,
             value: _answers.age.toDouble(),
             min: 13,
             max: 90,
@@ -346,6 +352,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(age: v.round())),
           ),
         _Step.height => QuizNumberSlider(
+            accent: _accent,
             value: _answers.heightCm,
             min: 120,
             max: 220,
@@ -355,6 +362,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(heightCm: v)),
           ),
         _Step.weight => QuizNumberSlider(
+            accent: _accent,
             value: _answers.weightKg,
             min: 35,
             max: 200,
@@ -364,6 +372,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(weightKg: v)),
           ),
         _Step.activity => QuizOptions<ActivityLevel>(
+            accent: _accent,
             value: _answers.activity,
             options: [
               for (final level in ActivityLevel.values)
@@ -372,6 +381,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(activity: v)),
           ),
         _Step.goal => QuizOptions<WeightGoal>(
+            accent: _accent,
             value: _answers.goal,
             options: const [
               (WeightGoal.lose, 'Lose weight', null),
@@ -389,11 +399,13 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             ),
           ),
         _Step.goalWeight => _GoalWeight(
+            accent: _accent,
             answers: _answers,
             onWeight: (v) => _set(_answers.copyWith(goalWeightKg: v)),
             onRate: (v) => _set(_answers.copyWith(weeklyRateKg: v)),
           ),
         _Step.diet => QuizOptions<DietPreference>(
+            accent: _accent,
             value: _answers.dietPreference,
             options: [
               for (final d in DietPreference.values) (d, d.label, null),
@@ -401,6 +413,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(dietPreference: v)),
           ),
         _Step.meals => QuizNumberSlider(
+            accent: _accent,
             value: _answers.mealsPerDay.toDouble(),
             min: 2,
             max: 6,
@@ -410,11 +423,13 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onChanged: (v) => _set(_answers.copyWith(mealsPerDay: v.round())),
           ),
         _Step.obstacle => QuizOptions<Obstacle>(
+            accent: _accent,
             value: _answers.obstacle,
             options: [for (final o in Obstacle.values) (o, o.label, null)],
             onChanged: (v) => _set(_answers.copyWith(obstacle: v)),
           ),
         _Step.reminders => QuizOptions<bool>(
+            accent: _accent,
             value: _answers.wantsReminders,
             options: const [
               (true, 'Yes, remind me', 'Around your mealtimes'),
@@ -422,8 +437,8 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             ],
             onChanged: (v) => _set(_answers.copyWith(wantsReminders: v)),
           ),
-        _Step.building => _Building(onDone: _advance),
-        _Step.plan => _Plan(profile: _draft, answers: _answers),
+        _Step.building => _Building(accent: _accent, onDone: _advance),
+        _Step.plan => _Plan(profile: _draft, answers: _answers, accent: _accent),
       };
 }
 
@@ -475,7 +490,7 @@ class _TextButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         child: Text(
           label,
-          style: AppTypography.socialLabel(color: QuizPalette.muted),
+          style: AppTypography.socialLabel(color: AppColors.inkMuted),
         ),
       ),
     );
@@ -485,11 +500,13 @@ class _TextButton extends StatelessWidget {
 /// Goal weight, plus how fast to get there.
 class _GoalWeight extends StatelessWidget {
   const _GoalWeight({
+    required this.accent,
     required this.answers,
     required this.onWeight,
     required this.onRate,
   });
 
+  final Color accent;
   final QuizAnswers answers;
   final ValueChanged<double> onWeight;
   final ValueChanged<double> onRate;
@@ -500,6 +517,7 @@ class _GoalWeight extends StatelessWidget {
     return Column(
       children: [
         QuizNumberSlider(
+          accent: accent,
           value: answers.goalWeightKg ?? answers.weightKg,
           min: 35,
           max: 200,
@@ -517,6 +535,7 @@ class _GoalWeight extends StatelessWidget {
             for (final option in const [0.25, 0.5, 0.75]) ...[
               Expanded(
                 child: _RateChip(
+                  accent: accent,
                   label: '${option.toStringAsFixed(2)} kg',
                   detail: option == 0.5 ? 'Recommended' : 'per week',
                   selected: (rate - option).abs() < 0.01,
@@ -534,12 +553,14 @@ class _GoalWeight extends StatelessWidget {
 
 class _RateChip extends StatelessWidget {
   const _RateChip({
+    required this.accent,
     required this.label,
     required this.detail,
     required this.selected,
     required this.onTap,
   });
 
+  final Color accent;
   final String label;
   final String detail;
   final bool selected;
@@ -551,10 +572,10 @@ class _RateChip extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       height: 64,
       decoration: BoxDecoration(
-        color: selected ? QuizPalette.selected : QuizPalette.card,
+        color: selected ? accent : QuizPalette.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: selected ? QuizPalette.selected : QuizPalette.border,
+          color: selected ? accent : QuizPalette.ink,
         ),
       ),
       clipBehavior: Clip.antiAlias,
@@ -570,14 +591,14 @@ class _RateChip extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: AppTypography.socialLabel(color: QuizPalette.text),
+                style: AppTypography.socialLabel(color: QuizPalette.ink),
               ),
               Text(
                 detail,
                 style: AppTypography.divider(
                   color: selected
                       ? const Color(0xCCFFFFFF)
-                      : QuizPalette.muted,
+                      : AppColors.inkMuted,
                 ),
               ),
             ],
@@ -595,8 +616,9 @@ class _RateChip extends StatelessWidget {
 /// watching it be worked out reads as a plan. The steps named are the ones
 /// actually being performed.
 class _Building extends StatefulWidget {
-  const _Building({required this.onDone});
+  const _Building({required this.accent, required this.onDone});
 
+  final Color accent;
   final VoidCallback onDone;
 
   @override
@@ -640,13 +662,13 @@ class _BuildingState extends State<_Building> {
     return Column(
       children: [
         const SizedBox(height: 40),
-        const SizedBox(
+        SizedBox(
           width: 56,
           height: 56,
           child: CircularProgressIndicator(
             strokeWidth: 5,
-            valueColor: AlwaysStoppedAnimation(QuizPalette.selected),
-            backgroundColor: QuizPalette.border,
+            valueColor: AlwaysStoppedAnimation(widget.accent),
+            backgroundColor: AppColors.white,
           ),
         ),
         const SizedBox(height: 32),
@@ -662,15 +684,13 @@ class _BuildingState extends State<_Building> {
                   Icon(
                     i < _stage ? Icons.check_circle : Icons.circle_outlined,
                     size: 18,
-                    color: i < _stage
-                        ? QuizPalette.selected
-                        : QuizPalette.muted,
+                    color: i < _stage ? widget.accent : AppColors.inkMuted,
                   ),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
                       _stages[i],
-                      style: AppTypography.socialLabel(color: QuizPalette.text),
+                      style: AppTypography.socialLabel(color: QuizPalette.ink),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -686,10 +706,15 @@ class _BuildingState extends State<_Building> {
 
 /// The payoff: the number the whole quiz was for.
 class _Plan extends StatelessWidget {
-  const _Plan({required this.profile, required this.answers});
+  const _Plan({
+    required this.profile,
+    required this.answers,
+    required this.accent,
+  });
 
   final UserProfile profile;
   final QuizAnswers answers;
+  final Color accent;
 
   /// The tip is chosen by the obstacle they named, and every one of them points
   /// at something the app can actually do.
@@ -714,21 +739,39 @@ class _Plan extends StatelessWidget {
 
     return Column(
       children: [
+        // The mascot turns up for the payoff and nowhere else, which is the
+        // only way a mascot stays likeable.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Sparkle(size: 16),
+            const SizedBox(width: 8),
+            Image.asset(
+              'assets/images/brand/mascot.png',
+              width: 76,
+              height: 76,
+              filterQuality: FilterQuality.high,
+            ),
+            const SizedBox(width: 8),
+            const Sparkle(size: 22),
+          ],
+        ),
+        const SizedBox(height: 4),
         TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: targets.calories),
           duration: const Duration(milliseconds: 900),
           curve: Curves.easeOutCubic,
           builder: (context, value, _) => Text(
             NutritionFormat.calories(value),
-            style: AppTypography.authTitle(color: QuizPalette.text)
+            style: AppTypography.authTitle(color: QuizPalette.ink)
                 .copyWith(fontSize: 46),
           ),
         ),
         Text(
           'calories a day',
-          style: AppTypography.body(color: QuizPalette.muted),
+          style: AppTypography.body(color: AppColors.inkMuted),
         ),
-        const SizedBox(height: 26),
+        const SizedBox(height: 16),
         // The same three colours the macro cards on Home use, so the plan and
         // the screen it hands over to are visibly the same numbers.
         Row(
@@ -750,32 +793,31 @@ class _Plan extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 14),
         if (goalDate != null)
           Text(
             'On track for ${profile.goalWeightKg!.toStringAsFixed(0)} kg by '
             '${DateFormat('d MMMM y').format(goalDate)}.',
-            style: AppTypography.socialLabel(color: QuizPalette.muted),
+            style: AppTypography.socialLabel(color: AppColors.inkMuted),
             textAlign: TextAlign.center,
             maxLines: 2,
           ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: QuizPalette.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: QuizPalette.border),
+            border: Border.all(color: QuizPalette.ink),
           ),
           child: Row(
             children: [
-              const Icon(Icons.lightbulb_outline_rounded,
-                  size: 18, color: QuizPalette.selected),
+              Icon(Icons.lightbulb_outline_rounded, size: 18, color: accent),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   _tip,
-                  style: AppTypography.socialLabel(color: QuizPalette.text),
+                  style: AppTypography.socialLabel(color: QuizPalette.ink),
                   maxLines: 3,
                 ),
               ),
@@ -785,7 +827,7 @@ class _Plan extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           'An estimate, not medical advice.',
-          style: AppTypography.divider(color: QuizPalette.muted),
+          style: AppTypography.divider(color: AppColors.inkMuted),
           textAlign: TextAlign.center,
         ),
       ],
@@ -816,7 +858,7 @@ class _Macro extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: AppTypography.socialLabel(color: QuizPalette.muted),
+            style: AppTypography.socialLabel(color: AppColors.inkMuted),
           ),
         ],
       ),

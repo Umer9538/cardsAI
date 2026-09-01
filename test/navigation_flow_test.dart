@@ -117,7 +117,7 @@ void main() {
     expect(find.text('Your daily plan'), findsOneWidget);
     expect(find.text('calories a day'), findsOneWidget);
 
-    await tester.tap(find.text('Start tracking'));
+    await tester.tap(find.text("Let's go"));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 

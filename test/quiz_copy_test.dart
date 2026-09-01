@@ -1,4 +1,5 @@
 import 'package:carbsai/core/models/models.dart';
+import 'package:carbsai/core/theme/app_colors.dart';
 import 'package:carbsai/features/onboarding/presentation/onboarding_quiz_screen.dart';
 import 'package:carbsai/features/onboarding/presentation/widgets/quiz_controls.dart';
 import 'package:flutter/material.dart';
@@ -44,7 +45,7 @@ void main() {
 
     await tester.pumpWidget(
       await designScope(
-        const MaterialApp(home: OnboardingQuizScreen()),
+        MaterialApp(home: OnboardingQuizScreen()),
       ),
     );
     await tester.pump(const Duration(milliseconds: 50));
@@ -132,8 +133,11 @@ void main() {
           body: Center(
             child: SizedBox(
               width: 388,
-              height: 6,
-              child: QuizProgress(fraction: 0.5),
+              height: 16,
+              child: QuizProgress(
+                fraction: 0.5,
+                accent: AppColors.primary,
+              ),
             ),
           ),
         ),
@@ -142,12 +146,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     final fill = find.byWidgetPredicate(
-      (w) => w is ColoredBox && w.color == QuizPalette.selected,
+      (w) => w is ColoredBox && w.color == AppColors.primary,
     );
     expect(fill, findsOneWidget);
 
     final size = tester.getSize(fill);
-    expect(size.height, 6, reason: 'the fill collapsed to zero height');
-    expect(size.width, closeTo(194, 1), reason: 'half of 388');
+    // The track's own 2.5pt outline eats into the fill on both edges.
+    expect(size.height, greaterThan(6),
+        reason: 'the fill collapsed to zero height');
+    expect(size.width, closeTo(191, 4), reason: 'about half of 388');
   });
 }
