@@ -11,9 +11,9 @@ import '../../../core/nutrition/target_calculator.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../auth/presentation/widgets/auth_widgets.dart';
 import 'quiz_answers.dart';
 import 'widgets/quiz_controls.dart';
-import 'widgets/round_next_button.dart';
 
 /// The steps, in order. `goalWeight` is skipped when maintaining.
 enum _Step {
@@ -155,19 +155,17 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   Widget build(BuildContext context) {
     final isPlan = _step == _Step.plan;
     final isBuilding = _step == _Step.building;
-    final background =
-        isPlan || isBuilding ? AppColors.accentGreen : AppColors.lilac;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
+      value: SystemUiOverlayStyle.light.copyWith(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: background,
-        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: QuizPalette.ground,
+        systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: background,
+        backgroundColor: QuizPalette.ground,
         body: DesignCanvas(
-          background: background,
+          background: QuizPalette.ground,
           children: [
             Positioned(
               left: 20,
@@ -188,17 +186,22 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 top: 96,
                 child: _TextButton(label: 'Skip', onTap: widget.onFinished),
               ),
+            // The question moves with its answers rather than snapping while
+            // the cards slide, which made the two read as separate screens.
             Positioned(
               left: 20,
               top: 148,
               width: 388,
               height: 84,
-              child: Text(
-                _title,
-                style: AppTypography.onboardingTitle(),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: _Fading(
+                step: _step,
+                child: Text(
+                  _title,
+                  style: AppTypography.authTitle(color: QuizPalette.text),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             Positioned(
@@ -206,15 +209,18 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
               top: 238,
               width: 388,
               height: 50,
-              child: Text(
-                _subtitle,
-                style: AppTypography.onboardingBody(),
-                textAlign: TextAlign.center,
-                // The box is two lines tall, inside a hard-clipped Stack, so
-                // without this a longer string is cut off mid-word and simply
-                // loses its ending.
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: _Fading(
+                step: _step,
+                child: Text(
+                  _subtitle,
+                  style: AppTypography.body(color: QuizPalette.muted),
+                  textAlign: TextAlign.center,
+                  // The box is two lines tall, inside a hard-clipped Stack, so
+                  // without this a longer string is cut off mid-word and simply
+                  // loses its ending.
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             // The running estimate. It moves while you answer, so the plan
@@ -248,28 +254,24 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 child: KeyedSubtree(key: ValueKey(_step), child: _body()),
               ),
             ),
-            // The blob is the button's backing shape, so it goes when the
-            // button does. Left on its own during the build step it reads as a
-            // blank white lozenge someone forgot to fill.
-            if (!isBuilding)
-              const DesignImage(
-                asset: 'assets/images/onboarding/blob.png',
-                left: 109,
-                top: 738,
-                width: 212,
-                height: 188,
-              ),
+            // The app's own CTA rather than the onboarding artboard's round
+            // button on its white blob. That pairing belongs to the marketing
+            // pages; here it sat on a dark ground looking like a sticker, and
+            // this is the same button the auth screens end on.
             if (!isBuilding)
               Positioned(
-                left: 165,
-                top: 788,
-                width: 100,
-                height: 100,
-                child: RoundNextButton(
-                  onTap: _advance,
-                  label: isPlan ? 'Start\nTracking' : 'Next',
-                  showArrow: !isPlan,
-                  enabled: _canAdvance && !_saving,
+                left: 20,
+                top: 800,
+                width: 388,
+                height: 50,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: _canAdvance ? 1 : 0.4,
+                  child: PrimaryButton(
+                    label: isPlan ? 'Start tracking' : 'Continue',
+                    busy: _saving,
+                    onPressed: _canAdvance && !_saving ? _advance : null,
+                  ),
                 ),
               ),
           ],
@@ -429,6 +431,35 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
 // Pieces
 // ---------------------------------------------------------------------------
 
+/// Crossfades its child whenever the step changes.
+///
+/// The question and its answers used to move independently — the cards slid in
+/// while the title snapped — which read as two screens sharing a background
+/// rather than one screen changing.
+class _Fading extends StatelessWidget {
+  const _Fading({required this.step, required this.child});
+
+  final Object step;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOut,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween(begin: const Offset(0, 0.15), end: Offset.zero)
+              .animate(animation),
+          child: child,
+        ),
+      ),
+      child: KeyedSubtree(key: ValueKey(step), child: child),
+    );
+  }
+}
+
 class _TextButton extends StatelessWidget {
   const _TextButton({required this.label, this.onTap});
 
@@ -444,7 +475,7 @@ class _TextButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         child: Text(
           label,
-          style: AppTypography.socialLabel(color: AppColors.inkMuted),
+          style: AppTypography.socialLabel(color: QuizPalette.muted),
         ),
       ),
     );
@@ -520,10 +551,10 @@ class _RateChip extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       height: 64,
       decoration: BoxDecoration(
-        color: selected ? AppColors.ink : AppColors.white,
+        color: selected ? QuizPalette.selected : QuizPalette.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: selected ? AppColors.ink : const Color(0x1F121212),
+          color: selected ? QuizPalette.selected : QuizPalette.border,
         ),
       ),
       clipBehavior: Clip.antiAlias,
@@ -539,15 +570,14 @@ class _RateChip extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: AppTypography.socialLabel(
-                  color: selected ? AppColors.white : AppColors.ink,
-                ),
+                style: AppTypography.socialLabel(color: QuizPalette.text),
               ),
               Text(
                 detail,
                 style: AppTypography.divider(
-                  color:
-                      selected ? const Color(0xB3FFFFFF) : AppColors.inkMuted,
+                  color: selected
+                      ? const Color(0xCCFFFFFF)
+                      : QuizPalette.muted,
                 ),
               ),
             ],
@@ -615,8 +645,8 @@ class _BuildingState extends State<_Building> {
           height: 56,
           child: CircularProgressIndicator(
             strokeWidth: 5,
-            valueColor: AlwaysStoppedAnimation(AppColors.ink),
-            backgroundColor: Color(0x1F121212),
+            valueColor: AlwaysStoppedAnimation(QuizPalette.selected),
+            backgroundColor: QuizPalette.border,
           ),
         ),
         const SizedBox(height: 32),
@@ -632,13 +662,15 @@ class _BuildingState extends State<_Building> {
                   Icon(
                     i < _stage ? Icons.check_circle : Icons.circle_outlined,
                     size: 18,
-                    color: AppColors.ink,
+                    color: i < _stage
+                        ? QuizPalette.selected
+                        : QuizPalette.muted,
                   ),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
                       _stages[i],
-                      style: AppTypography.socialLabel(color: AppColors.ink),
+                      style: AppTypography.socialLabel(color: QuizPalette.text),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -688,45 +720,72 @@ class _Plan extends StatelessWidget {
           curve: Curves.easeOutCubic,
           builder: (context, value, _) => Text(
             NutritionFormat.calories(value),
-            style: AppTypography.onboardingTitle().copyWith(fontSize: 44),
+            style: AppTypography.authTitle(color: QuizPalette.text)
+                .copyWith(fontSize: 46),
           ),
         ),
-        Text('calories a day', style: AppTypography.onboardingBody()),
-        const SizedBox(height: 24),
+        Text(
+          'calories a day',
+          style: AppTypography.body(color: QuizPalette.muted),
+        ),
+        const SizedBox(height: 26),
+        // The same three colours the macro cards on Home use, so the plan and
+        // the screen it hands over to are visibly the same numbers.
         Row(
           children: [
-            _Macro(label: 'Protein', grams: targets.protein),
-            _Macro(label: 'Carbs', grams: targets.carbs),
-            _Macro(label: 'Fat', grams: targets.fat),
+            _Macro(
+              label: 'Protein',
+              grams: targets.protein,
+              colour: AppColors.accentGreen,
+            ),
+            _Macro(
+              label: 'Carbs',
+              grams: targets.carbs,
+              colour: AppColors.planYellow,
+            ),
+            _Macro(
+              label: 'Fat',
+              grams: targets.fat,
+              colour: AppColors.accentOrange,
+            ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 22),
         if (goalDate != null)
           Text(
             'On track for ${profile.goalWeightKg!.toStringAsFixed(0)} kg by '
             '${DateFormat('d MMMM y').format(goalDate)}.',
-            style: AppTypography.socialLabel(color: AppColors.inkMuted),
+            style: AppTypography.socialLabel(color: QuizPalette.muted),
             textAlign: TextAlign.center,
             maxLines: 2,
           ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0x1F121212),
+            color: QuizPalette.card,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: QuizPalette.border),
           ),
-          child: Text(
-            _tip,
-            style: AppTypography.socialLabel(color: AppColors.ink),
-            textAlign: TextAlign.center,
-            maxLines: 3,
+          child: Row(
+            children: [
+              const Icon(Icons.lightbulb_outline_rounded,
+                  size: 18, color: QuizPalette.selected),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _tip,
+                  style: AppTypography.socialLabel(color: QuizPalette.text),
+                  maxLines: 3,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 10),
         Text(
           'An estimate, not medical advice.',
-          style: AppTypography.divider(color: AppColors.inkMuted),
+          style: AppTypography.divider(color: QuizPalette.muted),
           textAlign: TextAlign.center,
         ),
       ],
@@ -735,10 +794,15 @@ class _Plan extends StatelessWidget {
 }
 
 class _Macro extends StatelessWidget {
-  const _Macro({required this.label, required this.grams});
+  const _Macro({
+    required this.label,
+    required this.grams,
+    required this.colour,
+  });
 
   final String label;
   final double grams;
+  final Color colour;
 
   @override
   Widget build(BuildContext context) {
@@ -747,11 +811,12 @@ class _Macro extends StatelessWidget {
         children: [
           Text(
             NutritionFormat.grams(grams),
-            style: AppTypography.cardTitle(color: AppColors.ink),
+            style: AppTypography.cardTitle(color: colour),
           ),
+          const SizedBox(height: 2),
           Text(
             label,
-            style: AppTypography.socialLabel(color: AppColors.inkMuted),
+            style: AppTypography.socialLabel(color: QuizPalette.muted),
           ),
         ],
       ),

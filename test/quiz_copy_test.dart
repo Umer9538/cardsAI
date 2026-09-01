@@ -1,5 +1,4 @@
 import 'package:carbsai/core/models/models.dart';
-import 'package:carbsai/core/theme/app_colors.dart';
 import 'package:carbsai/features/onboarding/presentation/onboarding_quiz_screen.dart';
 import 'package:carbsai/features/onboarding/presentation/widgets/quiz_controls.dart';
 import 'package:flutter/material.dart';
@@ -74,7 +73,7 @@ void main() {
         await tester.tap(find.text(choice));
         await tester.pump(const Duration(milliseconds: 200));
       }
-      await tester.tap(find.text('Next'));
+      await tester.tap(find.text('Continue'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -103,12 +102,12 @@ void main() {
     // motivation, gender, then the three sliders, to reach activity.
     await tester.tap(find.text('Eat healthier'));
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.text('Next'));
+    await tester.tap(find.text('Continue'));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('Female'));
     await tester.pump(const Duration(milliseconds: 200));
     for (var i = 0; i < 4; i++) {
-      await tester.tap(find.text('Next'));
+      await tester.tap(find.text('Continue'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -143,7 +142,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     final fill = find.byWidgetPredicate(
-      (w) => w is ColoredBox && w.color == AppColors.ink,
+      (w) => w is ColoredBox && w.color == QuizPalette.selected,
     );
     expect(fill, findsOneWidget);
 

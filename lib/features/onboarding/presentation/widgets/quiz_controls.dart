@@ -4,14 +4,35 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
-/// The quiz's controls, in the onboarding artboard's own language: white cards
-/// on a light field, ink for the selected state, the same ink the round CTA
-/// uses.
+/// The quiz's controls.
 ///
-/// They are here rather than in the screen because the screen is now a dozen
-/// steps long, and because these are the pieces that carry the interaction —
-/// the selection feedback, the haptics, the fitting — which is worth reading
-/// separately from the question copy.
+/// ---------------------------------------------------------------------------
+/// Why these are dark
+/// ---------------------------------------------------------------------------
+/// The quiz first borrowed the onboarding artboards' palette — white cards on
+/// lilac — because it sits between those pages and the app. On a device that
+/// read as a pale purple marketing screen bolted to the front of a black app,
+/// and the seam showed at the moment the quiz handed over to Home.
+///
+/// It now uses the *app's* surface language instead: `#121212` ground,
+/// `#232220` cards on a `#2F2F2F` outline, primary orange for anything chosen.
+/// That is the same set Settings, Notifications and the scan result are built
+/// from, so the quiz reads as the first screens of the product rather than the
+/// last screens of the pitch — and walking out of it into Home is a change of
+/// content, not of world.
+abstract final class QuizPalette {
+  static const Color ground = AppColors.background;
+
+  /// The card fill every other list in the app uses.
+  static const Color card = Color(0xFF232220);
+  static const Color border = AppColors.outline;
+
+  /// Chosen. The app's CTA colour, so selection and the button agree.
+  static const Color selected = AppColors.primary;
+
+  static const Color text = AppColors.white;
+  static const Color muted = AppColors.placeholder;
+}
 
 /// How far through, as a bar rather than a count.
 class QuizProgress extends StatelessWidget {
@@ -26,7 +47,7 @@ class QuizProgress extends StatelessWidget {
       child: Stack(
         children: [
           const ColoredBox(
-            color: Color(0x1F121212),
+            color: QuizPalette.border,
             child: SizedBox(width: 388, height: 6),
           ),
           // heightFactor: 1 is load-bearing, not tidiness.
@@ -42,7 +63,7 @@ class QuizProgress extends StatelessWidget {
             widthFactor: fraction.clamp(0.02, 1),
             heightFactor: 1,
             alignment: Alignment.centerLeft,
-            child: const ColoredBox(color: AppColors.ink),
+            child: const ColoredBox(color: QuizPalette.selected),
           ),
         ],
       ),
@@ -50,12 +71,14 @@ class QuizProgress extends StatelessWidget {
   }
 }
 
-/// A single-choice list that sizes its own cards to the space it is given.
+/// A single-choice list that sizes its own cards to the space it is given, and
+/// deals them in one after another.
 ///
-/// Fixed card heights were how the five-option activity step ended up 10pt over
-/// its box; with six options it would have been 34pt over. Measuring instead
-/// means a step can take as many options as the question needs.
-class QuizOptions<T> extends StatelessWidget {
+/// The stagger is the difference between a list that appears and a list that
+/// arrives. It is 40ms apart and it is over in a third of a second, which is
+/// long enough to read as motion and short enough that nobody waiting to answer
+/// is kept waiting.
+class QuizOptions<T> extends StatefulWidget {
   const QuizOptions({
     super.key,
     required this.value,
@@ -69,34 +92,98 @@ class QuizOptions<T> extends StatelessWidget {
   final List<(T, String, String?)> options;
   final ValueChanged<T> onChanged;
 
-  static const double _gap = 12;
-  static const double _maxHeight = 74;
-  static const double _minHeight = 52;
+  static const double gap = 12;
+  static const double maxHeight = 74;
+  static const double minHeight = 52;
+
+  @override
+  State<QuizOptions<T>> createState() => _QuizOptionsState<T>();
+}
+
+class _QuizOptionsState<T> extends State<QuizOptions<T>>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entrance = AnimationController(
+    vsync: this,
+    duration: Duration(milliseconds: 260 + 40 * widget.options.length),
+  )..forward();
+
+  @override
+  void dispose() {
+    _entrance.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final n = options.length;
-        final available = constraints.maxHeight - _gap * (n - 1);
-        final height =
-            (available / n).clamp(_minHeight, _maxHeight).toDouble();
+        final n = widget.options.length;
+        final available =
+            constraints.maxHeight - QuizOptions.gap * (n - 1);
+        final height = (available / n)
+            .clamp(QuizOptions.minHeight, QuizOptions.maxHeight)
+            .toDouble();
 
         return Column(
           children: [
             for (var i = 0; i < n; i++) ...[
-              if (i > 0) const SizedBox(height: _gap),
-              QuizOptionCard(
-                label: options[i].$2,
-                detail: options[i].$3,
-                height: height,
-                selected: options[i].$1 == value,
-                onTap: () => onChanged(options[i].$1),
+              if (i > 0) const SizedBox(height: QuizOptions.gap),
+              _Entering(
+                controller: _entrance,
+                index: i,
+                count: n,
+                child: QuizOptionCard(
+                  label: widget.options[i].$2,
+                  detail: widget.options[i].$3,
+                  height: height,
+                  selected: widget.options[i].$1 == widget.value,
+                  onTap: () => widget.onChanged(widget.options[i].$1),
+                ),
               ),
             ],
           ],
         );
       },
+    );
+  }
+}
+
+/// Slides and fades one card in, offset from its neighbours.
+class _Entering extends StatelessWidget {
+  const _Entering({
+    required this.controller,
+    required this.index,
+    required this.count,
+    required this.child,
+  });
+
+  final AnimationController controller;
+  final int index;
+  final int count;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // Each card owns a window of the shared controller, opening 40ms after the
+    // one above it. One controller rather than one per card: this rebuilds on
+    // every step change, and a dozen controllers per step is a lot of teardown
+    // for an effect that lasts a third of a second.
+    final start = (index * 0.10).clamp(0.0, 0.6);
+    final animation = CurvedAnimation(
+      parent: controller,
+      curve: Interval(start, 1, curve: Curves.easeOutCubic),
+    );
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, inner) => Opacity(
+        opacity: animation.value,
+        child: Transform.translate(
+          offset: Offset(0, 18 * (1 - animation.value)),
+          child: inner,
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -119,18 +206,17 @@ class QuizOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Animated rather than switched: the fill and the tick arriving over a
-    // beat is most of what makes answering feel responsive rather than
-    // transactional, and it costs nothing.
+    // Animated rather than switched: the fill and the tick arriving over a beat
+    // is most of what makes answering feel responsive rather than transactional.
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
       height: height,
       decoration: BoxDecoration(
-        color: selected ? AppColors.ink : AppColors.white,
+        color: selected ? QuizPalette.selected : QuizPalette.card,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: selected ? AppColors.ink : const Color(0x1F121212),
+          color: selected ? QuizPalette.selected : QuizPalette.border,
         ),
       ),
       clipBehavior: Clip.antiAlias,
@@ -138,7 +224,7 @@ class QuizOptionCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            // The tick is small and the colour change is quick; the haptic is
+            // The colour change is quick and the tick is small; the haptic is
             // what actually confirms the tap landed.
             HapticFeedback.selectionClick();
             onTap();
@@ -154,9 +240,7 @@ class QuizOptionCard extends StatelessWidget {
                     children: [
                       Text(
                         label,
-                        style: AppTypography.body(
-                          color: selected ? AppColors.white : AppColors.ink,
-                        ),
+                        style: AppTypography.body(color: QuizPalette.text),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -165,8 +249,8 @@ class QuizOptionCard extends StatelessWidget {
                           detail!,
                           style: AppTypography.socialLabel(
                             color: selected
-                                ? const Color(0xB3FFFFFF)
-                                : AppColors.inkMuted,
+                                ? const Color(0xCCFFFFFF)
+                                : QuizPalette.muted,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -175,7 +259,7 @@ class QuizOptionCard extends StatelessWidget {
                   ),
                 ),
                 AnimatedScale(
-                  duration: const Duration(milliseconds: 180),
+                  duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutBack,
                   scale: selected ? 1 : 0,
                   child: const _Tick(),
@@ -201,7 +285,11 @@ class _Tick extends StatelessWidget {
         color: AppColors.white,
         shape: BoxShape.circle,
       ),
-      child: const Icon(Icons.check_rounded, size: 18, color: AppColors.ink),
+      child: const Icon(
+        Icons.check_rounded,
+        size: 18,
+        color: QuizPalette.selected,
+      ),
     );
   }
 }
@@ -232,7 +320,7 @@ class QuizNumberSlider extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -240,20 +328,21 @@ class QuizNumberSlider extends StatelessWidget {
           children: [
             Text(
               format(value),
-              style: AppTypography.onboardingTitle().copyWith(fontSize: 40),
+              style: AppTypography.authTitle(color: QuizPalette.text)
+                  .copyWith(fontSize: 44),
             ),
             const SizedBox(width: 8),
-            Text(unit, style: AppTypography.onboardingBody()),
+            Text(unit, style: AppTypography.body(color: QuizPalette.muted)),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 6,
-            activeTrackColor: AppColors.ink,
-            inactiveTrackColor: const Color(0x1F121212),
-            thumbColor: AppColors.ink,
-            overlayColor: const Color(0x14121212),
+            activeTrackColor: QuizPalette.selected,
+            inactiveTrackColor: QuizPalette.border,
+            thumbColor: AppColors.white,
+            overlayColor: const Color(0x22FF5A16),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
           ),
           child: Slider(
@@ -285,20 +374,32 @@ class QuizLiveTarget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: QuizPalette.card,
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: const Color(0x1F121212)),
+        border: Border.all(color: QuizPalette.border),
       ),
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(end: calories),
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeOut,
-        builder: (context, value, _) => Text(
-          'Target so far  ${value.round()} kcal',
-          style: AppTypography.socialLabel(color: AppColors.ink),
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.bolt_rounded,
+              size: 16, color: QuizPalette.selected),
+          const SizedBox(width: 6),
+          Text(
+            'Target so far ',
+            style: AppTypography.socialLabel(color: QuizPalette.muted),
+          ),
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: calories),
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOut,
+            builder: (context, value, _) => Text(
+              '${value.round()} kcal',
+              style: AppTypography.socialLabel(color: QuizPalette.text),
+            ),
+          ),
+        ],
       ),
     );
   }

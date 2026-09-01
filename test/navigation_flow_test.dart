@@ -35,7 +35,7 @@ void main() {
       await tester.tap(find.text(choice));
       await tester.pump(const Duration(milliseconds: 200));
     }
-    await tester.tap(find.text('Next'));
+    await tester.tap(find.text('Continue'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
   }
@@ -117,7 +117,7 @@ void main() {
     expect(find.text('Your daily plan'), findsOneWidget);
     expect(find.text('calories a day'), findsOneWidget);
 
-    await tester.tap(find.text('Start\nTracking'));
+    await tester.tap(find.text('Start tracking'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
