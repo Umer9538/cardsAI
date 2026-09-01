@@ -647,12 +647,14 @@ write.
   soon as it is deployed, but `PHOTO_PUBLIC_BASE` must name a custom domain on the
   bucket before a durable URL comes back. Until then the upload succeeds, the URL is
   null, and the diary keeps showing the local file.
-- **The app icon and wordmark are placeholders, not an identity.** Both are generated
-  from the design system rather than designed — a "C" monogram on `AppColors.primary`,
-  and a wordmark set in the app's own Space Grotesk Bold with the "ai" in orange, the
-  same treatment the old NutriAI mark used. Masters live in `assets/images/brand/`;
-  regenerating every platform size from a real logo is a scripted pass, not a
-  redraw.
+- **The wordmark is generated, the mascot is not.** `logo_carbsai.png` is set in the
+  app's own Space Grotesk Bold with the "ai" in orange — the same treatment the old
+  NutriAI mark used. The app icon is a supplied avocado mascot in the same
+  rubber-hose style as the onboarding illustrations, composited onto
+  `AppColors.primary`. Masters live in `assets/images/brand/`: `mascot.png` is the
+  artwork cropped to its ink, and every one of the 25 platform files is derived from
+  it, so a new logo means replacing one file and re-running the generation rather
+  than editing icons by hand.
 
 ## Firebase setup still needed
 
