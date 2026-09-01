@@ -248,13 +248,17 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 child: KeyedSubtree(key: ValueKey(_step), child: _body()),
               ),
             ),
-            const DesignImage(
-              asset: 'assets/images/onboarding/blob.png',
-              left: 109,
-              top: 738,
-              width: 212,
-              height: 188,
-            ),
+            // The blob is the button's backing shape, so it goes when the
+            // button does. Left on its own during the build step it reads as a
+            // blank white lozenge someone forgot to fill.
+            if (!isBuilding)
+              const DesignImage(
+                asset: 'assets/images/onboarding/blob.png',
+                left: 109,
+                top: 738,
+                width: 212,
+                height: 188,
+              ),
             if (!isBuilding)
               Positioned(
                 left: 165,
