@@ -492,7 +492,13 @@ artboard is followed *less* closely on purpose. Do not "restore" them.
   *inside*. Card insets are therefore 19, not 20. Honouring 20 makes every card 2pt tall.
 - **Blur**: Figma's `BACKGROUND_BLUR radius` is not a Skia sigma. The scan
   viewfinder uses sigma 15 against a reported radius of 91 — calibrated against the
-  render, not derived.
+  render, not derived. The blur is applied through a `ClipPath` that knocks the
+  viewfinder window out of the screen rect (`_WindowCutout`, `evenOdd`), so it blurs
+  *around* the window. It must not go back to blurring everything and drawing a
+  sharp copy of the preview on top: that is two `CameraPreview` widgets on one
+  controller, therefore two `Texture` widgets on one texture id, and Android does not
+  reliably draw both. Where the second came up empty the window fell through to the
+  blurred layer and the whole screen looked out of focus.
 - **Gradients**: a Figma fill can carry node-level opacity *on top of* its stops.
   The viewfinder wash is white 20%→100% at 50% node opacity = effective 0.1→0.5.
 - **Character-level style runs**: Figma stores per-character overrides in

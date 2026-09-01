@@ -85,8 +85,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
 
       final path = switch (_mode) {
         ScanMode.camera => await _takePhoto(),
-        ScanMode.gallery =>
-          await ref.read(imageCaptureProvider).pickFromGallery(),
+        ScanMode.gallery => await _pickFromGallery(),
         ScanMode.barcode => null,
       };
 
@@ -130,6 +129,21 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
     setState(() => _mode = mode);
   }
 
+  /// Picks an image, with our camera released while the picker is open.
+  ///
+  /// The system picker is another full-screen activity, and Android is much
+  /// more willing to destroy ours while it is showing if we are still holding
+  /// the camera. When that happens `pickImage` never returns: the shutter stays
+  /// busy and the screen stops responding, which is indistinguishable from the
+  /// app having hung.
+  ///
+  /// Same reasoning as the barcode mode switch, and the same cost — the preview
+  /// takes a beat to come back if the picker is dismissed.
+  Future<String?> _pickFromGallery() async {
+    ref.invalidate(cameraSessionProvider);
+    return ref.read(imageCaptureProvider).pickFromGallery();
+  }
+
   /// Null when there is no usable camera, which the caller reads as "analyse
   /// the stand-in".
   Future<String?> _takePhoto() async {
@@ -164,12 +178,28 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             // window into a brown wash the artboard does not have. 15 was
             // calibrated against the render and takes that band from 45.7% to
             // 8.7% differing.
+            // Blurred everywhere EXCEPT the window, rather than blurred
+            // everywhere with a sharp copy of the preview drawn back on top.
+            //
+            // That copy was a second [_Preview], which meant two CameraPreview
+            // widgets driven by one controller — two Texture widgets bound to
+            // one texture id. Android does not reliably draw both: where the
+            // second one comes up empty the window falls through to the blurred
+            // layer beneath it, and the whole screen reads as out of focus.
+            //
+            // One preview now, and the cut-out is a clip rather than a redraw,
+            // which is also what it looks like in the design.
             Positioned.fill(
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                child: const ColoredBox(color: Color(0x80000000)),
+              child: ClipPath(
+                clipper: const _WindowCutout(_window, _windowRadius),
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                  child: const ColoredBox(color: Color(0x80000000)),
+                ),
               ),
             ),
+            // Barcode is a different camera package, so it does get its own
+            // view inside the window — ours is released before this appears.
             if (_mode == ScanMode.barcode)
               Positioned.fromRect(
                 rect: _window,
@@ -177,22 +207,6 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
                   borderRadius: BorderRadius.circular(_windowRadius),
                   child: BarcodeScannerView(
                     onDetected: (code) => widget.onBarcode?.call(code),
-                  ),
-                ),
-              )
-            else
-              Positioned.fromRect(
-                rect: _window,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(_windowRadius),
-                  child: const OverflowBox(
-                  minWidth: DesignCanvas.designWidth,
-                  maxWidth: DesignCanvas.designWidth,
-                  minHeight: DesignCanvas.designHeight,
-                  maxHeight: DesignCanvas.designHeight,
-                  alignment: Alignment(-1 + 2 * 44 / (428 - 341),
-                      -1 + 2 * 180 / (926 - 412)),
-                    child: _Preview(),
                   ),
                 ),
               ),
@@ -305,6 +319,27 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
       ),
     );
   }
+}
+
+/// The blur's shape: the whole screen with the viewfinder window knocked out.
+///
+/// `evenOdd` is what makes the inner rounded rectangle a hole rather than a
+/// second filled shape.
+class _WindowCutout extends CustomClipper<Path> {
+  const _WindowCutout(this.window, this.radius);
+
+  final Rect window;
+  final double radius;
+
+  @override
+  Path getClip(Size size) => Path()
+    ..fillType = PathFillType.evenOdd
+    ..addRect(Offset.zero & size)
+    ..addRRect(RRect.fromRectAndRadius(window, Radius.circular(radius)));
+
+  @override
+  bool shouldReclip(_WindowCutout oldClipper) =>
+      oldClipper.window != window || oldClipper.radius != radius;
 }
 
 /// The live camera, or the artboard's photograph when there is not one.
