@@ -145,6 +145,8 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 _title,
                 style: AppTypography.onboardingTitle(),
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             Positioned(
@@ -156,6 +158,12 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 _subtitle,
                 style: AppTypography.onboardingBody(),
                 textAlign: TextAlign.center,
+                // The box is two lines tall. Without this a longer string is
+                // clipped mid-word by the Stack and simply loses its ending —
+                // which is how "…a goal you will not meet." shipped as "…a
+                // goal you will not".
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             Positioned(
@@ -207,8 +215,8 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
         _Step.age => 'Energy needs fall gradually with age.',
         _Step.height => 'Used only to work out your daily energy.',
         _Step.weight => 'You can change this any time in your profile.',
-        _Step.activity => 'Be honest rather than optimistic — an overstated '
-            'answer sets a goal you will not meet.',
+        _Step.activity => 'Be honest rather than optimistic — this sets '
+            'your whole target.',
         _Step.goal => 'This decides whether your target sits above or below '
             'what you burn.',
         _Step.goalWeight => 'A steady pace is easier to keep than a fast one.',
