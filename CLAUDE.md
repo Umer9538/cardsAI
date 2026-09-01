@@ -304,6 +304,43 @@ Rules:
   it in `Opacity` throws "Incorrect use of ParentDataWidget" — use its `opacity`
   parameter instead. That error still renders plausibly, so it survives a pixel diff.
 
+### The calorie target, and the quiz that produces it
+
+`TargetCalculator` (`core/nutrition/`) is the app's central number: the ring on Home,
+the macro cards and every "remaining" figure count against it. It is the one piece of
+this codebase that is a **pure function** — no providers, no clock, no I/O — which is
+why it is the one piece with exact unit tests rather than a render diff.
+
+```
+Mifflin-St Jeor BMR  ->  x activity multiplier  ->  +/- goal  ->  macro split
+```
+
+Mifflin-St Jeor rather than Harris-Benedict, because it is more accurate on modern
+populations and is what MyFitnessPal, Lose It and Cal AI all use. Sex enters only
+through the constant (+5 male, -161 female); `other` and `unspecified` take the
+midpoint, which is the honest answer to an unknown rather than a silent assumption.
+
+Two guards are not optional, and both are tested:
+
+- **The deficit is capped at 25% of maintenance**, not at a fixed number — 500 kcal
+  off a small person is a far harsher cut than off a large one.
+- **Floors of 1200 (female) / 1500 (male) kcal**, whatever the arithmetic says.
+
+Protein and fat are set from **bodyweight** (1.8 g/kg, 0.9 g/kg) and carbohydrate
+takes the remaining energy. Fixed macro percentages would give a very light person
+too little protein and a heavy one more than they can use.
+
+`OnboardingQuizScreen` collects the five inputs. **It is not in the Figma file** — the
+design has three marketing onboarding pages and no quiz — but without it every account
+gets `UserProfile.defaultTargets`, so a 22-year-old athlete and a sedentary
+55-year-old see the same 2000 kcal ring. It is built entirely from what the design
+does define: the onboarding artboard's canvas, palette, type ramp, `blob.png` and the
+round CTA, now shared as `RoundNextButton`. Same approach as `DescribeMealScreen`.
+
+Every step is skippable, and skipping leaves the default targets — which is exactly
+what the app showed before the quiz existed. `StoreKeys.quizSeen` records that it was
+dealt with either way, so a skip is not re-asked on every launch.
+
 ### Screens the design does not have
 
 Two things the app needs that no artboard covers. Both are built from components the

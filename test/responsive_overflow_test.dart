@@ -9,6 +9,7 @@ import 'package:carbsai/features/diets/presentation/diets_screen.dart';
 import 'package:carbsai/features/app/presentation/notifications_screen.dart';
 import 'package:carbsai/features/scan/presentation/scan_result_screen.dart';
 import 'package:carbsai/features/scan/presentation/scanning_screen.dart';
+import 'package:carbsai/features/onboarding/presentation/onboarding_quiz_screen.dart';
 import 'package:carbsai/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:carbsai/features/premium/presentation/plan_detail_screen.dart';
 import 'package:carbsai/features/premium/presentation/premium_offer_screen.dart';
@@ -45,6 +46,10 @@ List<(String, Widget)> _screens() => [
   ('splash', const SplashScreen()),
   ('onboarding 1', const OnboardingScreen()),
   ('onboarding 3', OnboardingScreen(initialPage: 2)),
+  // The quiz's first step. The five-option activity step is the tallest, and
+  // is covered by the walk-through in navigation_flow_test — a trailing gap
+  // there put it 10pt over its body and produced overflow stripes.
+  ('onboarding quiz', const OnboardingQuizScreen()),
   ('login', const LoginScreen()),
   ('sign up', const SignUpScreen()),
   ('forgot password', const ForgotPasswordScreen()),

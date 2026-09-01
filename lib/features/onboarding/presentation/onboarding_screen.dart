@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/design/design_canvas.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import 'widgets/round_next_button.dart';
 
 /// The content that varies between Figma frames `02`–`04`. Everything else on
 /// those three artboards is identical down to the pixel, so the layout lives in
@@ -182,7 +183,11 @@ class _OnboardingPage extends StatelessWidget {
           top: 788,
           width: 100,
           height: 100,
-          child: _RoundButton(isLast: isLast, onTap: onNext),
+          child: RoundNextButton(
+            onTap: onNext,
+            label: isLast ? 'Get\nStarted' : 'Next',
+            showArrow: !isLast,
+          ),
         ),
         DesignImage(
           asset: page.illustration,
@@ -192,48 +197,6 @@ class _OnboardingPage extends StatelessWidget {
           height: 364,
         ),
       ],
-    );
-  }
-}
-
-/// The dark circle CTA. Frames 02 and 03 show "Next" above an arrow glyph;
-/// frame 04 replaces both with a two-line "Get Started" and no icon.
-class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.isLast, required this.onTap});
-
-  final bool isLast;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.ink,
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Center(
-          child: isLast
-              ? Text(
-                  'Get\nStarted',
-                  style: AppTypography.buttonLabel(),
-                  textAlign: TextAlign.center,
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Next', style: AppTypography.buttonLabel()),
-                    const SizedBox(height: 4),
-                    Image.asset(
-                      'assets/images/onboarding/arrow_right.png',
-                      width: 24,
-                      height: 24,
-                      filterQuality: FilterQuality.high,
-                    ),
-                  ],
-                ),
-        ),
-      ),
     );
   }
 }

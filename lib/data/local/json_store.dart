@@ -79,6 +79,13 @@ abstract final class StoreKeys {
   /// deleting an account should not replay onboarding.
   static const String onboardingSeen = 'carbsai.onboardingSeen';
 
+  /// Whether the personalisation quiz has been answered or skipped.
+  ///
+  /// Separate from the profile's own completeness because skipping is a valid
+  /// answer: without this flag, anyone who skipped would be asked again on
+  /// every launch.
+  static const String quizSeen = 'carbsai.quizSeen';
+
   static const List<String> all = [
     profile,
     meals,

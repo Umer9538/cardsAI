@@ -4,6 +4,37 @@ import 'nutrition.dart';
 
 enum Gender { female, male, other, unspecified }
 
+/// How much someone moves, as the multiplier applied to their BMR.
+///
+/// The five standard Harris-Benedict activity factors, which every mainstream
+/// tracker uses. The labels matter as much as the numbers: "moderately active"
+/// means nothing to most people, so each carries the concrete description the
+/// quiz shows underneath it.
+enum ActivityLevel {
+  sedentary('Not very active', 'Desk job, little or no exercise', 1.2),
+  light('Lightly active', 'Exercise 1-3 days a week', 1.375),
+  moderate('Moderately active', 'Exercise 3-5 days a week', 1.55),
+  very('Very active', 'Exercise 6-7 days a week', 1.725),
+  athlete('Extremely active', 'Hard daily exercise, or a physical job', 1.9);
+
+  const ActivityLevel(this.label, this.detail, this.multiplier);
+
+  final String label;
+  final String detail;
+  final double multiplier;
+}
+
+/// Which direction the daily calorie target moves from maintenance.
+enum WeightGoal {
+  lose('Lose weight'),
+  maintain('Maintain weight'),
+  gain('Gain weight');
+
+  const WeightGoal(this.label);
+
+  final String label;
+}
+
 /// The signed-in person, and the goals their diary is measured against.
 @immutable
 class UserProfile {
@@ -16,12 +47,21 @@ class UserProfile {
     this.gender = Gender.unspecified,
     this.heightCm,
     this.weightKg,
+    this.activityLevel,
+    this.goal,
+    this.goalWeightKg,
+    this.weeklyRateKg = 0.5,
     this.targets = defaultTargets,
     this.isPremium = false,
   });
 
-  /// Stand-in goals until onboarding collects real ones. Chosen to match the
-  /// figures the artboards show, so the seeded app looks like the design.
+  /// Fallback goals for a profile that has not been through the quiz, or has
+  /// skipped it. Chosen to match the figures the artboards show, so the seeded
+  /// app looks like the design.
+  ///
+  /// Every user seeing the same number is the problem the quiz exists to fix:
+  /// a 22-year-old athlete and a sedentary 55-year-old do not share a calorie
+  /// goal, and the ring on Home is the app's central claim.
   static const Nutrition defaultTargets = Nutrition(
     calories: 2000,
     protein: 120,
@@ -40,6 +80,31 @@ class UserProfile {
   final Gender gender;
   final double? heightCm;
   final double? weightKg;
+
+  /// The two inputs a calorie target cannot be computed without, and the two
+  /// the app had no way to ask for until the quiz existed.
+  final ActivityLevel? activityLevel;
+  final WeightGoal? goal;
+
+  /// Where they are heading. Only meaningful when [goal] is not maintain.
+  final double? goalWeightKg;
+
+  /// Kilograms per week. 0.5 is the usual recommendation — roughly a 500 kcal
+  /// daily change — and the quiz does not offer a rate fast enough to be
+  /// unsafe.
+  final double weeklyRateKg;
+
+  /// Whether there is enough here to compute a real target.
+  ///
+  /// What decides whether the quiz is shown. Everything else about a profile is
+  /// optional; without these five the app can only show [defaultTargets], which
+  /// is the same number for everybody.
+  bool get canPersonaliseTargets =>
+      age != null &&
+      heightCm != null &&
+      weightKg != null &&
+      activityLevel != null &&
+      goal != null;
 
   /// Daily goals — what the ring and the macro cards count against.
   final Nutrition targets;
@@ -66,6 +131,10 @@ class UserProfile {
     Gender? gender,
     double? heightCm,
     double? weightKg,
+    ActivityLevel? activityLevel,
+    WeightGoal? goal,
+    double? goalWeightKg,
+    double? weeklyRateKg,
     Nutrition? targets,
     bool? isPremium,
   }) =>
@@ -78,6 +147,10 @@ class UserProfile {
         gender: gender ?? this.gender,
         heightCm: heightCm ?? this.heightCm,
         weightKg: weightKg ?? this.weightKg,
+        activityLevel: activityLevel ?? this.activityLevel,
+        goal: goal ?? this.goal,
+        goalWeightKg: goalWeightKg ?? this.goalWeightKg,
+        weeklyRateKg: weeklyRateKg ?? this.weeklyRateKg,
         targets: targets ?? this.targets,
         isPremium: isPremium ?? this.isPremium,
       );
@@ -91,6 +164,10 @@ class UserProfile {
         'gender': gender.name,
         'heightCm': heightCm,
         'weightKg': weightKg,
+        'activityLevel': activityLevel?.name,
+        'goal': goal?.name,
+        'goalWeightKg': goalWeightKg,
+        'weeklyRateKg': weeklyRateKg,
         'targets': targets.toJson(),
         'isPremium': isPremium,
       };
@@ -108,6 +185,16 @@ class UserProfile {
             Gender.unspecified,
         heightCm: (json['heightCm'] as num?)?.toDouble(),
         weightKg: (json['weightKg'] as num?)?.toDouble(),
+        // Unknown names fall back to null rather than throwing, so a value
+        // added server-side cannot crash an older build.
+        activityLevel: ActivityLevel.values
+            .where((a) => a.name == json['activityLevel'])
+            .firstOrNull,
+        goal: WeightGoal.values
+            .where((g) => g.name == json['goal'])
+            .firstOrNull,
+        goalWeightKg: (json['goalWeightKg'] as num?)?.toDouble(),
+        weeklyRateKg: (json['weeklyRateKg'] as num?)?.toDouble() ?? 0.5,
         targets: json['targets'] == null
             ? defaultTargets
             : Nutrition.fromJson(

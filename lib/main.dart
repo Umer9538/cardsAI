@@ -13,6 +13,7 @@ import 'data/local/json_store.dart';
 import 'features/auth/presentation/forgot_password_screen.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/sign_up_screen.dart';
+import 'features/onboarding/presentation/onboarding_quiz_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
 import 'features/splash/presentation/splash_screen.dart';
 import 'firebase_options.dart';
@@ -107,6 +108,10 @@ class AppRoot extends ConsumerStatefulWidget {
 class _AppRootState extends ConsumerState<AppRoot> with WidgetsBindingObserver {
   _Stage _stage = _Stage.splash;
 
+  /// Whether the personalisation quiz has been dealt with, either way.
+  late bool _quizSeen =
+      ref.read(jsonStoreProvider).flag(StoreKeys.quizSeen);
+
   @override
   void initState() {
     super.initState();
@@ -140,6 +145,13 @@ class _AppRootState extends ConsumerState<AppRoot> with WidgetsBindingObserver {
     setState(() => _stage = seen ? _Stage.ready : _Stage.onboarding);
   }
 
+  /// The quiz is answered or skipped. Recorded so it is asked once, not every
+  /// launch — skipping is a valid answer and leaves the default targets.
+  Future<void> _completeQuiz() async {
+    await ref.read(jsonStoreProvider).setFlag(StoreKeys.quizSeen, value: true);
+    if (mounted) setState(() => _quizSeen = true);
+  }
+
   Future<void> _completeOnboarding() async {
     await ref
         .read(jsonStoreProvider)
@@ -162,7 +174,22 @@ class _AppRootState extends ConsumerState<AppRoot> with WidgetsBindingObserver {
           // someone who is already signed in.
           loading: () => const SplashScreen(),
           error: (_, _) => const _AuthFlow(),
-          data: (user) => user == null ? const _AuthFlow() : const MainShell(),
+          data: (user) {
+            if (user == null) return const _AuthFlow();
+
+            // The quiz stands between signing in and the app only while the
+            // profile cannot produce a real calorie target. Without it every
+            // account counts against the same 2000 kcal, which is the one
+            // number the whole app is built around.
+            if (!_quizSeen) {
+              final profile = ref.watch(profileProvider).value;
+              if (profile == null) return const SplashScreen();
+              if (!profile.canPersonaliseTargets) {
+                return OnboardingQuizScreen(onFinished: _completeQuiz);
+              }
+            }
+            return const MainShell();
+          },
         );
     }
   }

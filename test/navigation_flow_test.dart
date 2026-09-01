@@ -25,6 +25,17 @@ Finder assetFinder(String name) => find.byWidgetPredicate(
 void main() {
   setUpAll(loadDesignFonts);
 
+  /// Answers one step and moves on. The Next button carries no text of its own
+  /// on the answer steps, so it is found by the label the artboard gives it.
+  Future<void> answerAndAdvance(WidgetTester tester, String? choice) async {
+    if (choice != null) {
+      await tester.tap(find.text(choice));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+  }
+
   Future<void> boot(WidgetTester tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(428, 926);
@@ -55,7 +66,48 @@ void main() {
     // and AppRoot then rebuilds off the auth stream.
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
+
+    // A fresh account cannot produce a real calorie target, so the
+    // personalisation quiz stands between here and Home. Most of these tests
+    // are about what is past it; `the quiz` test below walks it properly.
+    if (find.text('Skip').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+    }
   }
+
+  testWidgets('the quiz collects a real target and lands on Home',
+      (tester) async {
+    await boot(tester);
+    await reachLogin(tester);
+
+    await tester.enterText(find.byType(TextField).at(0), 'jane@example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'hunter2');
+    await tester.tap(find.text('Log In'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    // Signing in with a profile that has no height, weight or activity level
+    // must not drop straight into an app measuring against a made-up goal.
+    expect(find.text('Tell us about you'), findsOneWidget);
+
+    await answerAndAdvance(tester, 'Female');        // gender
+    await answerAndAdvance(tester, null);            // age, slider default
+    await answerAndAdvance(tester, null);            // height
+    await answerAndAdvance(tester, null);            // weight
+    await answerAndAdvance(tester, 'Lightly active');
+    await answerAndAdvance(tester, 'Maintain weight');
+
+    // Maintaining has no goal weight to ask about, so that step is skipped and
+    // the plan comes next.
+    expect(find.text('Your daily plan'), findsOneWidget);
+    expect(find.text('calories a day'), findsOneWidget);
+
+    await tester.tap(find.text('Start\nTracking'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(_homeMarker), findsOneWidget);
+  });
 
   testWidgets('splash advances to onboarding and on to log in',
       (tester) async {
