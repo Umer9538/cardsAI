@@ -29,10 +29,18 @@ class QuizProgress extends StatelessWidget {
             color: Color(0x1F121212),
             child: SizedBox(width: 388, height: 6),
           ),
+          // heightFactor: 1 is load-bearing, not tidiness.
+          //
+          // A FractionallySizedBox that is a non-positioned Stack child is
+          // given loose vertical constraints, so a ColoredBox inside it takes
+          // the smallest height allowed — zero. The track draws, the fill does
+          // not, and the bar sits there looking empty however far through you
+          // are. Exactly the bug the Scan Result macro bars had.
           AnimatedFractionallySizedBox(
             duration: const Duration(milliseconds: 320),
             curve: Curves.easeOutCubic,
             widthFactor: fraction.clamp(0.02, 1),
+            heightFactor: 1,
             alignment: Alignment.centerLeft,
             child: const ColoredBox(color: AppColors.ink),
           ),

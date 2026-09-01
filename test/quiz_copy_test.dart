@@ -1,5 +1,7 @@
 import 'package:carbsai/core/models/models.dart';
+import 'package:carbsai/core/theme/app_colors.dart';
 import 'package:carbsai/features/onboarding/presentation/onboarding_quiz_screen.dart';
+import 'package:carbsai/features/onboarding/presentation/widgets/quiz_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -117,5 +119,36 @@ void main() {
       expect(truncated(tester, find.text(level.detail)), isFalse,
           reason: '"${level.detail}" is cut off in its card');
     }
+  });
+
+  testWidgets('the progress bar draws a fill, not just a track',
+      (tester) async {
+    // A FractionallySizedBox that is a non-positioned Stack child gets loose
+    // vertical constraints, so without heightFactor its fill is zero pixels
+    // tall: the bar renders, looks fine, and never appears to move. The Scan
+    // Result macro bars shipped that way once already.
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 388,
+              height: 6,
+              child: QuizProgress(fraction: 0.5),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final fill = find.byWidgetPredicate(
+      (w) => w is ColoredBox && w.color == AppColors.ink,
+    );
+    expect(fill, findsOneWidget);
+
+    final size = tester.getSize(fill);
+    expect(size.height, 6, reason: 'the fill collapsed to zero height');
+    expect(size.width, closeTo(194, 1), reason: 'half of 388');
   });
 }

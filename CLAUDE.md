@@ -712,6 +712,15 @@ that file, which is why the CLI reported "no active project" before it existed.
 
 ## Two bugs worth not reintroducing
 
+**A `FractionallySizedBox` in a `Stack` needs `heightFactor: 1`.** This has now
+shipped twice: the Scan Result macro bars, and the quiz's progress bar. A
+non-positioned `Stack` child gets *loose* vertical constraints, so a `ColoredBox`
+inside a `FractionallySizedBox` takes the smallest height allowed, which is zero. The
+track draws, the fill does not, and nothing throws — the screen looks plausible and
+merely never appears to fill. Neither `analyze` nor the overflow suite sees it; both
+were caught by eye, the second one by the user. If you write a proportional fill
+inside a `Stack`, assert its rendered height in a test.
+
 **`DesignFit.cover` did not scale.** `FittedBox(BoxFit.cover)` sizes itself to its
 child and then scales within what it was given, which left the canvas at its natural
 428pt width on any wider viewport, pinned left, with a strip of bare background down
