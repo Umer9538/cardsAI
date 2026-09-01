@@ -1,11 +1,20 @@
 {
   "indexes": [
     {
-      "_comment": "Food search. array-contains-any alone returns an arbitrary page of matches, so the query orders by rank to pull the generic reference foods in ahead of restaurant dishes. That ordering needs this composite index.",
+      "_comment": "Loose token search. array-contains-any returns an arbitrary page, so the query orders by rank to pull generic reference foods ahead of restaurant dishes.",
       "collectionGroup": "foods",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "tokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "rank", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "Multi-word search by sorted word pair. A pair requires both words, which is what stops 'olive oil' matching OLIVE GARDEN.",
+      "collectionGroup": "foods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pairs", "arrayConfig": "CONTAINS" },
         { "fieldPath": "rank", "order": "ASCENDING" }
       ]
     }

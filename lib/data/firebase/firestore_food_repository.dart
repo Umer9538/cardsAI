@@ -62,6 +62,20 @@ class FirestoreFoodRepository implements FoodDatabaseRepository {
       .toSet()
       .toList();
 
+  /// Sorted word pairs of [tokens].
+  ///
+  /// MUST match `pairsOf` in `workers/src/catalogue.ts`.
+  static List<String> pairsOf(List<String> tokens) {
+    final words = tokens.take(8).toList();
+    final pairs = <String>{};
+    for (var i = 0; i < words.length; i++) {
+      for (var j = i + 1; j < words.length; j++) {
+        pairs.add(([words[i], words[j]]..sort()).join('|'));
+      }
+    }
+    return pairs.toList();
+  }
+
   @override
   Future<FoodItem?> lookupBarcode(String barcode) =>
       _fallback.lookupBarcode(barcode);
@@ -77,32 +91,25 @@ class FirestoreFoodRepository implements FoodDatabaseRepository {
     if (tokens.isEmpty) return _fallback.search(trimmed, limit: limit);
 
     try {
-      // Ordered by `rank`, which is what makes this usable at all.
-      //
-      // `arrayContainsAny` returns an arbitrary page of matches, so without an
-      // ordering the ranking below only ever saw 60 random foods sharing a
-      // word — "olive oil" came back as OLIVE GARDEN lasagna, "banana" as
-      // banana split, because "Oil, olive" and "Bananas, raw" were simply not
-      // in the page. Ordering by rank pulls the generic reference foods in
-      // first; the scoring then chooses between them.
-      final snapshot = await _firestore
-          .collection('foods')
-          .where('tokens', arrayContainsAny: tokens.take(_maxTokens).toList())
-          .orderBy('rank')
-          .limit(_candidates)
-          .get();
+      // Two strategies, because a one-word query and a two-word query fail in
+      // different ways against an index with no full-text search.
+      var docs = tokens.length >= 2
+          ? await _byPairs(tokens)
+          : await _byNamePrefix(trimmed.toLowerCase());
 
-      if (snapshot.docs.isEmpty) {
-        // An empty mirror is the state before the first sync completes, and is
-        // indistinguishable here from a genuinely unknown food. Either way the
-        // live database is the better answer.
+      // Neither is exhaustive — a pair only matches when both words appear, and
+      // a prefix only when the name begins with the query. Falling back to the
+      // loose token query keeps an unusual phrasing findable.
+      if (docs.isEmpty) docs = await _byTokens(tokens);
+
+      if (docs.isEmpty) {
+        // An empty mirror is also the state before the first sync completes,
+        // and is indistinguishable here from a genuinely unknown food.
         return _fallback.search(trimmed, limit: limit);
       }
 
-      final lower = trimmed.toLowerCase();
-      final scored = snapshot.docs
-          .map((doc) => (_score(doc.data(), tokens, lower), doc.data()))
-          .toList()
+      final phrase = trimmed.toLowerCase();
+      final scored = docs.map((d) => (_score(d, tokens, phrase), d)).toList()
         ..sort((a, b) => b.$1.compareTo(a.$1));
 
       return scored.take(limit).map((e) => _toFoodItem(e.$2)).toList();
@@ -112,14 +119,61 @@ class FirestoreFoodRepository implements FoodDatabaseRepository {
     }
   }
 
+  /// Multi-word queries, by sorted word pair.
+  ///
+  /// This is the query that makes multi-word search work. A pair is one indexed
+  /// term that requires *both* words, so "olive oil" cannot match "OLIVE
+  /// GARDEN, spaghetti with meat sauce" — that name has no "oil" in it. Matching
+  /// the two words separately, which is what the token query does, returns
+  /// everything containing either and leaves the ranker an arbitrary page.
+  Future<List<Map<String, dynamic>>> _byPairs(List<String> tokens) async {
+    final pairs = pairsOf(tokens);
+    if (pairs.isEmpty) return const [];
+
+    final snapshot = await _firestore
+        .collection('foods')
+        .where('pairs', arrayContainsAny: pairs.take(_maxTokens).toList())
+        .orderBy('rank')
+        .limit(_candidates)
+        .get();
+    return snapshot.docs.map((d) => d.data()).toList();
+  }
+
+  /// Single-word queries, by name prefix.
+  ///
+  /// FDC names lead with the food and follow with qualifiers — "Spinach, raw",
+  /// "Bananas, dehydrated". So for one word the useful set is the names that
+  /// *begin* with it, which is a range scan rather than an arbitrary page: it is
+  /// the difference between "Spinach, raw" and "New Zealand spinach, raw".
+  ///
+  /// `\uf8ff` is past every ordinary character, so it bounds the range at the
+  /// end of the prefix.
+  Future<List<Map<String, dynamic>>> _byNamePrefix(String prefix) async {
+    final snapshot = await _firestore
+        .collection('foods')
+        .where('nameLower', isGreaterThanOrEqualTo: prefix)
+        .where('nameLower', isLessThan: '$prefix\uf8ff')
+        .orderBy('nameLower')
+        .limit(_candidates)
+        .get();
+    return snapshot.docs.map((d) => d.data()).toList();
+  }
+
+  /// The loose fallback: any single word, generic foods first.
+  Future<List<Map<String, dynamic>>> _byTokens(List<String> tokens) async {
+    final snapshot = await _firestore
+        .collection('foods')
+        .where('tokens', arrayContainsAny: tokens.take(_maxTokens).toList())
+        .orderBy('rank')
+        .limit(_candidates)
+        .get();
+    return snapshot.docs.map((d) => d.data()).toList();
+  }
+
   /// How well one catalogue entry answers the query.
   ///
   /// Hand-tuned rather than derived: there is no relevance signal to work from,
-  /// so this encodes what a person means when they type a food name. Matching
-  /// the whole phrase beats matching the words separately; leading with the
-  /// phrase beats containing it; and among equals the shorter description wins,
-  /// because FDC's generic entries are short ("Spinach, raw") and its
-  /// oddities are long ("Spinach, creamed, from fresh, made with margarine").
+  /// so this encodes what a person means when they type a food name.
   static int _score(
     Map<String, dynamic> data,
     List<String> tokens,
@@ -137,9 +191,25 @@ class FirestoreFoodRepository implements FoodDatabaseRepository {
     } else if (name.contains(phrase)) {
       score += 20;
     }
-    // First word of the description carries most of its meaning.
-    if (tokens.isNotEmpty && name.startsWith(tokens.first)) score += 15;
 
+    // The strongest signal available, and the one that sorts "Rice, brown,
+    // long-grain, cooked" above "Babyfood, cereal, brown rice, dry": an FDC
+    // description names the food first and qualifies it afterwards, so a name
+    // whose first word is what you asked for is the food itself rather than
+    // something containing it. Compared by prefix in both directions, because
+    // "bananas" should answer "banana".
+    final first = name.split(RegExp(r'[^a-z0-9]+')).firstWhere(
+          (w) => w.isNotEmpty,
+          orElse: () => '',
+        );
+    if (first.isNotEmpty &&
+        tokens.any((t) => first.startsWith(t) || t.startsWith(first))) {
+      score += 25;
+    }
+
+    // Among equals the shorter description wins: FDC's generic entries are
+    // short ("Spinach, raw") and its oddities are long ("Spinach, creamed,
+    // from fresh, made with margarine").
     score -= name.length ~/ 15;
     return score;
   }

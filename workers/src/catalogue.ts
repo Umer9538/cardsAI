@@ -116,6 +116,38 @@ const NUMBER_BY_ID: Record<number, string> = {
  *
  * MUST match `FirestoreFoodRepository.tokenize` on the client.
  */
+/**
+ * Sorted word pairs, which are what make a multi-word search selective.
+ *
+ * Single tokens do not narrow anything: "olive oil" as two `array-contains-any`
+ * terms matches every food containing *either* word, and Firestore then returns
+ * an arbitrary page of those — which is how "olive oil" came back as OLIVE
+ * GARDEN spaghetti while "Oil, olive, salad or cooking" was never a candidate.
+ *
+ * A pair is a single indexed term that both words must be present for.
+ * `oil|olive` matches "Oil, olive, salad or cooking" and cannot match "OLIVE
+ * GARDEN, spaghetti with meat sauce", because that name has no "oil" in it.
+ *
+ * Sorted so the query does not have to guess word order: the food is called
+ * "Oil, olive" and the person types "olive oil".
+ *
+ * Capped at the first eight words — pairs grow quadratically, and by the eighth
+ * word an FDC description is into qualifiers ("drained solids", "without salt")
+ * rather than saying what the food is.
+ *
+ * MUST match `FirestoreFoodRepository.pairsOf`.
+ */
+export function pairsOf(tokens: string[]): string[] {
+  const words = tokens.slice(0, 8);
+  const pairs: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    for (let j = i + 1; j < words.length; j++) {
+      pairs.push([words[i], words[j]].sort().join("|"));
+    }
+  }
+  return [...new Set(pairs)];
+}
+
 export function tokenize(text: string): string[] {
   const words = text
     .toLowerCase()
@@ -190,10 +222,17 @@ function toDocument(food: FdcFood): Record<string, unknown> | null {
 
   const at = (number: string): number => byNumber.get(number) ?? 0;
 
+  const trimmed = name.length > 120 ? `${name.slice(0, 117)}...` : name;
+  const tokens = tokenize(trimmed);
+
   return {
     fdcId: food.fdcId,
-    name: name.length > 120 ? `${name.slice(0, 117)}...` : name,
-    tokens: tokenize(name),
+    name: trimmed,
+    // For the prefix range query, which is what answers a single-word search:
+    // "spinach" should find "Spinach, raw", not "New Zealand spinach".
+    nameLower: trimmed.toLowerCase(),
+    tokens,
+    pairs: pairsOf(tokens),
     dataType: food.dataType ?? "",
     rank: RANK[(food.dataType ?? "") as Dataset] ?? 3,
     // Every dataset mirrored here reports per 100g.
