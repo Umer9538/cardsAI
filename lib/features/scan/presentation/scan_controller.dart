@@ -177,6 +177,62 @@ class ScanController extends AsyncNotifier<ScanResult?> {
             item.id == itemId ? item.copyWith(name: name, userEdited: true) : item,
       );
 
+  /// Replaces one item's name, weight and figures with what the user typed.
+  ///
+  /// This is the correction path, and it is the difference between an estimate
+  /// someone can act on and one they have to accept. The ½×–2× row handles
+  /// "about twice that"; this handles "it was 180 g and the app cannot see the
+  /// oil".
+  ///
+  /// **The edited item becomes the new baseline.** `_asAnalysed` is rewritten
+  /// for this id and its portion factor reset to 1, so a later ½× halves what
+  /// the user corrected rather than what the model originally guessed. Without
+  /// that, typing 250 g and then tapping 2× would silently discard the 250.
+  ///
+  /// [userEdited] is set, which also clears [FoodItem.needsReview] — once
+  /// someone has looked at a number and confirmed it, "Check this" is noise.
+  void applyEdit({
+    required String itemId,
+    required String name,
+    required Nutrition nutrition,
+    double? portionGrams,
+  }) {
+    final current = state.value;
+    if (current == null) return;
+
+    final edited = <FoodItem>[];
+    for (final item in current.items) {
+      if (item.id != itemId) {
+        edited.add(item);
+        continue;
+      }
+      edited.add(
+        item.copyWith(
+          name: name.trim().isEmpty ? item.name : name.trim(),
+          nutrition: nutrition,
+          portionGrams: portionGrams,
+          userEdited: true,
+        ),
+      );
+    }
+
+    _asAnalysed = [
+      for (final item in _asAnalysed)
+        if (item.id != itemId)
+          item
+        else
+          item.copyWith(
+            name: name.trim().isEmpty ? item.name : name.trim(),
+            nutrition: nutrition,
+            portionGrams: portionGrams,
+            userEdited: true,
+          ),
+    ];
+    _portions[itemId] = 1;
+
+    state = AsyncData(current.copyWith(items: edited));
+  }
+
   /// Commits the current items to the diary and clears the controller.
   ///
   /// The meal is written first and the photo uploaded after, so a failed or
