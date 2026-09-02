@@ -12,6 +12,7 @@ import '../../settings/presentation/widgets/settings_widgets.dart';
 import 'widgets/bottom_nav.dart';
 import 'widgets/calorie_gauge.dart';
 import 'widgets/meal_card.dart';
+import 'widgets/meal_sheet.dart';
 
 /// Home — Figma frame `23_Home` (2002:1388).
 ///
@@ -152,6 +153,7 @@ class HomeScreen extends ConsumerWidget {
                   top: _mealsTop,
                   date: log.date,
                   meals: meals,
+                  onTap: (meal) => showMealSheet(context, ref, meal),
                   onDelete: (meal) => _confirmDelete(context, ref, meal),
                 ),
                 _SectionTitle(text: 'Diet Plan', top: _dietPlanTop + shift),
@@ -638,12 +640,14 @@ class _MealsSection extends StatelessWidget {
     required this.top,
     required this.date,
     required this.meals,
+    this.onTap,
     this.onDelete,
   });
 
   final double top;
   final DateTime date;
   final List<Meal> meals;
+  final ValueChanged<Meal>? onTap;
   final ValueChanged<Meal>? onDelete;
 
   static final DateFormat _heading = DateFormat('EEEE d MMMM');
@@ -686,6 +690,7 @@ class _MealsSection extends StatelessWidget {
               if (i > 0) const SizedBox(height: HomeScreen._mealGap),
               MealCard(
                 meal: meal,
+                onTap: onTap == null ? null : () => onTap!(meal),
                 onDelete: onDelete == null ? null : () => onDelete!(meal),
               ),
             ],

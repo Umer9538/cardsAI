@@ -429,6 +429,28 @@ Every step is skippable, and skipping leaves the default targets — which is ex
 what the app showed before the quiz existed. `StoreKeys.quizSeen` records that it was
 dealt with either way, so a skip is not re-asked on every launch.
 
+### Corrections are the product, not a nicety
+
+Mining ~40,000 reviews across this category produced one finding that outranks the rest:
+**correction friction, not error rate, decides a one-star review.** The same inaccuracy earns
+four stars or one depending only on whether fixing it is fast and free. So:
+
+- **`ItemEditSheet`** (`scan/presentation/widgets/`) edits a food's name, weight and all four
+  macros. Reached from the scan result *and* from a meal already in the diary, because a
+  correction that only works before you log is half a feature. **Never paywall it.**
+- Typing a weight rescales the macros from the per-gram baseline — "it was more like 180 g" is
+  a claim about the portion, not about protein — but typing into a macro field pins it, so a
+  manual correction is never undone by a later weight change.
+- **An edit becomes the new baseline.** `applyEdit` rewrites `_asAnalysed` and resets the
+  portion factor, so a later ½× halves what the user corrected rather than what the model
+  guessed. Without it, typing 250 g then tapping 2× silently discards the 250.
+- **`showMealSheet`** puts the same editing on a logged meal, plus **Log again** — which
+  answers the other daily complaint, *"I end up having to photo my yogurt pot every day."*
+  Log again builds a new `Meal` rather than `copyWith`, because `scanId` must be **cleared**:
+  two meals pointing at one scan record would make the cost log overstate how many scans ran.
+- Fibre and sugar are carried through every edit untouched. The sheet does not offer them, so
+  it must not silently zero them.
+
 ### The scan result surfaces what the model actually said
 
 The pipeline returns three things the UI used to discard or bury, and each one is the
