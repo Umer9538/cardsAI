@@ -608,8 +608,12 @@ class _ErrorOverlay extends ConsumerWidget {
                   width: 280,
                   height: 50,
                   child: PrimaryButton(
-                    label:
-                        'Watch an ad for ${AdConfig.scansPerRewardedAd} scans',
+                    // Pluralised, because the grant is 1 now — "1 scans" is
+                    // the kind of thing people screenshot.
+                    label: AdConfig.scansPerRewardedAd == 1
+                        ? 'Watch an ad for 1 more scan'
+                        : 'Watch an ad for '
+                            '${AdConfig.scansPerRewardedAd} more scans',
                     busy: busy,
                     onPressed: () => _watchAd(context, ref),
                   ),

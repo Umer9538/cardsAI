@@ -34,6 +34,58 @@ UserProfile profileOf({
 }
 
 void main() {
+  // The goal-weight slider ran from 35 kg for everyone, so a 175 cm user could
+  // set a BMI-11.4 target and the plan screen would then affirm it with a date.
+  // Play treats an app that promotes eating disorders as a removal category.
+  group('healthy goal floor', () {
+    test('is BMI 18.5 for the entered height', () {
+      // 18.5 * 1.75^2 = 56.66 -> rounded up to the next half kilo.
+      expect(TargetCalculator.healthyGoalFloorKg(175), 57.0);
+      // 18.5 * 1.50^2 = 41.625
+      expect(TargetCalculator.healthyGoalFloorKg(150), 42.0);
+      // 18.5 * 1.90^2 = 66.785
+      expect(TargetCalculator.healthyGoalFloorKg(190), 67.0);
+    });
+
+    test('rounds up, never down, so the floor is not crossed by rounding', () {
+      for (var h = 120.0; h <= 220.0; h += 1) {
+        final floor = TargetCalculator.healthyGoalFloorKg(h);
+        final bmi = floor / ((h / 100) * (h / 100));
+        expect(bmi, greaterThanOrEqualTo(TargetCalculator.minHealthyBmi),
+            reason: '$h cm -> $floor kg is BMI $bmi');
+      }
+    });
+
+    test('35 kg at 175 cm is below the floor', () {
+      expect(
+        TargetCalculator.isGoalBelowHealthyFloor(
+            goalWeightKg: 35, heightCm: 175),
+        isTrue,
+      );
+    });
+
+    test('no goal date is offered for an underweight target', () {
+      // A profile saved before the floor existed can still carry one.
+      final profile = profileOf(
+        heightCm: 175,
+        weightKg: 80,
+        goal: WeightGoal.lose,
+        goalWeightKg: 35,
+      );
+      expect(TargetCalculator.goalDate(profile), isNull);
+    });
+
+    test('a healthy target still gets its date', () {
+      final profile = profileOf(
+        heightCm: 175,
+        weightKg: 80,
+        goal: WeightGoal.lose,
+        goalWeightKg: 70,
+      );
+      expect(TargetCalculator.goalDate(profile), isNotNull);
+    });
+  });
+
   group('Mifflin-St Jeor', () {
     test('male constant is +5', () {
       // 10*80 + 6.25*180 - 5*30 + 5

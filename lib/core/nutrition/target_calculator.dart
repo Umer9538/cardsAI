@@ -33,6 +33,41 @@ abstract final class TargetCalculator {
   static const double minCaloriesFemale = 1200;
   static const double minCaloriesMale = 1500;
 
+  /// The lowest BMI this app will help anyone aim for.
+  ///
+  /// 18.5 is the bottom of the WHO healthy range. It is here as a hard floor
+  /// rather than a suggestion because the goal-weight slider previously ran
+  /// down to 35 kg for everyone: at 175 cm that is a BMI of 11.4, and the plan
+  /// screen would then affirm it with a date — "On track for 35 kg by 14 March
+  /// 2027." Google Play's Inappropriate Content policy names apps that promote
+  /// eating disorders as a **removal** category, not a rating one, and an app
+  /// endorsing an underweight target with a completion date is squarely that.
+  ///
+  /// Presented as our own guardrail, never as clinical advice — see the note on
+  /// [minCaloriesFemale].
+  static const double minHealthyBmi = 18.5;
+
+  /// The lowest goal weight offered for someone [heightCm] tall, kg.
+  ///
+  /// Rounded up to the next 0.5 kg so the slider lands on a value it can
+  /// actually represent, and so the floor is never crossed by rounding down.
+  static double healthyGoalFloorKg(double heightCm) {
+    final metres = heightCm / 100;
+    final raw = minHealthyBmi * metres * metres;
+    return (raw * 2).ceilToDouble() / 2;
+  }
+
+  /// True when [goalWeightKg] is below the healthy floor for [heightCm].
+  ///
+  /// The slider cannot produce one, but a profile saved before the floor
+  /// existed can, so everything that renders a goal checks this rather than
+  /// trusting the input.
+  static bool isGoalBelowHealthyFloor({
+    required double goalWeightKg,
+    required double heightCm,
+  }) =>
+      goalWeightKg < healthyGoalFloorKg(heightCm);
+
   /// Grams per kg of bodyweight. Protein at the upper end of the ordinary
   /// recommendation because it is the macro that best preserves muscle in a
   /// deficit and the one people under-eat; fat at the low end of adequate,
@@ -126,6 +161,14 @@ abstract final class TargetCalculator {
     final weight = profile.weightKg;
     if (goal == null || goal == WeightGoal.maintain) return null;
     if (target == null || weight == null || profile.weeklyRateKg <= 0) {
+      return null;
+    }
+
+    // Never put a date on an underweight target. A projection is the app
+    // agreeing with the goal, and there is one goal it must not agree with.
+    final height = profile.heightCm;
+    if (height != null &&
+        isGoalBelowHealthyFloor(goalWeightKg: target, heightCm: height)) {
       return null;
     }
 

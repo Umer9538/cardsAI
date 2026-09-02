@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
@@ -81,6 +83,11 @@ class AdMobService implements AdsService {
     // non-personalised ads at best and a policy violation at worst.
     await _requestConsent();
 
+    // Then ATT, in that order — Google's own guidance. The UMP form explains
+    // why the app is asking; Apple's system prompt is a bare yes/no, and it
+    // lands better after the explanation than before it.
+    await _requestTracking();
+
     unawaited(_loadRewarded());
     unawaited(_loadAppOpen());
   }
@@ -118,6 +125,32 @@ class AdMobService implements AdsService {
     );
   }
 
+  /// Apple's App Tracking Transparency prompt, iOS only.
+  ///
+  /// `Info.plist` has carried `NSUserTrackingUsageDescription` since ads were
+  /// added and nothing ever requested authorisation. That is two problems at
+  /// once: a declared tracking purpose with no prompt is something App Review
+  /// looks for, and without the prompt every iOS impression is served
+  /// non-personalised, which is the low end of the eCPM range this app's whole
+  /// ad case rests on.
+  ///
+  /// Only ever asked once — iOS returns the previous answer thereafter, and
+  /// re-prompting is not possible — so a refusal is final and simply means
+  /// non-personalised ads. Non-fatal for the same reason consent is: an ad
+  /// SDK must never be able to stop the app starting.
+  Future<void> _requestTracking() async {
+    if (kIsWeb || !Platform.isIOS) return;
+    try {
+      final status =
+          await AppTrackingTransparency.trackingAuthorizationStatus;
+      if (status == TrackingStatus.notDetermined) {
+        await AppTrackingTransparency.requestTrackingAuthorization();
+      }
+    } catch (error) {
+      debugPrint('ATT request failed: $error');
+    }
+  }
+
   Future<void> _showConsentForm() {
     final completer = Completer<void>();
     ConsentForm.loadAndShowConsentFormIfRequired((error) {
@@ -127,11 +160,20 @@ class AdMobService implements AdsService {
     return completer.future;
   }
 
+  /// The ad request carries nothing about the user, and must not.
+  ///
+  /// `AdRequest` takes `keywords`, `contentUrl` and `neighboringContentUrls`,
+  /// and it would be easy to reach for them — a nutrition app knows a great
+  /// deal about who is looking at the screen. Apple Guideline 5.1.3(i) bars
+  /// health data from advertising targeting outright, and a diet, a weight or a
+  /// goal is health data. **Keep this const and empty.**
+  static const AdRequest _request = AdRequest();
+
   Future<void> _loadRewarded() async {
     if (_rewarded != null) return;
     await RewardedAd.load(
       adUnitId: AdConfig.rewardedUnitId,
-      request: const AdRequest(),
+      request: _request,
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) => _rewarded = ad,
         onAdFailedToLoad: (error) {
@@ -146,7 +188,7 @@ class AdMobService implements AdsService {
     if (_appOpen != null) return;
     await AppOpenAd.load(
       adUnitId: AdConfig.appOpenUnitId,
-      request: const AdRequest(),
+      request: _request,
       adLoadCallback: AppOpenAdLoadCallback(
         onAdLoaded: (ad) {
           _appOpen = ad;

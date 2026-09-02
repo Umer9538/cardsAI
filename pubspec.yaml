@@ -56,6 +56,10 @@ dependencies:
   flutter_image_compress: ^2.5.1
   path_provider: ^2.1.6
   google_mobile_ads: ^9.1.0
+  # iOS App Tracking Transparency. Info.plist has declared
+  # NSUserTrackingUsageDescription since ads were added and nothing ever
+  # prompted, which is both a review flag and unrequested revenue.
+  app_tracking_transparency: ^2.0.6
   in_app_purchase: ^3.3.0
   http: ^1.6.0
   mobile_scanner: ^7.4.0

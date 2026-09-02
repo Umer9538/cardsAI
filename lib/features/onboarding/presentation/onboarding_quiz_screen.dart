@@ -519,17 +519,32 @@ class _GoalWeight extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rate = answers.weeklyRateKg;
+
+    // The floor moves with height rather than being a constant, because a
+    // healthy weight does. This slider used to start at 35 kg for everyone.
+    final floor = TargetCalculator.healthyGoalFloorKg(answers.heightCm);
+    final value = math.max(floor, answers.goalWeightKg ?? answers.weightKg);
+
     return Column(
       children: [
         QuizNumberSlider(
           accent: accent,
-          value: answers.goalWeightKg ?? answers.weightKg,
-          min: 35,
+          value: math.min(value, 200),
+          min: floor,
           max: 200,
-          divisions: 330,
+          divisions: ((200 - floor) * 2).round(),
           unit: 'kg goal',
           format: (v) => v.toStringAsFixed(1),
           onChanged: onWeight,
+        ),
+        const SizedBox(height: 8),
+        // Say the floor out loud. A slider that silently refuses to go lower
+        // reads as broken; one that explains itself reads as looking after you.
+        Text(
+          "We won't set a goal below ${floor.toStringAsFixed(0)} kg — that's the "
+          'bottom of the healthy range for your height.',
+          style: AppTypography.meta(color: AppColors.inkMuted),
+          textAlign: TextAlign.center,
         ),
         const SizedBox(height: 16),
         Row(

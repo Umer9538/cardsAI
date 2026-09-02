@@ -198,6 +198,34 @@ Security properties, none of which are optional:
 
 Two revenue paths, both gated on one flag: `isPremiumProvider`.
 
+**Ads stay, but they cannot be shipped carelessly.** The launch research argued for
+deleting AdMob outright; that was overruled, and the four things that made ads a launch
+blocker are fixed instead:
+
+- **One scan per rewarded ad, not three.** A scan costs ~$0.0012. A rewarded impression is
+  ~$0.016 at a US eCPM near $16 — thirteen scans — but ~$0.001 at the ~$1 CPM these markets
+  see, which is 0.83 of one. At three scans an ad, **every rewarded view in Pakistan or India
+  cost more than it earned.** `AdConfig.scansPerRewardedAd` and `rewards.ts` `RULES.scansPerAd`
+  must stay in step. The Tier-2 figure is an unsourced proxy — watch real AdMob numbers before
+  raising it.
+- **App-open ads are pure upside** — no scan cost attached — so they are unconditional.
+- **ATT is actually requested** (`app_tracking_transparency`). `Info.plist` had declared
+  `NSUserTrackingUsageDescription` since ads were added and nothing ever prompted: a review
+  flag, and every iOS impression served non-personalised at the low end of the eCPM range the
+  whole ad case rests on. UMP first, then ATT — the consent form explains why before Apple's
+  bare yes/no arrives.
+- **`SKAdNetworkItems` is populated** with Google's published list (50 entries). Re-copy it
+  from the AdMob quick-start when updating the SDK; it changes.
+- **`AdRequest` is `const` and empty, and must stay that way.** It accepts `keywords` and
+  `contentUrl`, and a nutrition app knows plenty about its user — but Apple 5.1.3(i) bars
+  health data from ad targeting, and a diet, a weight or a goal is health data.
+
+**`tool/build_release.sh` is how releases get built.** Ad ids fall back to Google's *test*
+units when the defines are missing, so a release built by hand installs, runs, and earns
+nothing, silently. `WORKER_URL` has no default and throws on the first scan. Neither is caught
+by `analyze` or the test suite, so the script refuses to build without them — and refuses if
+the ids still contain Google's test publisher, in the defines or in the manifest/plist.
+
 **Ads — AdMob, rewarded + app-open only.** No banners (the artboards reserve no
 space) and no interstitials (they fight the ten-second logging loop the app is built
 around). Premium accounts get `NoAdsService`, so the SDK is never initialised for them
@@ -303,6 +331,22 @@ Rules:
 - `DesignImage` returns a `Positioned` and must be a direct `Stack` child. Wrapping
   it in `Opacity` throws "Incorrect use of ParentDataWidget" — use its `opacity`
   parameter instead. That error still renders plausibly, so it survives a pixel diff.
+
+### The goal weight has a floor, and it is not negotiable
+
+`TargetCalculator.healthyGoalFloorKg` is BMI 18.5 for the entered height, rounded up to the
+next half kilo so rounding can never cross it. The goal-weight slider starts there and says so
+on screen; `goalDate` returns null below it, so nothing puts a date on an underweight target.
+
+The slider previously ran from 35 kg for **everyone**. At 175 cm that is a BMI of 11.4, and
+the plan screen would then affirm it — *"On track for 35 kg by 14 March 2027."* Google Play's
+Inappropriate Content policy names apps that promote eating disorders as a **removal**
+category, not a rating one. The floor is checked on render as well as on input, because a
+profile saved before it existed can still carry a lower number.
+
+Like the 1200/1500 kcal calorie floors, it is presented as **this app's own guardrail, never
+as clinical advice** — a silent floor is a number nobody can audit, and a cited one we cannot
+source becomes its own unverifiable health claim.
 
 ### The calorie target, and the quiz that produces it
 

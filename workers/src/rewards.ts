@@ -25,8 +25,13 @@ import { Firestore, increment, serverTimestamp } from "./firestore.js";
  */
 
 const RULES = {
-  /** Scans granted per ad. Must match `AdConfig.scansPerRewardedAd`. */
-  scansPerAd: 3,
+  /**
+   * Scans granted per ad. Must match `AdConfig.scansPerRewardedAd`, where the
+   * arithmetic for why this is 1 rather than 3 is written out: at a Tier-2
+   * eCPM one impression funds less than one scan, so three made every rewarded
+   * view in this app's home market cost more than it earned.
+   */
+  scansPerAd: 1,
   maxAdsPerDay: 5,
   /** A rewarded ad cannot finish faster than this. */
   cooldownSeconds: 30,
