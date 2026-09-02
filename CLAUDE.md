@@ -346,14 +346,33 @@ theatre — the work behind it is a few multiplications — but a number that ap
 instantly reads as a lookup while one that is worked out reads as a plan. The stages
 it names are the ones actually being performed.
 
-`QuizOptions` **measures its own cards** against the space it is given rather than
-using a fixed height. Fixed heights are how the five-option activity step ended up
-10pt over its box; the six-option diet step would have been 34pt over. **It is not in the Figma file** — the
-design has three marketing onboarding pages and no quiz — but without it every account
-gets `UserProfile.defaultTargets`, so a 22-year-old athlete and a sedentary
-55-year-old see the same 2000 kcal ring. It is built entirely from what the design
-does define: the onboarding artboard's canvas, palette, type ramp, `blob.png` and the
-round CTA, now shared as `RoundNextButton`. Same approach as `DescribeMealScreen`.
+**It is not in the Figma file** — the design has three marketing onboarding pages and
+no quiz — but without it every account gets `UserProfile.defaultTargets`, so a
+22-year-old athlete and a sedentary 55-year-old see the same 2000 kcal ring.
+
+It is drawn **the way the artwork is**: cream ground, flat colour, a 2.5pt black
+outline, and a hard offset shadow with no blur. Choosing an option presses it into the
+page — the shadow collapses and the card translates by exactly the shadow's offset,
+which is the whole reason the shadow is hard rather than soft. `QuizPalette` holds the
+set, and the accent **changes per question**, cycling the design's own four colours, so
+moving through the quiz is visibly moving rather than the same screen with new words.
+The mascot appears on the plan screen and nowhere else, which is the only way a mascot
+stays likeable.
+
+This screen has been three things, and the first two are worth remembering as
+mistakes. White-on-lilac borrowed from frames 02-04 read as a marketing page bolted to
+the front of a black app. The app's own dark surfaces were coherent and completely
+characterless. Neither used the voice the app already has — the onboarding
+illustrations are 1930s rubber-hose cartoons with heavy uniform linework, pie-cut eyes
+and sparkles, and the icon is a gloved avocado. **Do not "unify" this back into the
+dark app palette.** It is deliberately not that.
+
+`QuizOptions` **measures its own cards**, and tightens the gap before the cards.
+Fixed heights are how the five-option activity step ended up 10pt over its box; then
+clamping card height to a minimum without also tightening the gap put the six-option
+diet step 20pt over the shorter box the running estimate leaves. Cards below about
+50pt stop fitting two lines of text; spacing has no such floor, so spacing is what
+yields.
 
 Every step is skippable, and skipping leaves the default targets — which is exactly
 what the app showed before the quiz existed. `StoreKeys.quizSeen` records that it was
