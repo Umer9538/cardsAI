@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -76,12 +77,26 @@ class ScanResultScreen extends ConsumerWidget {
   static const double _itemHeight = 132;
   static const double _gap = 20;
 
+  /// Height of the note under the list, reserved whether or not it shows, so
+  /// the geometry does not move when the model happens to ask a question.
+  static const double _noteHeight = 38;
+
+  /// Room the content must leave beneath itself.
+  ///
+  /// "Add to My Diet" is pinned to the *viewport*, not to this canvas, so it
+  /// covers the bottom `926 - 832` units of every scroll. Without this the
+  /// model's clarifying question — the one line that says which number to
+  /// distrust — sits underneath the button and cannot be read at any scroll
+  /// position. Same shape of bug as the floating tab bar's clearance.
+  static const double _ctaClearance = DesignCanvas.designHeight - 832 + 16;
+
   static double _contentHeight(int itemCount) {
     final listBottom =
-        _gridTop + _gridHeight + itemCount * (_gap + _itemHeight) + 56;
-    return listBottom < DesignCanvas.designHeight
+        _gridTop + _gridHeight + itemCount * (_gap + _itemHeight);
+    final bottom = listBottom + _noteHeight + _ctaClearance;
+    return bottom < DesignCanvas.designHeight
         ? DesignCanvas.designHeight
-        : listBottom;
+        : bottom;
   }
 
   /// Calories as an absolute figure; the three macros as a share of the day.
@@ -279,7 +294,7 @@ class ScanResultScreen extends ConsumerWidget {
               ),
             ),
 
-            if (state.isLoading) const _AnalysingOverlay(),
+            if (state.isLoading) _AnalysingOverlay(path: scan?.photoPath),
             if (state.hasError)
               _ErrorOverlay(
                 message: ref.read(scanControllerProvider.notifier).errorMessage!,
@@ -339,33 +354,199 @@ class _CaptureImage extends StatelessWidget {
   }
 }
 
-/// Covers the screen while the pipeline works. The design carries no analysing
-/// frame, so this is the minimum that reads as "working, not broken".
-class _AnalysingOverlay extends StatelessWidget {
-  const _AnalysingOverlay();
+/// Covers the screen while the pipeline works.
+///
+/// The design carries no analysing frame, and the first version of this was a
+/// spinner over "Reading your plate…". A scan takes seven to twelve seconds —
+/// a photo has to be prepared, sent, looked at by a reasoning model, and turned
+/// into numbers — and a bare spinner over that long says "waiting", which is
+/// exactly what makes a wait feel broken.
+///
+/// So it shows the plate being read: the capture itself, with a band sweeping
+/// down it, and the stage that is actually running underneath.
+///
+/// **There is deliberately no percentage and no progress bar.** Nothing here
+/// knows how far along the model is, and a bar that fills on a timer is a lie
+/// that gets caught the first time a scan runs long. The stages are real steps
+/// in a real order, and the last one simply waits.
+class _AnalysingOverlay extends StatefulWidget {
+  const _AnalysingOverlay({this.path});
+
+  final String? path;
+
+  @override
+  State<_AnalysingOverlay> createState() => _AnalysingOverlayState();
+}
+
+class _AnalysingOverlayState extends State<_AnalysingOverlay>
+    with SingleTickerProviderStateMixin {
+  /// The pipeline's own steps. The last has no successor: it holds until the
+  /// result lands, however long that takes.
+  static const List<(String, Duration)> _stages = [
+    ('Preparing your photo', Duration(milliseconds: 1400)),
+    ('Finding the foods', Duration(milliseconds: 2600)),
+    ('Estimating portions', Duration(milliseconds: 3000)),
+    ('Working out the nutrition', Duration.zero),
+  ];
+
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1900),
+  )..repeat();
+
+  int _stage = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _advance();
+  }
+
+  void _advance() {
+    final wait = _stages[_stage].$2;
+    if (wait == Duration.zero) return;
+    _timer = Timer(wait, () {
+      if (!mounted) return;
+      setState(() => _stage++);
+      _advance();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _sweep.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: AppColors.background.withValues(alpha: 0.86),
+      color: AppColors.background.withValues(alpha: 0.94),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
-              width: 34,
-              height: 34,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(AppColors.accentGreen),
+            SizedBox(
+              width: 232,
+              height: 232,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _CapturePreview(path: widget.path),
+                    // Dimmed so the sweep reads over any photograph.
+                    const ColoredBox(color: Color(0x59121212)),
+                    AnimatedBuilder(
+                      animation: _sweep,
+                      builder: (context, _) => _Sweep(t: _sweep.value),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text('Reading your plate…', style: AppTypography.cardHeading()),
+            const SizedBox(height: 28),
+            // Crossfaded, so the line changing is not mistaken for the line
+            // being replaced by an error.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 320),
+              child: Text(
+                _stages[_stage].$1,
+                key: ValueKey(_stage),
+                style: AppTypography.cardHeading(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < _stages.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 260),
+                    width: i == _stage ? 22 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: i <= _stage
+                          ? AppColors.accentGreen
+                          : AppColors.outline,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The capture, or the design's stand-in, filling whatever box it is given.
+class _CapturePreview extends StatelessWidget {
+  const _CapturePreview({this.path});
+
+  final String? path;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = path;
+    if (p == null || p.startsWith('assets/')) {
+      return Image.asset(p ?? 'assets/images/app/scan_food.png',
+          fit: BoxFit.cover);
+    }
+    return Image.file(
+      File(p),
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) =>
+          Image.asset('assets/images/app/scan_food.png', fit: BoxFit.cover),
+    );
+  }
+}
+
+/// A band travelling down the capture, brightest at its leading edge.
+class _Sweep extends StatelessWidget {
+  const _Sweep({required this.t});
+
+  /// 0..1 through one pass.
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        const band = 78.0;
+        return Stack(
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              // Starts above the frame and leaves below it, so the band is
+              // never seen to appear or vanish mid-photo.
+              top: -band + t * (h + band),
+              height: band,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x0045C588),
+                      Color(0x3345C588),
+                      AppColors.accentGreen,
+                    ],
+                    stops: [0, 0.7, 1],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -616,7 +797,27 @@ class _FoodItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(food.name, style: AppTypography.body()),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    food.name,
+                    style: AppTypography.body(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // The model flags its own uncertainty per item and the UI threw
+                // that away, so a guess and a confident reading looked
+                // identical. `prompt.ts` tells it to use "low" freely precisely
+                // because a flagged guess is more useful than a confident wrong
+                // number — but only if the flag reaches the screen.
+                //
+                // It points at the portion row directly beneath it, which is
+                // the one-tap fix.
+                if (food.needsReview) const _CheckThisChip(),
+              ],
+            ),
             const SizedBox(height: 14),
             SizedBox(
               height: 19,
@@ -662,6 +863,36 @@ class _FoodItemCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Marks an item the model was not confident about.
+///
+/// Deliberately quiet — an outline rather than a fill. It is a nudge to check a
+/// number, not a warning that something is wrong, and a plate of five foods can
+/// easily carry two of these.
+class _CheckThisChip extends StatelessWidget {
+  const _CheckThisChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: AppColors.accentOrange),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              size: 12, color: AppColors.accentOrange),
+          const SizedBox(width: 4),
+          Text('Check this',
+              style: AppTypography.divider(color: AppColors.accentOrange)),
+        ],
       ),
     );
   }

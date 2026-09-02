@@ -1,7 +1,10 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/repositories/repositories.dart';
@@ -23,11 +26,33 @@ class ImageCapture {
   /// showing up on food texture.
   static const int quality = 80;
 
+  /// Opts into Android's system photo picker.
+  ///
+  /// The plugin still defaults to the legacy `ACTION_GET_CONTENT` intent, which
+  /// hands the request to whichever app claims it — usually Google Photos,
+  /// which shows the camera roll and offers no way out of it. Someone with a
+  /// meal photo saved in Downloads, or synced from another app, simply cannot
+  /// reach it.
+  ///
+  /// The system picker shows the same photos and carries a **Browse** entry
+  /// into device storage, so both are reachable from one screen. It is also the
+  /// picker Android grants without a storage permission at all.
+  ///
+  /// Set once, on the platform instance, so it applies to every later call.
+  static void _useSystemPicker() {
+    if (kIsWeb || !Platform.isAndroid) return;
+    final platform = ImagePickerPlatform.instance;
+    if (platform is ImagePickerAndroid) {
+      platform.useAndroidPhotoPicker = true;
+    }
+  }
+
   /// Picks one image from the library and prepares it.
   ///
   /// Null when the picker was dismissed — a cancellation, not a failure, so it
   /// must not surface as an error.
   Future<String?> pickFromGallery() async {
+    _useSystemPicker();
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
       maxWidth: maxEdge.toDouble(),

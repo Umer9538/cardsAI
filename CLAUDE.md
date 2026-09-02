@@ -381,6 +381,27 @@ Every step is skippable, and skipping leaves the default targets — which is ex
 what the app showed before the quiz existed. `StoreKeys.quizSeen` records that it was
 dealt with either way, so a skip is not re-asked on every launch.
 
+### The scan result surfaces what the model actually said
+
+The pipeline returns three things the UI used to discard or bury, and each one is the
+difference between an estimate you can act on and a number you have to take on faith:
+
+- **Per-item confidence.** `prompt.ts` tells the model to use `low` freely, because a
+  flagged guess is more useful than a confident wrong number — but only if the flag
+  reaches the screen. `FoodItem.needsReview` was computed, documented, and never
+  rendered, so a guess and a certain reading looked identical. Low-confidence items now
+  carry a quiet **Check this** chip, sitting directly above the portion row that fixes
+  it. Outline rather than fill: a plate of five foods can easily carry two.
+- **The clarifying question**, which was drawn *underneath* the pinned CTA and could not
+  be read at any scroll position. `_ctaClearance` fixes that the same way
+  `AppBottomNav.clearance` does.
+- **The wait.** A scan is seven to twelve seconds. It was a spinner over "Reading your
+  plate…", which says waiting. It now shows the capture with a band sweeping down it
+  and names the stage that is running. **Deliberately no percentage and no progress
+  bar** — nothing here knows how far along the model is, and a bar that fills on a
+  timer is a lie that gets caught the first time a scan runs long. The last stage
+  simply holds until the result lands.
+
 ### Screens the design does not have
 
 Two things the app needs that no artboard covers. Both are built from components the

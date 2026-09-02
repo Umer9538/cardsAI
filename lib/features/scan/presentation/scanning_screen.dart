@@ -77,6 +77,10 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   /// the shutter back and leaves the user where they were.
   Future<void> _shutter() async {
     if (_busy) return;
+    // The capture itself takes a moment and the screen does not change until it
+    // returns, so without this the shutter is the one tap in the app that gives
+    // nothing back.
+    HapticFeedback.mediumImpact();
     setState(() => _busy = true);
 
     try {
