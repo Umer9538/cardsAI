@@ -427,6 +427,15 @@ design does define, so they read as part of it rather than bolted on.
 - **Search the food database** (`FoodSearchScreen`). The path that always works: no
   camera, no model, no quota, no cost — which makes it the honest option once someone
   has used up their scans.
+- **A photo from anywhere on the phone.** Selecting AI Gallery opens a chooser —
+  **Photos** (camera roll) or **Files** (`file_picker`, i.e. Android's Storage Access
+  Framework). Two entries because no single Android picker covers both: the system
+  photo picker is media-only, and the legacy `ACTION_GET_CONTENT` path is fired with
+  `startActivityForResult` rather than through a chooser, so it lands in whichever app
+  is the registered default — Google Photos on most phones, with no way out of it. A
+  meal photo in Downloads or synced from another app was unreachable. The chooser opens
+  on selecting the tile, not on a later shutter press: the shutter is a camera control,
+  and a tile that opens nothing reads as dead.
 - **Barcode scanning** (`BarcodeScannerView`, `mobile_scanner`). Restricted to the
   symbologies actually printed on packaging (EAN/UPC), which speeds detection and
   stops a QR code on a menu being read as a product.

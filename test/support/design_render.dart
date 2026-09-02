@@ -66,10 +66,14 @@ Future<void> loadDesignFonts() async {
 
 /// Pumps [screen] on a 428x926 viewport, waits for its assets to decode, and
 /// writes a 3x PNG to `build/$outputName`.
+/// [before] runs after the screen has settled and its images have decoded, but
+/// before the capture — for rendering a state that only exists after an
+/// interaction, such as an overlay behind a tap.
 Future<void> renderScreen(
   WidgetTester tester,
   Widget screen, {
   required String outputName,
+  Future<void> Function(WidgetTester tester)? before,
 }) async {
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = const Size(428, 926);
@@ -99,6 +103,11 @@ Future<void> renderScreen(
   });
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+
+  if (before != null) {
+    await before(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+  }
 
   final boundary = tester.renderObject<RenderRepaintBoundary>(
     find.byType(RepaintBoundary).first,

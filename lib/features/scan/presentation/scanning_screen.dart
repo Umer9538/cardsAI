@@ -23,6 +23,12 @@ enum ScanMode {
   final String icon;
 }
 
+/// Where a gallery photo comes from.
+///
+/// Two entries because no single Android picker covers both. See
+/// [ImageCapture.pickFromFiles].
+enum PhotoSource { photos, files }
+
 /// Camera capture — Figma frame `31_Scanning` (2002:1093).
 ///
 /// Shows the live camera when there is one. A simulator, a refused permission
@@ -67,6 +73,13 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   late ScanMode _mode = widget.mode;
   bool _busy = false;
 
+  /// Whether the "where from" chooser is up.
+  ///
+  /// Opening it on selecting Gallery, rather than waiting for a shutter press,
+  /// is deliberate: the shutter is a *camera* control, and the tile that has
+  /// just been tapped reads as having done nothing until something opens.
+  bool _choosingSource = false;
+
   /// Viewfinder window, in artboard coordinates.
   static const Rect _window = Rect.fromLTWH(44, 180, 341, 412);
   static const double _windowRadius = 32;
@@ -87,14 +100,14 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
       // Barcode has no shutter: the reader fires as soon as it sees a code.
       if (_mode == ScanMode.barcode) return;
 
-      final path = switch (_mode) {
-        ScanMode.camera => await _takePhoto(),
-        ScanMode.gallery => await _pickFromGallery(),
-        ScanMode.barcode => null,
-      };
+      // Gallery has no shutter of its own either: it reopens the chooser.
+      if (_mode == ScanMode.gallery) {
+        setState(() => _choosingSource = true);
+        return;
+      }
 
+      final path = await _takePhoto();
       if (!mounted) return;
-      if (_mode == ScanMode.gallery && path == null) return;
       widget.onCaptured?.call(_mode, path);
     } on RepositoryException catch (e) {
       if (!mounted) return;
@@ -126,11 +139,21 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   /// disposes our controller; it is rebuilt lazily the next time the photo
   /// preview is watched.
   void _selectMode(ScanMode mode) {
+    if (mode == ScanMode.gallery) {
+      setState(() {
+        _mode = mode;
+        _choosingSource = true;
+      });
+      return;
+    }
     if (mode == _mode) return;
     if (mode == ScanMode.barcode) {
       ref.invalidate(cameraSessionProvider);
     }
-    setState(() => _mode = mode);
+    setState(() {
+      _mode = mode;
+      _choosingSource = false;
+    });
   }
 
   /// Picks an image, with our camera released while the picker is open.
@@ -143,9 +166,36 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   ///
   /// Same reasoning as the barcode mode switch, and the same cost — the preview
   /// takes a beat to come back if the picker is dismissed.
-  Future<String?> _pickFromGallery() async {
+  Future<void> _pickFrom(PhotoSource source) async {
+    setState(() => _choosingSource = false);
+    if (_busy) return;
+    setState(() => _busy = true);
+
     ref.invalidate(cameraSessionProvider);
-    return ref.read(imageCaptureProvider).pickFromGallery();
+    try {
+      final capture = ref.read(imageCaptureProvider);
+      final path = switch (source) {
+        PhotoSource.photos => await capture.pickFromGallery(),
+        PhotoSource.files => await capture.pickFromFiles(),
+      };
+      if (!mounted) return;
+      // A dismissed picker is a cancellation, not a failure: it just puts the
+      // screen back where it was.
+      if (path == null) return;
+      widget.onCaptured?.call(ScanMode.gallery, path);
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (error, stack) {
+      debugPrint('pick failed: $error\n$stack');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That photo could not be opened.')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   /// Null when there is no usable camera, which the caller reads as "analyse
@@ -317,6 +367,134 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
                   _TextAction(label: 'Search foods', onTap: widget.onSearch),
                 ],
               ),
+            ),
+
+            // Inside this canvas, not floating above the screen, so it shares
+            // the one transform — a separately-positioned overlay drifts out of
+            // register the moment the canvas is scaled.
+            if (_choosingSource) ...[
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _choosingSource = false),
+                  child: const ColoredBox(color: Color(0x99000000)),
+                ),
+              ),
+              // No height: the sheet is ours, not the artboard's, so it sizes
+              // to its own text rather than to a number that a font metric can
+              // quietly overflow.
+              Positioned(
+                left: 20,
+                bottom: DesignCanvas.designHeight - 640,
+                width: 388,
+                child: _SourceSheet(onPick: _pickFrom),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The two ways into a photo already on the phone.
+///
+/// Android's system photo picker and its file browser are separate surfaces and
+/// neither can reach the other, so the choice has to be made before one opens.
+/// Naming what each *reaches* — camera roll versus downloads and folders — is
+/// the whole point: "Gallery" and "Files" alone do not tell someone which one
+/// holds the photo they are thinking of.
+class _SourceSheet extends StatelessWidget {
+  const _SourceSheet({required this.onPick});
+
+  final ValueChanged<PhotoSource> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.inkMuted,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(19, 20, 19, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Add a photo', style: AppTypography.cardHeading()),
+            const SizedBox(height: 16),
+            _SourceRow(
+              icon: Icons.photo_library_outlined,
+              label: 'Photos',
+              detail: 'Your camera roll',
+              onTap: () => onPick(PhotoSource.photos),
+            ),
+            const SizedBox(height: 12),
+            _SourceRow(
+              icon: Icons.folder_open_outlined,
+              label: 'Files',
+              detail: 'Downloads, folders, SD card',
+              onTap: () => onPick(PhotoSource.files),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceRow extends StatelessWidget {
+  const _SourceRow({
+    required this.icon,
+    required this.label,
+    required this.detail,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String detail;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 72,
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.outline),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: AppColors.primary),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppTypography.cardTitle()),
+                  const SizedBox(height: 2),
+                  Text(
+                    detail,
+                    style: AppTypography.meta(color: AppColors.placeholder),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: AppColors.placeholder,
             ),
           ],
         ),

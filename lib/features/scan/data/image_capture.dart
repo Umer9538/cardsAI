@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
@@ -47,7 +48,35 @@ class ImageCapture {
     }
   }
 
-  /// Picks one image from the library and prepares it.
+  /// Picks one image out of device storage and prepares it.
+  ///
+  /// This exists because **neither** picker the photo plugin can open reaches a
+  /// file browser. The system photo picker is media-only by design, and the
+  /// legacy `ACTION_GET_CONTENT` path is fired with `startActivityForResult`
+  /// rather than through a chooser, so it goes straight to whichever app is the
+  /// registered default — Google Photos on most phones, which shows the camera
+  /// roll and nothing else. A meal photo in Downloads, on an SD card, saved
+  /// from WhatsApp or sitting in Drive was unreachable either way.
+  ///
+  /// `FilePicker` goes to the Storage Access Framework on Android and Files on
+  /// iOS, which is the one surface that sees all of those. It needs no storage
+  /// permission: the user granting a document *is* the grant.
+  ///
+  /// `pickFile` rather than `pickFiles` so nothing has to reject a multi-select
+  /// after the fact, and no bytes are requested — pulling a 12MP file through
+  /// the platform channel only to write it straight back out is a large,
+  /// pointless copy, and [prepare] wants a path anyway.
+  Future<String?> pickFromFiles() async {
+    final picked = await FilePicker.pickFile(
+      type: FileType.image,
+      dialogTitle: 'Choose a meal photo',
+    );
+    final path = picked?.path;
+    if (path == null) return null;
+    return prepare(path);
+  }
+
+  /// Picks one image from the photo library and prepares it.
   ///
   /// Null when the picker was dismissed — a cancellation, not a failure, so it
   /// must not surface as an error.
