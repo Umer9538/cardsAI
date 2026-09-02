@@ -276,7 +276,11 @@ Hardcoded "$4.99" shown to someone paying in another currency is a rejection.
 Screens depend only on the interfaces in `core/repositories/`. `core/providers/providers.dart`
 picks the implementation from `backendProvider`. To add a backend, write the classes and
 extend that switch — no screen changes. `main()` falls back to `local` if Firebase fails
-to start, so a missing config file degrades instead of crashing.
+to start, so a missing config file degrades instead of crashing — **in debug and profile
+only.** A release build shows `_MisconfiguredApp` instead, because there the fallback is not a
+degraded experience but a wrong one: `LocalScanRepository` returns the same three foods
+whatever you photograph, so a shipped build that quietly landed there would invent nutrition
+figures and write them to a real diary.
 
 Firestore layout — everything under `users/{uid}`, so the rules are one ownership check:
 
@@ -765,7 +769,11 @@ write.
   password just confirms that Firebase's reset *link* was sent. `VerificationScreen`
   and `ResetPasswordScreen` are built and tested but not reachable — both need the
   email-code function. Restoring them means restoring two pushes in `main.dart`.
-- **Google / Apple sign-in** throw `provider-unavailable`. Email/password works.
+- **Google / Apple sign-in are gone from the UI.** The repository methods still throw
+  `provider-unavailable` — the providers were never configured — and a reviewer taps every
+  button on the first screen, so a control that only ever errors is an Apple 2.1 rejection.
+  Restoring them is not just wiring the SDKs: offering Google obliges Sign in with Apple too,
+  under Guideline 4.8. Both or neither, along with the `OrDivider` that separated them.
 - **Email verification codes need `EMAIL_API_KEY` set and the Worker deployed.**
   On `BACKEND=local` any six digits pass, by design — there is no mail server.
 - **Meal photos need an R2 public base URL.** They upload to R2 through the Worker as
@@ -848,6 +856,15 @@ not when the local cache has it — so `ProfileRepository.save` put a server rou
 in front of the sign-up button, which sat spinning for ~40 seconds. The local write is
 synchronous and the SDK guarantees delivery, so there is nothing to wait for. Do not
 re-add the `await`.
+
+## iOS build settings that are decisions
+
+- **`TARGETED_DEVICE_FAMILY = 1`** — iPhone only. The whole UI is a fixed 428 × 926 artboard
+  capped at 1.15× on tablets, so on an iPad it renders as a scaled phone column adrift in the
+  middle of the screen. Apple reviews on iPad if you claim it, and that is a routine 2.4.1
+  rejection. Shipping iPad means designing for it, not declaring it.
+- **`ITSAppUsesNonExemptEncryption = false`** — answered in the plist so uploads stop stalling
+  on the export-compliance questionnaire. Correct while the only cryptography is HTTPS.
 
 ## Android package name
 

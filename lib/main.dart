@@ -27,6 +27,16 @@ Future<void> main() async {
   final store = await JsonStore.open();
   final backend = await _startBackend();
 
+  // Release only. Debug and profile keep the fallback, which is the whole
+  // point of it — working offline with no Firebase config is a feature during
+  // development and a lie in a shipped build. See [_startBackend].
+  if (kReleaseMode &&
+      backend == AppBackend.local &&
+      AppConfig.backend == AppBackend.firebase) {
+    runApp(const _MisconfiguredApp());
+    return;
+  }
+
   runApp(
     ProviderScope(
       overrides: [
@@ -43,9 +53,17 @@ Future<void> main() async {
 ///
 /// A missing `google-services.json`, a project that has been deleted, or a
 /// platform the app was never registered for all throw here. None of those are
-/// worth a crash on the splash screen when there is a working offline mode a
-/// line away — but they must be loud in debug, because silently running local
-/// while believing you are on Firebase is a confusing way to lose an afternoon.
+/// worth a crash on the splash screen in development, when there is a working
+/// offline mode a line away — but they must be loud, because silently running
+/// local while believing you are on Firebase is a confusing way to lose an
+/// afternoon.
+///
+/// **In a release build the fallback is not a degraded experience, it is a
+/// wrong one.** `LocalScanRepository` waits two seconds and returns the same
+/// three foods whatever you photograph. A shipped build that quietly landed
+/// there would invent nutrition figures and log them to a real person's diary,
+/// which is worse than any error screen. So release says so, in
+/// [_MisconfiguredApp], rather than carrying on.
 Future<AppBackend> _startBackend() async {
   if (AppConfig.backend == AppBackend.local) return AppBackend.local;
 
@@ -62,6 +80,48 @@ Future<AppBackend> _startBackend() async {
       );
     }
     return AppBackend.local;
+  }
+}
+
+/// Shown instead of the app when the configured backend could not start.
+///
+/// Deliberately not a crash: a crash tells the user nothing and tells you only
+/// that it crashed. This names the cause, which is always a build or config
+/// problem rather than anything the person holding the phone did.
+class _MisconfiguredApp extends StatelessWidget {
+  const _MisconfiguredApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Carbsai can’t start',
+                  style: AppTypography.authTitle(),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'This build is missing its Firebase configuration, so it '
+                  'has no way to reach your account or analyse a meal. '
+                  'Reinstalling from the store should fix it.',
+                  style: AppTypography.body(color: AppColors.placeholder),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

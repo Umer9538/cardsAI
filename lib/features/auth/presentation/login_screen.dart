@@ -90,18 +90,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _submitProvider(Future<bool> Function() signIn) async {
-    final ok = await signIn();
-    if (!mounted) return;
-    if (ok) {
-      widget.onLoggedIn?.call();
-    } else {
-      setState(() {
-        _emailError = ref.read(authControllerProvider.notifier).errorMessage;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final busy = ref.watch(authControllerProvider).isLoading;
@@ -193,32 +181,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  const OrDivider(),
-                  const SizedBox(height: 32),
-                  SocialButton(
-                    icon: 'assets/images/auth/icon_google.png',
-                    label: 'Continue with Google',
-                    onPressed: busy
-                        ? null
-                        : () => _submitProvider(
-                              ref
-                                  .read(authControllerProvider.notifier)
-                                  .signInWithGoogle,
-                            ),
-                  ),
-                  const SizedBox(height: 20),
-                  SocialButton(
-                    icon: 'assets/images/auth/icon_apple.png',
-                    label: 'Continue with Apple',
-                    onPressed: busy
-                        ? null
-                        : () => _submitProvider(
-                              ref
-                                  .read(authControllerProvider.notifier)
-                                  .signInWithApple,
-                            ),
-                  ),
+                  // Google and Apple sign-in are not here, deliberately.
+                  //
+                  // `signInWithGoogle` and `signInWithApple` throw
+                  // `provider-unavailable` — the providers were never
+                  // configured. A reviewer taps every button on the first
+                  // screen, and a button that only ever produces an error is a
+                  // guaranteed rejection under Apple 2.1.
+                  //
+                  // Restoring them is not just wiring the SDKs: offering Google
+                  // sign-in obliges us to offer Sign in with Apple too, under
+                  // Guideline 4.8. Bring back both, or neither, along with the
+                  // OrDivider that used to separate them from the form.
                 ],
               ),
             ),

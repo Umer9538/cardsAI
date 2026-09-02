@@ -70,6 +70,11 @@
 	<string>Carbsai uses the camera to photograph your meals and estimate their nutrition.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Carbsai reads photos you pick so it can estimate the nutrition of a meal.</string>
+	<!-- Answered here so every upload does not stall on the export-compliance
+	     questionnaire. False is correct while the only cryptography in the app
+	     is HTTPS, which is exempt. Revisit if we ever ship our own crypto. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-3940256099942544~1458002511</string>
 	<key>NSUserTrackingUsageDescription</key>
