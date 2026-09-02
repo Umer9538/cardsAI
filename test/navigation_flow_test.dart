@@ -174,6 +174,33 @@ void main() {
     }
   });
 
+  // The tabs are an IndexedStack, so there is nothing beneath a tab for the
+  // system back to pop except MainShell itself — the whole signed-in app.
+  // Pressing back on Settings closed it.
+  testWidgets('system back returns to home from every tab', (tester) async {
+    await boot(tester);
+    await reachLogin(tester);
+    await signIn(tester);
+
+    for (final (icon, marker) in const [
+      ('assets/images/app/nav_analysis.png', 'Your Nutrition Analysis'),
+      ('assets/images/app/nav_diets.png', 'Explore Diet Plans'),
+      ('assets/images/app/nav_settings.png', 'Change Password'),
+    ]) {
+      await tester.tap(assetFinder(icon).first, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text(marker), findsWidgets, reason: 'on $icon');
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(
+        find.text(_homeMarker),
+        findsOneWidget,
+        reason: 'back from $icon should land on home, not close the app',
+      );
+    }
+  });
+
   testWidgets('scan opens the camera and reaches the result', (tester) async {
     await boot(tester);
     await reachLogin(tester);

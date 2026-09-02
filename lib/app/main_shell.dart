@@ -264,6 +264,25 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Back on any tab but Home returns to Home; only Home lets the gesture
+    // through.
+    //
+    // The tabs live in an IndexedStack rather than on the navigator, so there
+    // is nothing under Settings for the system back to pop except MainShell
+    // itself — which is the whole signed-in app. Pressing back on Settings
+    // therefore closed the app. Every other tabbed app treats back as "up one
+    // level" here, and Home is the level above a tab.
+    return PopScope(
+      canPop: _tab == AppTab.home,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _tab == AppTab.home) return;
+        setState(() => _tab = AppTab.home);
+      },
+      child: _tabs(),
+    );
+  }
+
+  Widget _tabs() {
     return IndexedStack(
       index: switch (_tab) {
         AppTab.home => 0,

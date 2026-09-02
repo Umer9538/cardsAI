@@ -572,6 +572,17 @@ starts. That is why switching modes takes a beat.
 Still missing: nothing from this list — but the streak is the only History surface, so
 there is no calendar or per-day detail beyond swiping the week strip.
 
+### Back, on a tab
+
+The four tabs are an `IndexedStack`, not navigator routes, so there is nothing
+beneath Settings for the system back gesture to pop except `MainShell` itself — the
+whole signed-in app. Pressing back on any tab but Home therefore closed it.
+
+`MainShell` wraps the stack in a `PopScope` with `canPop: _tab == AppTab.home`: back
+is "up one level", and Home is the level above a tab. **On Home the gesture passes
+straight through and the app closes** — no confirmation dialog and no press-twice-to-
+exit, both of which are worse than the thing they prevent.
+
 ### The floating tab bar needs clearance, and it is a constant
 
 `AppBottomNav` is pinned to the **viewport**, not to the scrolling canvas, so the

@@ -14,6 +14,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../auth/presentation/widgets/auth_widgets.dart';
 import 'scan_controller.dart';
+import 'widgets/pinned_cta.dart';
 
 /// One macro tile in the 2x2 grid.
 class MacroStat {
@@ -88,7 +89,7 @@ class ScanResultScreen extends ConsumerWidget {
   /// model's clarifying question — the one line that says which number to
   /// distrust — sits underneath the button and cannot be read at any scroll
   /// position. Same shape of bug as the floating tab bar's clearance.
-  static const double _ctaClearance = DesignCanvas.designHeight - 832 + 16;
+  static const double _ctaClearance = PinnedCta.clearance;
 
   static double _contentHeight(int itemCount) {
     final listBottom =
@@ -276,21 +277,14 @@ class ScanResultScreen extends ConsumerWidget {
               ],
             ),
 
-            // Pinned to the viewport so it stays reachable as the list grows.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 926 - 832 - 50,
-              child: Center(
-                child: SizedBox(
-                  width: 388,
-                  height: 50,
-                  child: PrimaryButton(
-                    label: 'Add to My Diet',
-                    busy: state.isLoading,
-                    onPressed: foods.isEmpty ? null : () => _add(ref),
-                  ),
-                ),
+            // Pinned to the viewport so it stays reachable as the list grows,
+            // on a band so the item it lands on fades out behind it rather than
+            // being sliced in half.
+            PinnedCta(
+              child: PrimaryButton(
+                label: 'Add to My Diet',
+                busy: state.isLoading,
+                onPressed: foods.isEmpty ? null : () => _add(ref),
               ),
             ),
 

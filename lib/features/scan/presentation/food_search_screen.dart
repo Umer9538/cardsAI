@@ -12,6 +12,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../auth/presentation/widgets/auth_widgets.dart';
 import '../../premium/presentation/widgets/premium_widgets.dart';
 import 'scan_controller.dart';
+import 'widgets/pinned_cta.dart';
 
 /// Search the food database and build a meal by hand.
 ///
@@ -19,12 +20,7 @@ import 'scan_controller.dart';
 /// quota, and it costs nothing — which makes it the right fallback when a photo
 /// fails and the honest option once someone has used up their scans.
 class FoodSearchScreen extends ConsumerStatefulWidget {
-  const FoodSearchScreen({
-    super.key,
-    this.onBack,
-    this.onDone,
-    this.results,
-  });
+  const FoodSearchScreen({super.key, this.onBack, this.onDone, this.results});
 
   final VoidCallback? onBack;
 
@@ -79,12 +75,13 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
 
   Future<void> _search(String value) async {
     try {
-      final results =
-          await ref.read(foodDatabaseProvider).search(value.trim());
+      final results = await ref.read(foodDatabaseProvider).search(value.trim());
       if (!mounted || value != _query.text) return;
       setState(() {
         _results = results;
-        _error = results.isEmpty ? 'Nothing found for “${value.trim()}”.' : null;
+        _error = results.isEmpty
+            ? 'Nothing found for “${value.trim()}”.'
+            : null;
         _searching = false;
       });
     } on RepositoryException catch (e) {
@@ -105,123 +102,156 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
 
   double get _listTop => _picked.isEmpty ? 300 : 300 + 44.0;
 
+  /// Row pitch: a 66pt row and a 12pt gap.
+  static const double _rowPitch = 78;
+
+  /// Room the content must leave beneath itself.
+  ///
+  /// "Add to My Diet" is pinned to the *viewport*, so it covers the bottom
+  /// `926 - 832` units of every scroll position. Same debt the floating tab bar
+  /// charges, and the same 16 on top so the last row clears rather than touches.
+  static const double _ctaClearance = PinnedCta.clearance;
+
+  /// Tall enough to hold every result.
+  ///
+  /// This used to add `(results * 78).clamp(0, 900)`, which stops growing after
+  /// eleven rows — so a search that returned thirty put nineteen of them past
+  /// the end of the canvas, where no amount of scrolling reaches them. The
+  /// list's own geometry is the only thing that can say how tall it is.
+  double get _contentHeight {
+    if (_results.isEmpty) return DesignCanvas.designHeight;
+    final listBottom = _listTop + _results.length * _rowPitch - 12;
+    final bottom = listBottom + _ctaClearance;
+    return bottom < DesignCanvas.designHeight
+        ? DesignCanvas.designHeight
+        : bottom;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: true,
-      body: DesignCanvas(
-        background: AppColors.background,
-        height: DesignCanvas.designHeight +
-            (_results.length * 78).clamp(0, 900).toDouble(),
+      body: Stack(
         children: [
-          PremiumTopBar(title: 'Search Foods', onBack: widget.onBack),
+          DesignCanvas(
+            background: AppColors.background,
+            height: _contentHeight,
+            children: [
+              PremiumTopBar(title: 'Search Foods', onBack: widget.onBack),
 
-          Positioned(
-            left: 20,
-            top: 147,
-            width: 388,
-            height: 50,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.inkMuted,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.outline),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 15),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _query,
-                      autofocus: true,
-                      style: AppTypography.body(),
-                      cursorColor: AppColors.primary,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration.collapsed(
-                        hintText: 'Search a food or brand',
-                        hintStyle:
-                            AppTypography.body(color: AppColors.placeholder),
+              Positioned(
+                left: 20,
+                top: 147,
+                width: 388,
+                height: 50,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.inkMuted,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.outline),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _query,
+                          autofocus: true,
+                          style: AppTypography.body(),
+                          cursorColor: AppColors.primary,
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration.collapsed(
+                            hintText: 'Search a food or brand',
+                            hintStyle: AppTypography.body(
+                              color: AppColors.placeholder,
+                            ),
+                          ),
+                          onChanged: _onQueryChanged,
+                        ),
                       ),
-                      onChanged: _onQueryChanged,
+                      if (_searching)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.placeholder,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+
+              Positioned(
+                left: 20,
+                top: 215,
+                width: 388,
+                height: 60,
+                child: Text(
+                  'Results come from Open Food Facts, a community database of '
+                  'packaged foods. Loose produce may not be listed.',
+                  style: AppTypography.meta(color: AppColors.muted),
+                ),
+              ),
+
+              if (_picked.isNotEmpty)
+                Positioned(
+                  left: 20,
+                  top: 292,
+                  width: 388,
+                  height: 30,
+                  child: Text(
+                    '${_picked.length} added · ${NutritionFormat.calories(Nutrition.sum(_picked.map((f) => f.nutrition)).calories)}',
+                    style: AppTypography.label(color: AppColors.accentGreen),
+                  ),
+                ),
+
+              if (_error != null)
+                Positioned(
+                  left: 20,
+                  top: _listTop,
+                  width: 388,
+                  height: 40,
+                  child: Text(
+                    _error!,
+                    style: AppTypography.socialLabel(
+                      color: AppColors.placeholder,
                     ),
                   ),
-                  if (_searching)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(AppColors.placeholder),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+                ),
+
+              for (final (i, food) in _results.indexed)
+                Positioned(
+                  left: 20,
+                  top: _listTop + i * _rowPitch,
+                  width: 388,
+                  child: _ResultRow(
+                    food: food,
+                    added: _picked.any((f) => f.name == food.name),
+                    onTap: () => setState(() {
+                      final existing = _picked.indexWhere(
+                        (f) => f.name == food.name,
+                      );
+                      if (existing >= 0) {
+                        _picked.removeAt(existing);
+                      } else {
+                        _picked.add(food);
+                      }
+                    }),
+                  ),
+                ),
+            ],
           ),
 
-          Positioned(
-            left: 20,
-            top: 215,
-            width: 388,
-            height: 60,
-            child: Text(
-              'Results come from Open Food Facts, a community database of '
-              'packaged foods. Loose produce may not be listed.',
-              style: AppTypography.meta(color: AppColors.muted),
-            ),
-          ),
-
-          if (_picked.isNotEmpty)
-            Positioned(
-              left: 20,
-              top: 292,
-              width: 388,
-              height: 30,
-              child: Text(
-                '${_picked.length} added · ${NutritionFormat.calories(Nutrition.sum(_picked.map((f) => f.nutrition)).calories)}',
-                style: AppTypography.label(color: AppColors.accentGreen),
-              ),
-            ),
-
-          if (_error != null)
-            Positioned(
-              left: 20,
-              top: _listTop,
-              width: 388,
-              height: 40,
-              child: Text(
-                _error!,
-                style: AppTypography.socialLabel(color: AppColors.placeholder),
-              ),
-            ),
-
-          for (final (i, food) in _results.indexed)
-            Positioned(
-              left: 20,
-              top: _listTop + i * 78,
-              width: 388,
-              child: _ResultRow(
-                food: food,
-                added: _picked.any((f) => f.name == food.name),
-                onTap: () => setState(() {
-                  final existing =
-                      _picked.indexWhere((f) => f.name == food.name);
-                  if (existing >= 0) {
-                    _picked.removeAt(existing);
-                  } else {
-                    _picked.add(food);
-                  }
-                }),
-              ),
-            ),
-
-          Positioned(
-            left: 20,
-            top: 810,
-            width: 388,
-            height: 50,
+          // Pinned to the viewport, not to the canvas. On the canvas it sat at
+          // a fixed y in a container that grows with the results, so once a
+          // search returned more than a screenful the button scrolled up into
+          // the middle of the list and drew across the rows.
+          PinnedCta(
             child: PrimaryButton(
               label: _picked.isEmpty
                   ? 'Add to My Diet'

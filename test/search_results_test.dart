@@ -16,6 +16,14 @@ void main() {
       tester,
       FoodSearchScreen(
         results: [
+          for (var i = 0; i < 14; i++)
+            FoodItem(
+              id: 'k$i',
+              name: 'KFC, Fried Chicken, EXTRA CRISPY, Breast, meat only $i',
+              nutrition: const Nutrition(calories: 260, protein: 30, fat: 14),
+              portionDescription: '100 g',
+              source: FoodSource.database,
+            ),
           const FoodItem(
             id: '1',
             name: 'Chicken breast, grilled without sauce',
