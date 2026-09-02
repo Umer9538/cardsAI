@@ -762,6 +762,14 @@ that file, which is why the CLI reported "no active project" before it existed.
 - Private widgets are `_PascalCase` in the screen file; anything shared across screens
   moves to that feature's `presentation/widgets/`.
 
+**A fixed-height row needs slack, and a screen needs a way to render its full
+state.** The search result row was 66 tall with 10pt padding, holding a 25pt line, a
+2pt gap and a 19pt line — exactly 46 against exactly 46. The fraction a font's line box
+rounds up by then put it 2px over on a device. Padding is what yields there; the 66 is
+the pitch the list geometry is built on. It survived because `FoodSearchScreen` had no
+`results` override, so the only state a test could reach was the empty one — which is
+the convention existing precisely to prevent this.
+
 ## Two bugs worth not reintroducing
 
 **A `FractionallySizedBox` in a `Stack` needs `heightFactor: 1`.** This has now

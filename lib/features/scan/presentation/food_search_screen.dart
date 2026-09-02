@@ -19,12 +19,24 @@ import 'scan_controller.dart';
 /// quota, and it costs nothing — which makes it the right fallback when a photo
 /// fails and the honest option once someone has used up their scans.
 class FoodSearchScreen extends ConsumerStatefulWidget {
-  const FoodSearchScreen({super.key, this.onBack, this.onDone});
+  const FoodSearchScreen({
+    super.key,
+    this.onBack,
+    this.onDone,
+    this.results,
+  });
 
   final VoidCallback? onBack;
 
   /// Fired once the picked foods are in the controller.
   final VoidCallback? onDone;
+
+  /// Pins the result list, shadowing whatever a search would return.
+  ///
+  /// Null means "run the real search". Without this the only state a test can
+  /// reach is the empty one, which is how a result row shipped two pixels over
+  /// its own box.
+  final List<FoodItem>? results;
 
   @override
   ConsumerState<FoodSearchScreen> createState() => _FoodSearchScreenState();
@@ -35,7 +47,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
   final _picked = <FoodItem>[];
 
   Timer? _debounce;
-  List<FoodItem> _results = const [];
+  late List<FoodItem> _results = widget.results ?? const [];
   bool _searching = false;
   String? _error;
 
@@ -244,7 +256,12 @@ class _ResultRow extends StatelessWidget {
             color: added ? AppColors.accentGreen : AppColors.outline,
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
+        // 8, not 10. The two lines are 25 and 19 with a 2pt gap = 46, which
+        // is exactly what 66 less 10 top and bottom leaves — no slack at all,
+        // so the fraction a font's line box rounds up by put the column two
+        // pixels over its own box on a device. Padding is what yields here;
+        // 66 is the row pitch the list geometry is built on.
+        padding: const EdgeInsets.fromLTRB(15, 8, 15, 8),
         child: Row(
           children: [
             Expanded(
