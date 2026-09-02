@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -437,7 +438,11 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             ],
             onChanged: (v) => _set(_answers.copyWith(wantsReminders: v)),
           ),
-        _Step.building => _Building(accent: _accent, onDone: _advance),
+        _Step.building => _Building(
+            accent: _accent,
+            profile: _draft,
+            onDone: _advance,
+          ),
         _Step.plan => _Plan(profile: _draft, answers: _answers, accent: _accent),
       };
 }
@@ -611,97 +616,255 @@ class _RateChip extends StatelessWidget {
 
 /// The beat between the last answer and the plan.
 ///
-/// It is theatre, and it is deliberate: the work behind it is a few
-/// multiplications, but arriving at a number instantly reads as a lookup, while
-/// watching it be worked out reads as a plan. The steps named are the ones
-/// actually being performed.
+/// A spinner says "waiting". This says "working", because it shows the working:
+/// each stage resolves to the number it actually produced — resting burn, then
+/// the same figure scaled by movement, then the target after the goal is
+/// applied, then the split. Those are the four steps [TargetCalculator]
+/// performs, in order, with its real intermediate values.
+///
+/// It is still theatre — all four are arithmetic and take no time at all — but
+/// theatre that is true. A number that appears instantly reads as a lookup; one
+/// you watch being derived reads as a plan.
 class _Building extends StatefulWidget {
-  const _Building({required this.accent, required this.onDone});
+  const _Building({
+    required this.accent,
+    required this.profile,
+    required this.onDone,
+  });
 
   final Color accent;
+  final UserProfile profile;
   final VoidCallback onDone;
 
   @override
   State<_Building> createState() => _BuildingState();
 }
 
-class _BuildingState extends State<_Building> {
-  static const _stages = [
-    'Working out what you burn at rest',
-    'Adding what you burn moving',
-    'Setting your daily target',
-    'Splitting it into protein, carbs and fat',
-  ];
+class _BuildingState extends State<_Building>
+    with SingleTickerProviderStateMixin {
+  static const Duration _run = Duration(milliseconds: 2600);
 
-  int _stage = 0;
-  Timer? _timer;
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: _run,
+  )
+    ..addStatusListener((status) {
+      if (status != AnimationStatus.completed || !mounted) return;
+      HapticFeedback.mediumImpact();
+      widget.onDone();
+    })
+    ..forward();
 
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 550), (t) {
-      if (!mounted) return;
-      if (_stage == _stages.length - 1) {
-        t.cancel();
-        HapticFeedback.mediumImpact();
-        widget.onDone();
-        return;
-      }
-      setState(() => _stage++);
-    });
-  }
+  /// One tick per stage as it lands, so the sequence is felt as well as seen.
+  int _tapped = 0;
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _c.dispose();
     super.dispose();
+  }
+
+  /// The real intermediate values, in the order they are computed.
+  List<(String, String)> get _stages {
+    final p = widget.profile;
+    if (!p.canPersonaliseTargets) {
+      return const [
+        ('Reading your answers', ''),
+        ('Working out your burn', ''),
+        ('Setting your target', ''),
+        ('Splitting the macros', ''),
+      ];
+    }
+    final t = p.targets;
+    return [
+      ('Burn at rest', '${TargetCalculator.basalRate(
+        weightKg: p.weightKg!,
+        heightCm: p.heightCm!,
+        age: p.age!,
+        gender: p.gender,
+      ).round()} kcal'),
+      ('With how you move',
+          '${TargetCalculator.maintenance(p).round()} kcal'),
+      ('Your daily target', '${t.calories.round()} kcal'),
+      ('Protein · carbs · fat',
+          '${t.protein.round()} · ${t.carbs.round()} · ${t.fat.round()} g'),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const SizedBox(height: 40),
-        SizedBox(
-          width: 56,
-          height: 56,
-          child: CircularProgressIndicator(
-            strokeWidth: 5,
-            valueColor: AlwaysStoppedAnimation(widget.accent),
-            backgroundColor: AppColors.white,
-          ),
-        ),
-        const SizedBox(height: 32),
-        for (var i = 0; i < _stages.length; i++)
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 260),
-            opacity: i <= _stage ? 1 : 0.25,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    i < _stage ? Icons.check_circle : Icons.circle_outlined,
-                    size: 18,
-                    color: i < _stage ? widget.accent : AppColors.inkMuted,
+    final stages = _stages;
+
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        final progress = _c.value;
+        // A stage is done once the sweep has passed its share of the ring.
+        final done = (progress * stages.length).floor();
+        if (done > _tapped && done <= stages.length) {
+          _tapped = done;
+          HapticFeedback.selectionClick();
+        }
+
+        return Column(
+          children: [
+            const SizedBox(height: 6),
+            SizedBox(
+              width: 148,
+              height: 148,
+              child: CustomPaint(
+                painter: _RingPainter(
+                  progress: progress,
+                  accent: widget.accent,
+                ),
+                child: Center(
+                  child: Text(
+                    '${(progress * 100).round()}%',
+                    style: AppTypography.onboardingTitle(color: QuizPalette.ink)
+                        .copyWith(fontSize: 34, fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      _stages[i],
-                      style: AppTypography.socialLabel(color: QuizPalette.ink),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-      ],
+            const SizedBox(height: 22),
+            for (var i = 0; i < stages.length; i++)
+              _StageRow(
+                label: stages[i].$1,
+                value: stages[i].$2,
+                accent: widget.accent,
+                // Each row owns a quarter of the sweep.
+                progress: ((progress * stages.length) - i).clamp(0.0, 1.0),
+              ),
+          ],
+        );
+      },
     );
   }
+}
+
+/// One line of the working, revealing its value as the sweep passes it.
+class _StageRow extends StatelessWidget {
+  const _StageRow({
+    required this.label,
+    required this.value,
+    required this.accent,
+    required this.progress,
+  });
+
+  final String label;
+  final String value;
+  final Color accent;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = progress >= 1;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Opacity(
+        // Pending rows are present but recede, so the list does not reflow as
+        // each one lands.
+        opacity: 0.25 + 0.75 * progress,
+        child: Transform.translate(
+          offset: Offset(14 * (1 - progress), 0),
+          child: Row(
+            children: [
+              // The tick stamps in rather than fading: it is the moment the
+              // step completed.
+              AnimatedScale(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutBack,
+                scale: done ? 1 : 0.4,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: done ? accent : QuizPalette.card,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: QuizPalette.ink, width: 2),
+                  ),
+                  child: done
+                      ? Icon(Icons.check_rounded,
+                          size: 14, color: QuizPalette.onAccent(accent))
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTypography.socialLabel(color: QuizPalette.ink),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // The value counts up rather than appearing, so the figure looks
+              // arrived at.
+              if (value.isNotEmpty)
+                Opacity(
+                  opacity: progress,
+                  child: Text(
+                    value,
+                    style: AppTypography.socialLabel(color: QuizPalette.ink)
+                        .copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The sweep. Outlined on both edges so it belongs with everything else here.
+class _RingPainter extends CustomPainter {
+  const _RingPainter({required this.progress, required this.accent});
+
+  final double progress;
+  final Color accent;
+
+  static const double _stroke = 18;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centre = size.center(Offset.zero);
+    final radius = (size.shortestSide - _stroke) / 2 - QuizPalette.stroke;
+    final rect = Rect.fromCircle(center: centre, radius: radius);
+    const start = -math.pi / 2;
+
+    // Track.
+    canvas.drawArc(rect, 0, math.pi * 2, false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _stroke
+          ..color = QuizPalette.card);
+
+    // Filled sweep.
+    if (progress > 0) {
+      canvas.drawArc(rect, start, math.pi * 2 * progress, false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = _stroke
+            ..strokeCap = StrokeCap.round
+            ..color = accent);
+    }
+
+    // The two black edges of the band, drawn last so the fill cannot bleed
+    // over them.
+    final outline = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = QuizPalette.stroke
+      ..color = QuizPalette.ink;
+    canvas
+      ..drawCircle(centre, radius + _stroke / 2, outline)
+      ..drawCircle(centre, radius - _stroke / 2, outline);
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) =>
+      old.progress != progress || old.accent != accent;
 }
 
 /// The payoff: the number the whole quiz was for.

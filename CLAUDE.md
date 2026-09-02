@@ -341,10 +341,13 @@ The engagement is in three places and all of it is cheap. The **running estimate
 appears the moment there is enough to compute one and moves as later answers land, so
 the plan assembles out of the person's own answers rather than arriving at the end as
 an assertion. **Selection is animated and haptic**, because a tick and a colour change
-over a beat is most of what makes answering feel responsive. And the **build step** is
-theatre — the work behind it is a few multiplications — but a number that appears
-instantly reads as a lookup while one that is worked out reads as a plan. The stages
-it names are the ones actually being performed.
+over a beat is most of what makes answering feel responsive. And the **build step** shows its
+working: a sweep ring, and four lines that resolve to the real intermediate values —
+`basalRate`, then `maintenance`, then the target after the goal is applied, then the
+split. Those are the four things `TargetCalculator` actually does, in order, with its
+own numbers. It is still theatre, since all four are arithmetic and take no time, but
+theatre that is true: a number that appears instantly reads as a lookup, while one you
+watch being derived reads as a plan.
 
 **It is not in the Figma file** — the design has three marketing onboarding pages and
 no quiz — but without it every account gets `UserProfile.defaultTargets`, so a
