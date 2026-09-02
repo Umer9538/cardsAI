@@ -87,6 +87,35 @@ void main() {
     );
   });
 
+  // "If you snap your food twice it will give you two wildly different calorie
+  // counts" is the most corrosive complaint in this category, because people
+  // find it by accident. The same file must never disagree with itself.
+  test('re-analysing the same photo returns the same numbers', () async {
+    const path = 'assets/images/app/scan_food.png';
+    await controller().analyzePhoto(path);
+    final first = container.read(scanControllerProvider).value!;
+
+    await controller().analyzePhoto(path);
+    final second = container.read(scanControllerProvider).value!;
+
+    expect(second.id, first.id);
+    expect(
+      second.items.map((f) => f.nutrition.calories).toList(),
+      first.items.map((f) => f.nutrition.calories).toList(),
+    );
+  });
+
+  test('changing the note asks again rather than reusing the answer', () async {
+    const path = 'assets/images/app/scan_food.png';
+    await controller().analyzePhoto(path);
+    final first = container.read(scanControllerProvider).value!;
+
+    await controller().analyzePhoto(path, hint: 'fried in ghee');
+    final second = container.read(scanControllerProvider).value!;
+
+    expect(second.id, isNot(first.id));
+  });
+
   test('editing one item leaves the others alone', () async {
     await controller().describe('two eggs on toast');
     final items = container.read(scanControllerProvider).value!.items;

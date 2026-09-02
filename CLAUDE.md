@@ -242,10 +242,22 @@ around). Premium accounts get `NoAdsService`, so the SDK is never initialised fo
 - App-open shows on resume only, never on first launch, with a 15-minute cooldown
   and a 4-hour ad TTL.
 
+**The same photo never gets two answers.** `ScanController._seen` caches a result
+against the image path and the note. The model samples, so asking twice about one
+photograph returns two numbers, and reviewers find that by accident — *"if you snap your food
+twice it will give you two wildly different calorie counts"* — after which nothing the app
+says is believed. This cannot make two *different* photographs of one plate agree; it
+guarantees the same file never disagrees with itself, and stops a double tap spending a second
+scan. Keyed on the note too, because editing the note is a request to think again.
+
 **Rewarded ads pay in scans.** Watching one calls `grantBonusScans`, which writes
 `bonus` on the quota document the scan pipeline already reads. The offer appears in
-the scan-result error overlay when the quota runs out, alongside "Go Premium", and
-retries the failed scan automatically after granting.
+the scan-result error overlay when the quota runs out and retries the failed scan
+automatically after granting — but **"Go Premium" is the primary action and the ad is the
+alternative**, not the other way round. Leading with the ad puts a video between someone and
+the thing they opened the app for, which is the shape reviewers of Lose It! and Cronometer
+call extortion rather than a fair exchange. Running out of scans is the paywall arriving, so
+the paywall is the honest first offer.
 
 > `grantBonusScans` trusts the client's claim that an ad was watched. That is
 > acceptable only because the payout is **hard-capped** at 5 ads/day with a 30s

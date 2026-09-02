@@ -602,7 +602,11 @@ class _ErrorOverlay extends ConsumerWidget {
     }
 
     messenger.showSnackBar(
-      SnackBar(content: Text('$granted scans added.')),
+      SnackBar(
+        content: Text(
+          granted == 1 ? '1 scan added.' : '$granted scans added.',
+        ),
+      ),
     );
     // Straight back into the scan they were trying to do, rather than making
     // them photograph the plate again.
@@ -629,23 +633,20 @@ class _ErrorOverlay extends ConsumerWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 28),
-              if (canWatch) ...[
-                SizedBox(
-                  width: 280,
-                  height: 50,
-                  child: PrimaryButton(
-                    // Pluralised, because the grant is 1 now — "1 scans" is
-                    // the kind of thing people screenshot.
-                    label: AdConfig.scansPerRewardedAd == 1
-                        ? 'Watch an ad for 1 more scan'
-                        : 'Watch an ad for '
-                            '${AdConfig.scansPerRewardedAd} more scans',
-                    busy: busy,
-                    onPressed: () => _watchAd(context, ref),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
+              // Premium leads; the ad is the alternative, not the headline.
+              //
+              // These were the other way round, which put "Watch an ad" as the
+              // primary action at the exact moment the app had just refused to
+              // do the thing the person opened it for. Reviewers of apps that
+              // do this describe it as extortion rather than a fair exchange —
+              // *"watch an ad to save this food" thats all I should have to
+              // say* — and the anger is specifically about an ad standing
+              // between them and a core action.
+              //
+              // Running out of scans is the paywall arriving, so the paywall is
+              // the honest first offer. The ad stays because it is a real way
+              // out for someone who will not pay, but it reads as a way out
+              // rather than a toll.
               if (outOfScans && onUpgrade != null) ...[
                 SizedBox(
                   width: 280,
@@ -653,6 +654,22 @@ class _ErrorOverlay extends ConsumerWidget {
                   child: PrimaryButton(
                     label: 'Go Premium',
                     onPressed: onUpgrade,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (canWatch) ...[
+                SizedBox(
+                  width: 280,
+                  height: 50,
+                  child: GhostButton(
+                    // Pluralised, because the grant is 1 now — "1 scans" is
+                    // the kind of thing people screenshot.
+                    label: AdConfig.scansPerRewardedAd == 1
+                        ? 'Or watch an ad for 1 scan'
+                        : 'Or watch an ad for '
+                            '${AdConfig.scansPerRewardedAd} scans',
+                    onPressed: busy ? null : () => _watchAd(context, ref),
                   ),
                 ),
                 const SizedBox(height: 12),

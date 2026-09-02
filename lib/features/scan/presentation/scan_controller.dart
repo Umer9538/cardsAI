@@ -50,22 +50,65 @@ class ScanController extends AsyncNotifier<ScanResult?> {
   String? _lastHint;
   String? _lastDescription;
 
+  /// Results already produced this session, keyed by image and note.
+  ///
+  /// The model samples, so asking it twice about one photograph gives two
+  /// answers — and that is the most corrosive failure in this category, because
+  /// people discover it by accident and trust dies in that one moment: "if you
+  /// snap your food twice it will give you two wildly different calorie
+  /// counts." Nothing here can make two *different* photographs of one plate
+  /// agree; what it guarantees is that the same file never disagrees with
+  /// itself.
+  ///
+  /// It also stops a double tap, or a retry after a transient failure, from
+  /// spending a second scan out of the quota.
+  ///
+  /// Keyed on the note as well as the path, because changing the note is
+  /// precisely a request to think again.
+  final Map<String, ScanResult> _seen = {};
+
+  static String _key(String imagePath, String? hint) =>
+      '$imagePath|${hint?.trim() ?? ''}';
+
   Future<void> analyzePhoto(String imagePath, {String? hint}) {
     _lastImagePath = imagePath;
     _lastHint = hint;
     _lastDescription = null;
-    return _run(() => ref.read(scanRepositoryProvider).analyzePhoto(
-          imagePath: imagePath,
-          hint: hint,
-        ));
+    return _analyze(imagePath, hint: hint);
   }
 
-  Future<void> analyzeGallery(String imagePath, {String? hint}) =>
-      _run(() => ref.read(scanRepositoryProvider).analyzePhoto(
+  Future<void> analyzeGallery(String imagePath, {String? hint}) {
+    // Recorded here too, or `retryLast` after a gallery scan has nothing to
+    // retry — which is exactly the path a rewarded ad hands back to.
+    _lastImagePath = imagePath;
+    _lastHint = hint;
+    _lastDescription = null;
+    return _analyze(imagePath, hint: hint, input: ScanInput.gallery);
+  }
+
+  Future<void> _analyze(
+    String imagePath, {
+    String? hint,
+    ScanInput input = ScanInput.photo,
+  }) {
+    final cached = _seen[_key(imagePath, hint)];
+    if (cached != null) {
+      _portions.clear();
+      _asAnalysed = cached.items;
+      state = AsyncData(cached);
+      return Future.value();
+    }
+
+    return _run(() async {
+      final result = await ref.read(scanRepositoryProvider).analyzePhoto(
             imagePath: imagePath,
             hint: hint,
-            input: ScanInput.gallery,
-          ));
+            input: input,
+          );
+      _seen[_key(imagePath, hint)] = result;
+      return result;
+    });
+  }
 
   Future<void> describe(String description) {
     _lastDescription = description;
