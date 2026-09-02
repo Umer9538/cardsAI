@@ -72,6 +72,21 @@ class AdMobService implements AdsService {
   /// the camera and back should not be charged an ad for it.
   static const Duration _appOpenCooldown = Duration(minutes: 15);
 
+  /// How many app-open ads one person may see in a day.
+  ///
+  /// A cooldown alone is not enough here, and the reason is specific to this
+  /// category: a calorie tracker is opened five to ten times a day *by design*
+  /// — that is the product working — so a per-launch ad is a five-to-ten-times
+  /// -a-day toll on the exact behaviour the app is trying to build. Reviewers
+  /// of Cronometer and MyFitnessPal count it themselves, and it is the most
+  /// common reason given for abandoning an otherwise-liked tracker.
+  ///
+  /// Two is the whole day's budget.
+  static const int _appOpenPerDay = 2;
+
+  int _appOpenShownToday = 0;
+  DateTime? _appOpenDay;
+
   @override
   Future<void> initialize() async {
     if (_initialized) return;
@@ -257,15 +272,27 @@ class AdMobService implements AdsService {
       return;
     }
 
+    final now = DateTime.now();
+
     final shownAt = _appOpenShownAt;
-    if (shownAt != null &&
-        DateTime.now().difference(shownAt) < _appOpenCooldown) {
+    if (shownAt != null && now.difference(shownAt) < _appOpenCooldown) {
       return;
     }
 
+    // Local midnight, not a rolling 24 hours: "twice today" is what a person
+    // experiences, and a rolling window would let a late-night session and an
+    // early-morning one both count against the same budget.
+    final today = DateTime(now.year, now.month, now.day);
+    if (_appOpenDay != today) {
+      _appOpenDay = today;
+      _appOpenShownToday = 0;
+    }
+    if (_appOpenShownToday >= _appOpenPerDay) return;
+    _appOpenShownToday++;
+
     _appOpen = null;
     _showing = true;
-    _appOpenShownAt = DateTime.now();
+    _appOpenShownAt = now;
 
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {

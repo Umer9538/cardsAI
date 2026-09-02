@@ -37,12 +37,27 @@ class HomeScreen extends ConsumerWidget {
   final VoidCallback? onPremium;
   final VoidCallback? onNotifications;
 
+  /// Bottom edge of the two macro cards: they sit at y=574 and are 173 tall.
+  static const double _macroCardsBottom = 747;
+
+  /// A slim row carrying the two figures the artboard has no card for.
+  ///
+  /// Fat is in the target and in every scan and appeared nowhere on this
+  /// screen; fibre is the second most-requested number in this category and had
+  /// been computed and discarded since the pipeline was built. Neither warrants
+  /// a 173pt card, and there is a 24pt gap under the two that do.
+  static const double _extrasTop = _macroCardsBottom + 6;
+  static const double _extrasHeight = 22;
+
+  /// Everything below the macro cards moves down by the row's height.
+  static const double _extrasShift = _extrasHeight + 8;
+
   /// Where the artboard puts the Diet Plan heading, before the meals list is
   /// inserted above it.
-  static const double _dietPlanTop = 771;
+  static const double _dietPlanTop = 771 + _extrasShift;
 
   /// Top of the meals section, immediately below the two macro cards.
-  static const double _mealsTop = 771;
+  static const double _mealsTop = 771 + _extrasShift;
 
   static const double _mealGap = 12;
   static const double _sectionTitleHeight = 48;
@@ -67,7 +82,11 @@ class HomeScreen extends ConsumerWidget {
   /// scrolled out from under it — see [AppBottomNav.clearance]. That part is
   /// not design.
   static double contentHeightFor(int mealCount) =>
-      1109 + _mealsHeight(mealCount) + 24 + AppBottomNav.clearance;
+      1109 +
+      _extrasShift +
+      _mealsHeight(mealCount) +
+      24 +
+      AppBottomNav.clearance;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -122,6 +141,12 @@ class HomeScreen extends ConsumerWidget {
                   label: 'Protein',
                   consumed: log.consumed.protein,
                   target: log.targets.protein,
+                ),
+                _SecondaryMacros(
+                  top: _extrasTop,
+                  height: _extrasHeight,
+                  consumed: log.consumed,
+                  targets: log.targets,
                 ),
                 _MealsSection(
                   top: _mealsTop,
@@ -665,6 +690,87 @@ class _MealsSection extends StatelessWidget {
               ),
             ],
         ],
+      ),
+    );
+  }
+}
+
+/// Fat and fibre, on one line under the two macro cards.
+///
+/// Deliberately a line rather than two more cards. Fat is the macro the
+/// artboard leaves out, and fibre is the number people ask for most after
+/// health-app sync — almost always phrased as "put it on the home screen"
+/// rather than "give me the micronutrients". Both are already computed; neither
+/// is important enough to compete with calories for attention.
+class _SecondaryMacros extends StatelessWidget {
+  const _SecondaryMacros({
+    required this.top,
+    required this.height,
+    required this.consumed,
+    required this.targets,
+  });
+
+  final double top;
+  final double height;
+  final Nutrition consumed;
+  final Nutrition targets;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 20,
+      top: top,
+      width: 388,
+      height: height,
+      child: Row(
+        children: [
+          Expanded(
+            child: _Pair(
+              label: 'Fat',
+              consumed: consumed.fat,
+              target: targets.fat,
+            ),
+          ),
+          const SizedBox(
+            width: 1,
+            height: 14,
+            child: ColoredBox(color: AppColors.muted),
+          ),
+          Expanded(
+            child: _Pair(
+              label: 'Fibre',
+              consumed: consumed.fiber,
+              target: targets.fiber,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Pair extends StatelessWidget {
+  const _Pair({
+    required this.label,
+    required this.consumed,
+    required this.target,
+  });
+
+  final String label;
+  final double consumed;
+  final double target;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        target <= 0
+            ? '$label ${NutritionFormat.grams(consumed)}'
+            : '$label ${NutritionFormat.grams(consumed)}'
+                ' / ${NutritionFormat.grams(target)}',
+        style: AppTypography.meta(color: AppColors.placeholder),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

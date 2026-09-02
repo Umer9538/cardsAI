@@ -94,7 +94,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   /// Starts the analysis and moves straight to the result, which renders its
   /// own working state off the controller. Waiting here instead would leave the
   /// shutter looking dead for the duration.
-  void _capture(ScanMode mode, String? imagePath) {
+  void _capture(ScanMode mode, String? imagePath, String? hint) {
     final controller = ref.read(scanControllerProvider.notifier);
 
     // No path means no usable camera — a simulator, or a refused permission.
@@ -103,9 +103,9 @@ class _MainShellState extends ConsumerState<MainShell> {
 
     switch (mode) {
       case ScanMode.camera:
-        controller.analyzePhoto(path);
+        controller.analyzePhoto(path, hint: hint);
       case ScanMode.gallery:
-        controller.analyzeGallery(path);
+        controller.analyzeGallery(path, hint: hint);
       case ScanMode.barcode:
         // Reached only if a shutter press slips through; the reader normally
         // fires onBarcode with a real code.

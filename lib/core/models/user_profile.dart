@@ -118,6 +118,10 @@ class UserProfile {
     protein: 120,
     carbs: 250,
     fat: 65,
+    // 14 g per 1000 kcal, matching TargetCalculator.fibrePer1000Kcal. Without
+    // it a profile that skipped the quiz shows fibre with no goal beside it,
+    // which reads as a number the app does not know what to do with.
+    fiber: 28,
   );
 
   final String id;

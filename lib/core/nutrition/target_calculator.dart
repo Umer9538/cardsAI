@@ -75,6 +75,19 @@ abstract final class TargetCalculator {
   static const double proteinPerKg = 1.8;
   static const double fatPerKg = 0.9;
 
+  /// Fibre, in grams per 1000 kcal of the daily target.
+  ///
+  /// Scaled to energy rather than fixed at 25 or 30 g, which is the form the
+  /// dietary guidance itself takes and the honest one: someone eating 1,400
+  /// kcal and someone eating 3,000 are not chasing the same number.
+  ///
+  /// Fibre is here because it is the second most-requested figure in this
+  /// category after health-app sync, it is almost always asked for as "put it
+  /// on the home screen" rather than "give me all the micronutrients", and the
+  /// pipeline has been returning it all along — `Nutrition.fiber` was populated
+  /// by every scan and rendered nowhere.
+  static const double fibrePer1000Kcal = 14;
+
   /// Basal metabolic rate, kcal/day.
   ///
   /// The constant is the only place sex enters the equation: +5 for male, -161
@@ -147,6 +160,7 @@ abstract final class TargetCalculator {
       protein: _round(protein),
       carbs: _round(carbs),
       fat: _round(fat),
+      fiber: _round(calories / 1000 * fibrePer1000Kcal),
     );
   }
 

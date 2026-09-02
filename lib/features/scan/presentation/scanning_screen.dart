@@ -9,6 +9,7 @@ import '../../../core/design/design_canvas.dart';
 import '../../../core/repositories/repositories.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../auth/presentation/widgets/auth_widgets.dart';
 import 'barcode_scanner_view.dart';
 import 'camera_session.dart';
 
@@ -51,10 +52,12 @@ class ScanningScreen extends ConsumerStatefulWidget {
 
   final VoidCallback? onClose;
 
-  /// Fired once an image is in hand: the mode used, and the prepared file's
-  /// path — null for a mode that produces no image, or when the camera was
-  /// unavailable and the design's stand-in is being analysed instead.
-  final void Function(ScanMode mode, String? imagePath)? onCaptured;
+  /// Fired once an image is in hand: the mode used, the prepared file's path —
+  /// null for a mode that produces no image, or when the camera was unavailable
+  /// and the design's stand-in is being analysed instead — and the note the
+  /// person added, if any.
+  final void Function(ScanMode mode, String? imagePath, String? hint)?
+      onCaptured;
 
   /// A barcode was read. Separate from [onCaptured] because it produces a
   /// product code rather than a photo, and needs no shutter press.
@@ -72,6 +75,19 @@ class ScanningScreen extends ConsumerStatefulWidget {
 class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   late ScanMode _mode = widget.mode;
   bool _busy = false;
+
+  /// What the person told us the photo cannot show.
+  ///
+  /// `prompt.ts` calls this "the cheapest accuracy win available on a mixed
+  /// dish" and treats it as ground truth — the person was there and the camera
+  /// was not. It has been threaded through the Worker, the repositories and the
+  /// controller since the pipeline was built, and no screen ever offered a way
+  /// to type into it.
+  ///
+  /// It matters because of what the model provably cannot see: oil, butter and
+  /// sauce are invisible in a photograph and are exactly where the measured
+  /// underestimation comes from.
+  String? _hint;
 
   /// Whether the "where from" chooser is up.
   ///
@@ -108,7 +124,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
 
       final path = await _takePhoto();
       if (!mounted) return;
-      widget.onCaptured?.call(_mode, path);
+      widget.onCaptured?.call(_mode, path, _hint);
     } on RepositoryException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -182,7 +198,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
       // A dismissed picker is a cancellation, not a failure: it just puts the
       // screen back where it was.
       if (path == null) return;
-      widget.onCaptured?.call(ScanMode.gallery, path);
+      widget.onCaptured?.call(ScanMode.gallery, path, _hint);
     } on RepositoryException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -196,6 +212,22 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Collects the note in a modal sheet rather than a field on the canvas.
+  ///
+  /// The canvas is `DesignFit.cover` and full-bleed; a focused field inside it
+  /// would put the keyboard over the shutter with nothing able to scroll out of
+  /// the way. A sheet owns its own inset handling and leaves the camera alone.
+  Future<void> _editNote() async {
+    final note = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _NoteSheet(initial: _hint),
+    );
+    if (!mounted || note == null) return;
+    setState(() => _hint = note.trim().isEmpty ? null : note.trim());
   }
 
   /// Null when there is no usable camera, which the caller reads as "analyse
@@ -265,6 +297,21 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
                 ),
               ),
             Positioned.fromRect(rect: _window, child: const _Viewfinder()),
+
+            // Sits in the 59pt gap the artboard leaves between the viewfinder
+            // and the mode sheet. Collapsed to a pill until it has something to
+            // say, so the camera stays a camera.
+            if (_mode != ScanMode.barcode)
+              Positioned(
+                left: 44,
+                top: 604,
+                width: 341,
+                height: 34,
+                child: _NoteChip(
+                  note: _hint,
+                  onTap: _editNote,
+                ),
+              ),
 
             // Sheet holding the mode tiles and shutter.
             Positioned(
@@ -777,6 +824,208 @@ class _ShutterButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.white.withValues(alpha: busy ? 0.6 : 1),
             shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The collapsed affordance for the scan note.
+///
+/// Reads as a prompt when empty and as the note itself once written, so the
+/// thing you typed is visible before you commit a scan to it.
+class _NoteChip extends StatelessWidget {
+  const _NoteChip({required this.note, required this.onTap});
+
+  final String? note;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final has = note != null && note!.isNotEmpty;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0x99000000),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(
+            color: has ? AppColors.primary : AppColors.outline,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            Icon(
+              has ? Icons.edit_note : Icons.add,
+              size: 16,
+              color: has ? AppColors.primary : AppColors.placeholder,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                has ? note! : 'Add a note — oil, sauce, how it was cooked',
+                style: AppTypography.meta(
+                  color: has ? AppColors.white : AppColors.placeholder,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Where the note is typed.
+///
+/// The examples are not decoration. An empty text box is the main reason this
+/// kind of input goes unused, and each one names something a photograph
+/// genuinely cannot show — which is where the measured underestimation in
+/// photo-based estimates actually comes from.
+class _NoteSheet extends StatefulWidget {
+  const _NoteSheet({this.initial});
+
+  final String? initial;
+
+  @override
+  State<_NoteSheet> createState() => _NoteSheetState();
+}
+
+class _NoteSheetState extends State<_NoteSheet> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial ?? '');
+
+  static const List<String> _examples = [
+    'Fried in 2 tbsp oil',
+    'Half of what you see',
+    'No sugar',
+    'Cooked in ghee',
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _append(String example) {
+    final current = _controller.text.trim();
+    setState(() {
+      _controller.text = current.isEmpty ? example : '$current, $example';
+      _controller.selection =
+          TextSelection.collapsed(offset: _controller.text.length);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.inkMuted,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: AppColors.outline)),
+        ),
+        padding: const EdgeInsets.fromLTRB(19, 12, 19, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.muted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'What can’t the camera see?',
+                style: AppTypography.cardHeading(),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Oil, butter and sauce are invisible in a photo, and they are '
+                'where the estimate usually goes wrong.',
+                style: AppTypography.meta(color: AppColors.placeholder),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 88,
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.outline),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: AppTypography.body(),
+                  cursorColor: AppColors.primary,
+                  decoration: InputDecoration.collapsed(
+                    hintText: 'Grilled, no oil…',
+                    hintStyle: AppTypography.body(color: AppColors.muted),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final example in _examples)
+                    GestureDetector(
+                      onTap: () => _append(example),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.outline),
+                        ),
+                        child: Text(
+                          example,
+                          style: AppTypography.meta(
+                            color: AppColors.placeholder,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 50,
+                width: double.infinity,
+                child: PrimaryButton(
+                  label: 'Done',
+                  onPressed: () =>
+                      Navigator.of(context).pop(_controller.text),
+                ),
+              ),
+            ],
           ),
         ),
       ),
