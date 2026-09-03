@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
@@ -89,6 +90,26 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   /// underestimation comes from.
   String? _hint;
 
+  /// True while one camera package is handing the device to the other.
+  ///
+  /// Two packages cannot hold the same camera, and neither releases it
+  /// synchronously — `CameraController.dispose` and `MobileScannerController`
+  /// teardown are both futures. Rendering the incoming preview in the same
+  /// frame as the outgoing one means the second open lands while the first is
+  /// still closing, and it fails.
+  ///
+  /// So the handoff is explicit: for one short beat neither camera is on
+  /// screen. This is the "switching modes takes a beat" the design notes
+  /// mention — it is deliberate, not latency to be optimised away.
+  bool _switching = false;
+
+  static const Duration _handoff = Duration(milliseconds: 350);
+
+  /// Held so it can be cancelled. A bare `Future.delayed` outlives the widget,
+  /// which means a `setState` after dispose in the app and a pending-timer
+  /// failure in every test that touches this screen.
+  Timer? _handoffTimer;
+
   /// Whether the "where from" chooser is up.
   ///
   /// Opening it on selecting Gallery, rather than waiting for a shutter press,
@@ -163,13 +184,34 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
       return;
     }
     if (mode == _mode) return;
-    if (mode == ScanMode.barcode) {
-      ref.invalidate(cameraSessionProvider);
-    }
+
+    // Either direction across the barcode boundary swaps camera packages.
+    final swapsCamera =
+        mode == ScanMode.barcode || _mode == ScanMode.barcode;
+
     setState(() {
       _mode = mode;
       _choosingSource = false;
+      _switching = swapsCamera;
     });
+
+    if (!swapsCamera) return;
+
+    // Dispose ours first. With `_Preview` already off screen there is no
+    // watcher left to rebuild it, so this is a real release rather than a
+    // release-and-immediately-reopen.
+    ref.invalidate(cameraSessionProvider);
+
+    _handoffTimer?.cancel();
+    _handoffTimer = Timer(_handoff, () {
+      if (mounted) setState(() => _switching = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _handoffTimer?.cancel();
+    super.dispose();
   }
 
   /// Picks an image, with our camera released while the picker is open.
@@ -214,6 +256,18 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
     }
   }
 
+  /// Types a barcode instead of reading one.
+  Future<void> _enterCode() async {
+    final code = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _BarcodeEntrySheet(),
+    );
+    if (!mounted || code == null || code.trim().isEmpty) return;
+    widget.onBarcode?.call(code.trim());
+  }
+
   /// Collects the note in a modal sheet rather than a field on the canvas.
   ///
   /// The canvas is `DesignFit.cover` and full-bleed; a focused field inside it
@@ -253,7 +307,18 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
           // Full-bleed preview, and nothing sits at the very bottom edge.
           fit: DesignFit.cover,
           children: [
-            const Positioned.fill(child: _Preview()),
+            // Not in barcode mode, and this is the whole reason barcode
+            // scanning never worked.
+            //
+            // `_Preview` *watches* `cameraSessionProvider`. Selecting barcode
+            // invalidates that provider to hand the camera over — but an
+            // invalidated provider with a live watcher is rebuilt immediately,
+            // so the photo camera was re-acquired within the same frame it was
+            // released and `mobile_scanner` never got a device to open. The
+            // release has to be a real release, which means nothing may be
+            // watching it.
+            if (_mode != ScanMode.barcode && !_switching)
+              const Positioned.fill(child: _Preview()),
 
             // Black at 50% over the scrim blur, then the same preview redrawn
             // sharp inside the window so it reads as a cut-out rather than an
@@ -286,7 +351,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             ),
             // Barcode is a different camera package, so it does get its own
             // view inside the window — ours is released before this appears.
-            if (_mode == ScanMode.barcode)
+            if (_mode == ScanMode.barcode && !_switching)
               Positioned.fromRect(
                 rect: _window,
                 child: ClipRRect(
@@ -371,15 +436,30 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             if (_mode == ScanMode.barcode)
               Positioned(
                 left: 40,
-                top: 789,
+                top: 782,
                 width: 348,
-                height: 56,
-                child: Center(
-                  child: Text(
-                    'Point the camera at a product barcode.',
-                    style: AppTypography.body(color: AppColors.placeholder),
-                    textAlign: TextAlign.center,
-                  ),
+                height: 68,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _switching
+                          ? 'Starting the reader…'
+                          : 'Point the camera at a product barcode.',
+                      style: AppTypography.body(color: AppColors.placeholder),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    // Barcode has no shutter — detection is continuous, so
+                    // there is nothing for a button to trigger. That left the
+                    // mode with no control at all, and no way forward at all
+                    // when a code will not read: a scuffed label, a curved tin,
+                    // a barcode behind shrink wrap. Typing the digits always
+                    // works, and the number is printed right there.
+                    _TextAction(label: 'Enter it by hand', onTap: _enterCode),
+                  ],
                 ),
               )
             else
@@ -1023,6 +1103,119 @@ class _NoteSheetState extends State<_NoteSheet> {
                   label: 'Done',
                   onPressed: () =>
                       Navigator.of(context).pop(_controller.text),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Types a barcode when the reader cannot get one.
+///
+/// Every barcode on a food package is printed as digits directly under the
+/// bars, precisely so it can be read when the scan fails — a scuffed label, a
+/// curved tin, shrink wrap, or a phone whose camera cannot focus that close.
+/// Without this, barcode mode had no way forward at all when detection did not
+/// fire.
+class _BarcodeEntrySheet extends StatefulWidget {
+  const _BarcodeEntrySheet();
+
+  @override
+  State<_BarcodeEntrySheet> createState() => _BarcodeEntrySheetState();
+}
+
+class _BarcodeEntrySheetState extends State<_BarcodeEntrySheet> {
+  final _controller = TextEditingController();
+
+  /// EAN-8 through EAN-13/UPC-A. Shorter than 8 is not a product code, and
+  /// sending it would spend a lookup to be told so.
+  bool get _valid {
+    final digits = _controller.text.trim();
+    return digits.length >= 8 &&
+        digits.length <= 14 &&
+        int.tryParse(digits) != null;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.inkMuted,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: AppColors.outline)),
+        ),
+        padding: const EdgeInsets.fromLTRB(19, 12, 19, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.muted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text('Enter the barcode', style: AppTypography.cardHeading()),
+              const SizedBox(height: 4),
+              Text(
+                'The digits printed under the bars.',
+                style: AppTypography.meta(color: AppColors.placeholder),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.outline),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.centerLeft,
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  style: AppTypography.body(),
+                  cursorColor: AppColors.primary,
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (v) {
+                    if (_valid) Navigator.of(context).pop(v);
+                  },
+                  decoration: InputDecoration.collapsed(
+                    hintText: '5000112637922',
+                    hintStyle: AppTypography.body(color: AppColors.muted),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 50,
+                width: double.infinity,
+                child: PrimaryButton(
+                  label: 'Look it up',
+                  onPressed: _valid
+                      ? () => Navigator.of(context).pop(_controller.text.trim())
+                      : null,
                 ),
               ),
             ],

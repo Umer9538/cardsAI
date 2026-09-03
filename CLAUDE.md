@@ -647,9 +647,23 @@ so it degrades to a worse database rather than to a dead end. On `BACKEND=local`
 Open Food Facts serves both, which keeps the app runnable offline with nothing
 configured.
 
-Two packages cannot hold the same camera at once, so selecting barcode mode
-invalidates `cameraSessionProvider` to release the photo camera before the reader
-starts. That is why switching modes takes a beat.
+Two packages cannot hold the same camera at once, and **invalidating
+`cameraSessionProvider` was not enough on its own** — that was why barcode scanning never
+worked at all. `_Preview` *watches* that provider and was rendered unconditionally, so an
+invalidated provider with a live watcher rebuilt immediately and re-acquired the photo camera
+in the same frame it was released; `mobile_scanner` never got a device to open.
+
+The release has to be a real one, which means two things. `_Preview` is not rendered in
+barcode mode, so nothing is left watching. And because neither package releases synchronously
+— `CameraController.dispose` and the scanner's teardown are both futures — `_switching` holds
+a beat during which **neither** camera is on screen, in both directions. That is the "switching
+modes takes a beat": deliberate, not latency to optimise away. The timer is cancellable and
+cancelled in `dispose`, or it outlives the screen and fails every test that touches it.
+
+Barcode has no shutter — detection is continuous, so there is nothing for a button to trigger
+— which left the mode with no control at all and no way forward when a code will not read.
+**"Enter it by hand"** takes the digits printed under the bars, which is the path that always
+works on a scuffed label, a curved tin, or through shrink wrap.
 
 Still missing: nothing from this list — but the streak is the only History surface, so
 there is no calendar or per-day detail beyond swiping the week strip.
