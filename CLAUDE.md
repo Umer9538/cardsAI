@@ -283,6 +283,34 @@ Two things are **not done** and are marked in the code:
 Prices must come from the store once products exist — `_merge()` already does this.
 Hardcoded "$4.99" shown to someone paying in another currency is a rejection.
 
+### Nothing on Home, Analysis or Diets is invented
+
+Home and Analysis were already computed — Home off the diary, Analysis off real
+`mealsBetween` ranges with real buckets. Diets was not, in two ways, and both made the
+honest screens look invented by association:
+
+- **Three plans shipped with `isMine` and `isFavorite` already true.** A brand-new account
+  opened onto a My Diets tab and a Favourites tab full of choices nobody had made. An app that
+  pretends you did something is the clearest signal its numbers are decoration. The catalogue
+  now ships owned by no one.
+- **Plan figures were absolute and unrelated to the user.** The app computed a personal target
+  of 2,413 kcal and then offered a "2,000 kcal" plan beside it. `DietPlan.scaledTo` keeps the
+  pattern's macro *proportions* — keto is a fat ratio, Mediterranean is a fat-to-carb ratio —
+  and puts the user's own energy through it. It is applied in `providers.dart`, on all three
+  plan streams, so there is exactly one path from repository to screen and no way to render an
+  unscaled plan by forgetting.
+
+**`targetsProvider` derives a missing fibre goal rather than trusting storage.** Targets are
+persisted on the profile, so every account created before the fibre goal existed carried
+`fiber: 0` and showed "Fibre 0g" on Home with no goal beside it, permanently. A figure the app
+knows how to compute should not be absent because of when the account was made.
+
+**The trend chart's y-axis is 52 wide, not 40.** A four-digit calorie caption did not fit the
+32pt that left, and `TextPainter` answers that by *wrapping* — so "4000" drew as "400" above
+"0" and the axis became a stack of half-numbers that read as extra gridlines. `_label` pins
+`maxLines: 1` now, so a caption that does not fit clips where it is obvious rather than
+wrapping into the row below where it looks like another caption.
+
 ### The backend seam
 
 Screens depend only on the interfaces in `core/repositories/`. `core/providers/providers.dart`

@@ -43,6 +43,41 @@ class DietPlan {
   /// source photos are available at full height.
   final double imageHeight;
 
+  /// This plan, expressed against [targets].
+  ///
+  /// A diet plan is a **pattern**, not a promise of a particular calorie count:
+  /// Mediterranean is a ratio of fat to carbohydrate, keto is a carbohydrate
+  /// ceiling. The catalogue stores each one at a representative size, and
+  /// showing that raw is what made the section feel like decoration — the app
+  /// computes a personal target of 2,413 kcal, then offers a "2,000 kcal" plan
+  /// beside it with no explanation, and both numbers stop being believable.
+  ///
+  /// So the macro *proportions* are preserved and the energy is the user's own.
+  /// Grams are recovered with the Atwater factors the rest of the app uses
+  /// (4/4/9), which is also why this cannot simply scale each macro by a
+  /// ratio of calories: the stored figures do not always add up to their own
+  /// stated total, and the user's target must be the number that holds.
+  ///
+  /// Returns the plan unchanged when either side has no energy to work from —
+  /// a zero target means the profile has not been through the quiz yet, and
+  /// inventing a split for it would be worse than showing the pattern's own.
+  DietPlan scaledTo(Nutrition targets) {
+    final energy = nutrition.protein * 4 + nutrition.carbs * 4 + nutrition.fat * 9;
+    if (energy <= 0 || targets.calories <= 0) return this;
+
+    final factor = targets.calories / energy;
+    return copyWith(
+      nutrition: Nutrition(
+        calories: targets.calories,
+        protein: (nutrition.protein * factor).roundToDouble(),
+        carbs: (nutrition.carbs * factor).roundToDouble(),
+        fat: (nutrition.fat * factor).roundToDouble(),
+        fiber: nutrition.fiber * factor,
+        sugar: nutrition.sugar * factor,
+      ),
+    );
+  }
+
   DietPlan copyWith({
     String? id,
     String? name,

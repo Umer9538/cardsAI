@@ -24,6 +24,7 @@ import '../../data/worker/r2_photo_repository.dart';
 import '../../data/worker/worker_food_repository.dart';
 import '../app_config.dart';
 import '../models/models.dart';
+import '../nutrition/target_calculator.dart';
 import '../repositories/repositories.dart';
 
 // ---------------------------------------------------------------------------
@@ -258,11 +259,23 @@ final profileProvider = StreamProvider<UserProfile?>((ref) async* {
 
 /// Daily goals, with a sensible default before a profile exists — no screen
 /// should have to handle "targets unknown".
-final targetsProvider = Provider<Nutrition>(
-  (ref) =>
-      ref.watch(profileProvider).value?.targets ??
-      UserProfile.defaultTargets,
-);
+final targetsProvider = Provider<Nutrition>((ref) {
+  final stored =
+      ref.watch(profileProvider).value?.targets ?? UserProfile.defaultTargets;
+
+  // Fibre is derived on read when it is missing, rather than being left at
+  // whatever was stored.
+  //
+  // Targets are persisted on the profile, so every account created before the
+  // fibre goal existed carries `fiber: 0` — and showed "Fibre 0g" on Home with
+  // no goal beside it, forever. A figure the app knows how to compute should
+  // not be permanently absent because of when the account was made.
+  if (stored.fiber > 0 || stored.calories <= 0) return stored;
+  return stored.copyWith(
+    fiber: (stored.calories / 1000 * TargetCalculator.fibrePer1000Kcal)
+        .roundToDouble(),
+  );
+});
 
 /// The account's entitlement.
 final subscriptionProvider = StreamProvider<Subscription>(
@@ -334,16 +347,36 @@ final streakProvider = FutureProvider<int>((ref) {
 // Plans
 // ---------------------------------------------------------------------------
 
+/// Every plan, put in the user's own terms.
+///
+/// The scaling happens here rather than in each screen so there is exactly one
+/// path from the repository to a rendered plan, and no way to draw an unscaled
+/// one by forgetting. See [DietPlan.scaledTo] for why a raw catalogue figure
+/// beside a personal target makes both numbers look invented.
+List<DietPlan> _inUserTerms(Ref ref, List<DietPlan> plans) {
+  final targets = ref.watch(targetsProvider);
+  return [for (final plan in plans) plan.scaledTo(targets)];
+}
+
 final allDietsProvider = StreamProvider<List<DietPlan>>(
-  (ref) => ref.watch(dietRepositoryProvider).watchAll(),
+  (ref) => ref
+      .watch(dietRepositoryProvider)
+      .watchAll()
+      .map((plans) => _inUserTerms(ref, plans)),
 );
 
 final myDietsProvider = StreamProvider<List<DietPlan>>(
-  (ref) => ref.watch(dietRepositoryProvider).watchMine(),
+  (ref) => ref
+      .watch(dietRepositoryProvider)
+      .watchMine()
+      .map((plans) => _inUserTerms(ref, plans)),
 );
 
 final favoriteDietsProvider = StreamProvider<List<DietPlan>>(
-  (ref) => ref.watch(dietRepositoryProvider).watchFavorites(),
+  (ref) => ref
+      .watch(dietRepositoryProvider)
+      .watchFavorites()
+      .map((plans) => _inUserTerms(ref, plans)),
 );
 
 // ---------------------------------------------------------------------------

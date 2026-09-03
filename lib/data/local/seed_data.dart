@@ -57,6 +57,16 @@ abstract final class SeedData {
   /// photographs of the same plan, and the second is clipped short by the frame
   /// edge. Two records keep both screens pixel-faithful. Collapse them once the
   /// catalogue comes from the backend with one canonical image.
+  /// The published catalogue.
+  ///
+  /// **Nothing here is favourited or owned.** Three plans used to ship with
+  /// `isMine` and `isFavorite` already set, so a brand-new account opened onto
+  /// a My Diets tab and a Favourites tab that were already full of choices
+  /// nobody had made. An app that pretends you did something is the clearest
+  /// possible signal that its numbers are decoration.
+  ///
+  /// The figures are the pattern's own — see [DietPlan.scaledTo], which is what
+  /// puts them in the user's terms before they are shown.
   static List<DietPlan> get dietPlans => const [
         DietPlan(
           id: 'plan-mediterranean',
@@ -84,7 +94,6 @@ abstract final class SeedData {
           nutrition:
               Nutrition(calories: 1600, protein: 110, carbs: 60, fat: 90),
           description: 'Moderate protein, low carb, calorie-controlled.',
-          isMine: true,
         ),
         DietPlan(
           id: 'plan-vegan',
@@ -94,7 +103,6 @@ abstract final class SeedData {
               Nutrition(calories: 2000, protein: 125, carbs: 300, fat: 55),
           description: 'Entirely plant-based, with the protein actually '
               'accounted for.',
-          isMine: true,
         ),
         DietPlan(
           id: 'plan-detox',
@@ -103,7 +111,6 @@ abstract final class SeedData {
           nutrition:
               Nutrition(calories: 1400, protein: 60, carbs: 180, fat: 40),
           description: 'A short, light reset built around whole foods.',
-          isMine: true,
           imageHeight: 110,
         ),
         DietPlan(
@@ -114,7 +121,6 @@ abstract final class SeedData {
               Nutrition(calories: 2000, protein: 180, carbs: 150, fat: 80),
           description: 'Meat, fish, eggs, vegetables, nuts. No grains, no '
               'dairy, no refined sugar.',
-          isFavorite: true,
         ),
         DietPlan(
           id: 'plan-indian-veg',
@@ -123,7 +129,6 @@ abstract final class SeedData {
           nutrition:
               Nutrition(calories: 1800, protein: 100, carbs: 225, fat: 45),
           description: 'Dal, paneer and vegetables, portioned for a deficit.',
-          isFavorite: true,
         ),
         DietPlan(
           id: 'plan-mediterranean-fav',
@@ -132,7 +137,6 @@ abstract final class SeedData {
           nutrition:
               Nutrition(calories: 2000, protein: 120, carbs: 200, fat: 70),
           description: 'Olive oil, fish, vegetables and whole grains.',
-          isFavorite: true,
           imageHeight: 175,
         ),
       ];

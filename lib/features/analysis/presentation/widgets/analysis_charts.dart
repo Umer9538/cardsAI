@@ -135,7 +135,13 @@ class _TrendPainter extends CustomPainter {
   final AnalysisSummary summary;
 
   /// Room for the y-axis captions on the left and the day captions below.
-  static const double _axisWidth = 40;
+  ///
+  /// 52, not 40. A four-digit calorie caption does not fit in the 32pt that 40
+  /// left after its inset, and `TextPainter` answers that by *wrapping* — so
+  /// "4000" rendered as "400" above "0", and the axis silently turned into a
+  /// stack of half-numbers that read as extra gridlines. Anyone with a target
+  /// over about 1,000 kcal saw it, which is everyone.
+  static const double _axisWidth = 52;
   static const double _captionHeight = 24;
 
   @override
@@ -311,6 +317,11 @@ class _TrendPainter extends CustomPainter {
       ),
       textAlign: align,
       textDirection: TextDirection.ltr,
+      // One line, always. A caption that does not fit should be clipped, where
+      // it is obvious, rather than wrapped into the row below it, where it
+      // looks like a second caption.
+      maxLines: 1,
+      ellipsis: '…',
     )
       ..layout(minWidth: width, maxWidth: width)
       ..paint(canvas, at);
