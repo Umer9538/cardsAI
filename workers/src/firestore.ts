@@ -178,6 +178,84 @@ export class Firestore {
     await this.call(`${this.root}/${path}`, { method: "DELETE" });
   }
 
+  /**
+   * The subcollections under [path], or under the database root when omitted.
+   *
+   * Firestore documents do not know their own subcollections, so a recursive
+   * delete has to ask. Enumerating rather than hardcoding is the point: an
+   * account deletion that misses a collection added later leaves the person's
+   * data behind, and nothing would report it.
+   */
+  async collectionIds(path = ""): Promise<string[]> {
+    const parent = path ? `${this.root}/${path}` : this.root;
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const body = (await this.call(`${parent}:listCollectionIds`, {
+        method: "POST",
+        body: { pageSize: 100, pageToken },
+      })) as { collectionIds?: string[]; nextPageToken?: string };
+      ids.push(...(body.collectionIds ?? []));
+      pageToken = body.nextPageToken;
+    } while (pageToken);
+
+    return ids;
+  }
+
+  /**
+   * Document ids in a collection.
+   *
+   * Only `__name__` is fetched: the caller is deleting these, so the field
+   * values are wasted bytes on a diary that could run to thousands of meals.
+   */
+  async documentIds(collectionPath: string, pageSize = 300): Promise<string[]> {
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const query = new URLSearchParams({ pageSize: String(pageSize) });
+      query.append("mask.fieldPaths", "__name__");
+      if (pageToken) query.set("pageToken", pageToken);
+
+      const body = (await this.call(
+        `${this.root}/${collectionPath}?${query}`,
+        { method: "GET" },
+      )) as {
+        documents?: Array<{ name?: string }>;
+        nextPageToken?: string;
+        __missing?: boolean;
+      };
+      if (body.__missing) break;
+
+      for (const doc of body.documents ?? []) {
+        const id = doc.name?.split("/").pop();
+        if (id) ids.push(id);
+      }
+      pageToken = body.nextPageToken;
+    } while (pageToken);
+
+    return ids;
+  }
+
+  /**
+   * Deletes many documents.
+   *
+   * Chunked at 400, under Firestore's 500-writes-per-commit limit with room to
+   * spare, so a long diary does not fail the whole delete on its last page.
+   */
+  async deleteAll(paths: string[]): Promise<void> {
+    for (let i = 0; i < paths.length; i += 400) {
+      const chunk = paths.slice(i, i + 400);
+      await this.call(`${this.root}:commit`, {
+        method: "POST",
+        body: {
+          writes: chunk.map((path) => ({ delete: `${this.root}/${path}` })),
+        },
+      });
+    }
+  }
+
   /** Applies [writes] atomically. */
   async commit(writes: Write[], transaction?: string): Promise<void> {
     await this.call(`${this.root}:commit`, {

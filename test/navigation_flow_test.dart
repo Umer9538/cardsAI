@@ -292,4 +292,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Welcome Back to Carbsai'), findsOneWidget);
   });
+
+  testWidgets('deleting the account leaves no screen behind', (tester) async {
+    await boot(tester);
+    await reachLogin(tester);
+    await signIn(tester);
+
+    await tester.tap(
+      assetFinder('assets/images/app/nav_settings.png').first,
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete Account'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Are you sure'), findsOneWidget);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    // More is a pushed route, so it survives the app rebuilding from the auth
+    // stream — it has to be popped explicitly. It previously stayed on top of
+    // the login page.
+    expect(find.text('Welcome Back to Carbsai'), findsOneWidget);
+    expect(find.text('Delete Account'), findsNothing);
+  });
 }

@@ -52,3 +52,23 @@ export async function getUser(env: Env, uid: string): Promise<AuthUser> {
 export async function setEmailVerified(env: Env, uid: string): Promise<void> {
   await call(env, "update", { localId: uid, emailVerified: true });
 }
+
+/**
+ * Removes the account.
+ *
+ * `accounts:batchDelete` rather than `accounts:delete`: the single-account form
+ * expects the user's own ID token, while this one is an admin call taking uids
+ * — which is what a server holding a service-account token has.
+ *
+ * `force` deletes accounts that are not disabled first; without it the API
+ * refuses every enabled account, which is all of them.
+ */
+export async function deleteUser(env: Env, uid: string): Promise<void> {
+  const body = await call(env, "batchDelete", { localIds: [uid], force: true });
+  const errors = body.errors as Array<{ message?: string }> | undefined;
+  if (errors && errors.length > 0) {
+    // Reported rather than swallowed: the data is already gone at this point,
+    // so an account that survives can still sign in to an empty app.
+    throw new Error(`account delete failed: ${errors[0]?.message ?? "unknown"}`);
+  }
+}

@@ -185,8 +185,13 @@ class _AppRootState extends ConsumerState<AppRoot> with WidgetsBindingObserver {
   _Stage _stage = _Stage.splash;
 
   /// Whether the personalisation quiz has been dealt with, either way.
-  late bool _quizSeen =
-      ref.read(jsonStoreProvider).flag(StoreKeys.quizSeen);
+  ///
+  /// Read on every build rather than latched in `initState`. Deleting an
+  /// account clears the flag, and a latched copy meant the next sign-up in the
+  /// same session was never asked — and quietly took the default 2000 kcal
+  /// target the quiz exists to replace. The read is a cached preferences
+  /// lookup, so there is nothing to save by holding it.
+  bool get _quizSeen => ref.read(jsonStoreProvider).flag(StoreKeys.quizSeen);
 
   @override
   void initState() {
@@ -225,7 +230,7 @@ class _AppRootState extends ConsumerState<AppRoot> with WidgetsBindingObserver {
   /// launch — skipping is a valid answer and leaves the default targets.
   Future<void> _completeQuiz() async {
     await ref.read(jsonStoreProvider).setFlag(StoreKeys.quizSeen, value: true);
-    if (mounted) setState(() => _quizSeen = true);
+    if (mounted) setState(() {});
   }
 
   Future<void> _completeOnboarding() async {

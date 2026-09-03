@@ -106,6 +106,12 @@ abstract final class StoreKeys {
   /// an account should not put an American back on centimetres.
   static const String units = 'carbsai.units';
 
+  /// Everything a deleted account takes with it.
+  ///
+  /// [onboardingSeen] and [units] are excluded for the reasons stated on each.
+  /// Everything else belongs to the person, including [quizSeen] — leaving it
+  /// set meant the next account on the device was never asked, and silently
+  /// took the default 2000 kcal target the quiz exists to replace.
   static const List<String> all = [
     profile,
     myPlans,
@@ -113,9 +119,11 @@ abstract final class StoreKeys {
     meals,
     subscription,
     plans,
+    plansVersion,
     notifications,
     notificationSettings,
     scans,
     session,
+    quizSeen,
   ];
 }

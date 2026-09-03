@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/models.dart';
 import '../core/providers/providers.dart';
+import '../core/repositories/repositories.dart';
+import '../core/theme/app_colors.dart';
 import '../features/analysis/presentation/analysis_screen.dart';
 import '../features/app/presentation/home_screen.dart';
 import '../features/app/presentation/notifications_screen.dart';
@@ -272,10 +274,7 @@ class _MainShellState extends ConsumerState<MainShell>
       Builder(
         builder: (c) => MoreScreen(
           onBack: () => Navigator.of(c).pop(),
-          onDelete: () {
-            Navigator.of(c).pop();
-            ref.read(authControllerProvider.notifier).deleteAccount();
-          },
+          onDelete: () => _deleteAccount(c),
           onOpen: (key) => _push(
             Builder(
               builder: (c2) => switch (key) {
@@ -287,6 +286,52 @@ class _MainShellState extends ConsumerState<MainShell>
               },
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Deletes the account, and says so if it does not work.
+  ///
+  /// Deletion is not instant — the server walks the whole diary — so the
+  /// screen is held under a barrier rather than popped immediately. Popping
+  /// first would drop the only place an error could be reported, which is how
+  /// this previously failed silently.
+  Future<void> _deleteAccount(BuildContext sheetContext) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(sheetContext);
+
+    showDialog<void>(
+      context: sheetContext,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+    );
+
+    final ok = await ref.read(authControllerProvider.notifier).deleteAccount();
+
+    // Close the barrier.
+    if (navigator.canPop()) navigator.pop();
+
+    if (ok) {
+      // Everything pushed has to come off. Signing out rebuilds the app from
+      // the auth stream, but that only replaces `MaterialApp.home` — pushed
+      // routes sit above it and would leave the deleted account's More screen
+      // on top of the login page.
+      navigator.popUntil((route) => route.isFirst);
+      return;
+    }
+
+    // Failure leaves More where it is, so the message appears over the screen
+    // the button was on.
+    final error = ref.read(authControllerProvider).error;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          error is RepositoryException
+              ? error.message
+              : 'Your account could not be deleted. Please try again.',
         ),
       ),
     );

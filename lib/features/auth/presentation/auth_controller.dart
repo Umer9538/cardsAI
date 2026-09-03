@@ -70,10 +70,14 @@ class AuthController extends AsyncNotifier<void> {
     state = const AsyncData(null);
   }
 
-  Future<void> deleteAccount() async {
-    await ref.read(authRepositoryProvider).deleteAccount();
-    state = const AsyncData(null);
-  }
+  /// Returns false if the deletion failed, leaving the reason in [state].
+  ///
+  /// This used to swallow both. Deletion can genuinely fail — an expired
+  /// session, no network — and a Delete button that silently does nothing on a
+  /// screen the user is then thrown out of is the worst possible version of
+  /// this feature.
+  Future<bool> deleteAccount() =>
+      _run(() => ref.read(authRepositoryProvider).deleteAccount());
 
   /// Clears a stale message when the user edits the form.
   void clearError() {
