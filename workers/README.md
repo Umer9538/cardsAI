@@ -26,7 +26,11 @@ reachable here and nowhere else. `firestore.rules` is unchanged.
 | `POST /cancelSubscription` | callable | `cancelSubscription` |
 | `POST /searchFoods` | callable | — (new: USDA FoodData Central) |
 | `POST /grantBonusScans` | callable | `grantBonusScans` |
+| `POST /generatePlan` | callable | — (new: the AI diet planner) |
+| `POST /deleteAccount` | callable | — (new: account deletion) |
 | `POST /photos`, `DELETE /photos` | plain HTTP | Cloud Storage |
+| `POST /syncFoods` | plain HTTP, `x-sync-key` | — (operator) |
+| `POST /storeNotify/{google\|apple}/{key}` | plain HTTP | — (store webhooks) |
 | `GET /health` | plain HTTP | — |
 
 "Callable" means the Firebase callable wire protocol — `{"data": ...}` in,
@@ -79,7 +83,35 @@ npm run secret OTP_PEPPER                 # any long random string
 npm run secret EMAIL_API_KEY              # Brevo API key
 npm run secret EMAIL_FROM                 # "Carbsai <no-reply@yourdomain>"
 npm run secret USDA_API_KEY               # fdc.nal.usda.gov/api-key-signup
+npm run secret SYNC_KEY                   # gates /syncFoods; any long random string
 ```
+
+For paid subscriptions, once the store products exist:
+
+```bash
+npm run secret PLAY_SERVICE_ACCOUNT       # JSON for a Play Console account
+                                          #   with "View financial data"
+npm run secret APPLE_SHARED_SECRET        # App Store Connect -> App Information
+npm run secret STORE_NOTIFY_KEY           # any long random string; rides in the
+                                          #   notification URL path
+```
+
+Then set `ALLOW_UNVERIFIED_PURCHASES = "0"` in `wrangler.toml` and deploy. Until
+one of the two store credentials is set, `activateSubscription` **refuses**
+rather than granting — which is why that flag exists at all, and why it must
+come off before the first paid release.
+
+Point the stores at the notification routes:
+
+- **Play Console** → Monetisation setup → Real-time developer notifications →
+  a Pub/Sub topic with a push subscription to
+  `https://<worker>/storeNotify/google/<STORE_NOTIFY_KEY>`
+- **App Store Connect** → App Information → App Store Server Notifications V2 →
+  `https://<worker>/storeNotify/apple/<STORE_NOTIFY_KEY>`
+
+Newly linked Play service accounts take up to 24 hours to work, and until they
+do every call 401s — which reads exactly like a wrong key. Wait before changing
+anything.
 
 Only `FIREBASE_SERVICE_ACCOUNT` and the model key are needed for a scan.
 `USDA_API_KEY` powers food search — without it search still works, falling back
@@ -147,14 +179,17 @@ contents — it takes precedence when present.
 
 ## Still not done
 
-Both of these carried over from the Cloud Functions version unchanged:
-
-1. **`validateReceipt` does not validate.** It grants on request. Do not ship as
-   it stands — it hands premium to anyone who calls it. The Play and Apple API
-   calls that replace it are named in `subscription.ts`, and a Worker *can* make
-   them, which the Spark plan could not.
-2. **No store server notifications.** A lapsed or refunded subscription stays
-   active until `renewsAt` passes. Needs one more route per store.
+1. **Purchases are unverified until the store credentials are set.**
+   `ALLOW_UNVERIFIED_PURCHASES = "1"` is on in `wrangler.toml` because there
+   are no store products to validate against yet. The validation itself is
+   written and wired — `play.ts` and `appstore.ts` — so turning it on is
+   setting two secrets and flipping that flag. **It must be flipped before the
+   first paid release.**
+2. **Apple validation uses `verifyReceipt`,** which is deprecated but
+   operational, because `in_app_purchase` is on StoreKit 1 here and a StoreKit
+   1 app receipt is what it takes. Moving to the App Store Server API is a
+   *client* change first — StoreKit 2 sends a transaction id instead.
+3. **No eval set.** Nothing has measured this prompt's accuracy.
 
 ## Why the npm scripts set `NODE_OPTIONS`
 

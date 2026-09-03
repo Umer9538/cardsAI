@@ -24,6 +24,19 @@ FIREBASE_PROJECT_ID = "carbsai-8cca8"
 # has one; until then uploads still work and reads fall back to the local file.
 PHOTO_PUBLIC_BASE = ""
 
+# The Play package name. Receipt validation needs it: a purchase token only
+# means anything against the app it was bought in.
+ANDROID_PACKAGE_NAME = "com.carbsai.app"
+
+# Accept purchases without asking the store whether they are real.
+#
+# ON while there are no store products to validate against — the app cannot be
+# tested end to end otherwise. **Set this to "0" before the first paid
+# release**, and validation takes over as soon as PLAY_SERVICE_ACCOUNT or
+# APPLE_SHARED_SECRET is set. With it on, anyone who can call
+# activateSubscription has premium.
+ALLOW_UNVERIFIED_PURCHASES = "1"
+
 # Meal photos. Replaces Cloud Storage — R2 has zero egress fees, which is the
 # whole reason it is here rather than in Firebase.
 #

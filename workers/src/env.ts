@@ -36,6 +36,36 @@ export interface Env {
   /** e.g. "Carbsai <no-reply@yourdomain>" */
   EMAIL_FROM: string;
 
+  // ---- purchases ----
+  /**
+   * The app's Play package name, e.g. "com.carbsai.app". Receipt validation
+   * cannot be done without it: a purchase token is only meaningful against the
+   * app it was bought in.
+   */
+  ANDROID_PACKAGE_NAME: string;
+  /**
+   * Service-account JSON for a Play Console account with "View financial
+   * data". Usually NOT the Firebase one. See `play.ts`.
+   */
+  PLAY_SERVICE_ACCOUNT: string;
+  /** App Store Connect → App Information → App-Specific Shared Secret. */
+  APPLE_SHARED_SECRET: string;
+  /**
+   * Set to "1" to accept purchases without checking them with the store.
+   *
+   * For development against a build with no store products, which is the state
+   * this app is in. **Unset in production**: with it on, anyone who can call
+   * `activateSubscription` has premium. Absent means off, so the safe value is
+   * the default rather than something to remember.
+   */
+  ALLOW_UNVERIFIED_PURCHASES?: string;
+  /**
+   * Shared secret in the store notification URLs, so only the stores can post
+   * to them. Play's Pub/Sub push and Apple's notification endpoint both accept
+   * an arbitrary URL, so the secret rides in the path.
+   */
+  STORE_NOTIFY_KEY: string;
+
   // ---- bindings ----
   /// Optional: absent until R2 is enabled on the account and the binding is
   /// uncommented in wrangler.toml. `/photos` reports that plainly rather than

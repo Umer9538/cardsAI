@@ -10,6 +10,7 @@ import { deletePhoto, uploadPhoto } from "./photos.js";
 import { generatePlan, type GeneratePlanRequest } from "./planner.js";
 import { grantBonusScans } from "./rewards.js";
 import { analyzeMeal, type ScanRequest } from "./scan.js";
+import { handleStoreNotification } from "./storeNotify.js";
 import { activateSubscription, cancelSubscription } from "./subscription.js";
 
 /**
@@ -119,6 +120,18 @@ async function route(request: Request, env: Env): Promise<Response> {
           500,
         );
       }
+    }
+
+    // Store server notifications: a refund, a lapse, a renewal.
+    //
+    // Not a callable and not behind requireAuth — the caller is Apple or
+    // Google's Pub/Sub, neither of which holds a Firebase token. The key in
+    // the path is what gates it, and the body is treated as a hint rather than
+    // as fact; see storeNotify.ts.
+    const notify = path.match(/^storeNotify\/(google|apple)\/(.+)$/);
+    if (notify) {
+      if (request.method !== "POST") throw new HttpsError("not-found", "No such route.");
+      return await handleStoreNotification(env, notify[1]!, notify[2]!, request);
     }
 
     if (path === "photos") {
