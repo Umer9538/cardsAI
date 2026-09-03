@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/design_canvas.dart';
+import '../../../core/notifications/meal_reminders.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../premium/presentation/widgets/premium_widgets.dart';
@@ -44,9 +45,19 @@ class NotificationSettingsScreen extends ConsumerWidget {
                   SettingsToggleRow(
                     label: label,
                     value: values[key] ?? false,
-                    onChanged: (v) => ref
-                        .read(notificationSettingsRepositoryProvider)
-                        .setEnabled(key, enabled: v),
+                    // Meal reminders go through the coordinator, which asks
+                    // for OS permission and rewrites the schedule. It writes
+                    // the preference itself, and only once permission is
+                    // actually granted — so a refused prompt leaves the row
+                    // off rather than claiming notifications are on while the
+                    // OS silently drops every one.
+                    onChanged: key == MealReminders.key
+                        ? (v) => ref
+                            .read(mealRemindersProvider)
+                            .setEnabled(enabled: v)
+                        : (v) => ref
+                            .read(notificationSettingsRepositoryProvider)
+                            .setEnabled(key, enabled: v),
                   ),
               ],
             ),

@@ -27,6 +27,8 @@ import '../../data/worker/r2_photo_repository.dart';
 import '../../data/worker/worker_food_repository.dart';
 import '../app_config.dart';
 import '../models/models.dart';
+import '../notifications/meal_reminders.dart';
+import '../notifications/reminder_service.dart';
 import '../nutrition/target_calculator.dart';
 import '../repositories/repositories.dart';
 
@@ -456,3 +458,13 @@ final unreadNotificationCountProvider = Provider<int>(
 final notificationSettingsProvider = StreamProvider<Map<String, bool>>(
   (ref) => ref.watch(notificationSettingsRepositoryProvider).watch(),
 );
+
+/// The local-notification plugin, wrapped.
+///
+/// A `Provider` rather than a singleton so a test can override it — the real
+/// one talks to a platform channel that does not exist under `flutter test`.
+final reminderServiceProvider = Provider<ReminderService>(
+  (ref) => ReminderService(),
+);
+
+final mealRemindersProvider = Provider<MealReminders>(MealReminders.new);

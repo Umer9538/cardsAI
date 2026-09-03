@@ -61,6 +61,11 @@ dependencies:
   # prompted, which is both a review flag and unrequested revenue.
   app_tracking_transparency: ^2.0.6
   in_app_purchase: ^3.3.0
+  # Local reminders only. No firebase_messaging: nothing here needs a server to
+  # decide when to notify, and adding push would mean an APNs certificate, a
+  # token registry, and a second thing that can wake the app.
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.1
   http: ^1.6.0
   mobile_scanner: ^7.4.0
 

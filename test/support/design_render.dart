@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_reminder_service.dart';
+
 // Helpers for rendering a screen at its Figma artboard size and writing the
 // result to `build/`, so it can be diffed against an export from the design
 // file.
@@ -51,6 +53,10 @@ Future<Widget Function(Widget)> designScopeBuilder() async {
   final overrides = [
     jsonStoreProvider.overrideWithValue(store),
     backendProvider.overrideWithValue(AppBackend.local),
+    // The real one reaches a platform channel that does not exist here. It
+    // already fails softly, but softly and repeatedly, which buries the test
+    // output.
+    reminderServiceProvider.overrideWithValue(FakeReminderService()),
   ];
   return (child) => ProviderScope(overrides: overrides, child: child);
 }
