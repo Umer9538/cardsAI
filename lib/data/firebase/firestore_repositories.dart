@@ -335,7 +335,7 @@ class FirestoreDietRepository with _UserScoped implements DietRepository {
 
   /// Bumped whenever the catalogue changes in a way that must reach accounts
   /// that already exist.
-  static const int _catalogueVersion = 3;
+  static const int _catalogueVersion = 4;
 
   CollectionReference<Map<String, dynamic>> get _prefs => collection('prefs');
 }

@@ -1,6 +1,7 @@
 /// One import for the whole domain.
 library;
 
+export 'planned_meal.dart';
 export 'unit_system.dart';
 export 'app_notification.dart';
 export 'daily_log.dart';

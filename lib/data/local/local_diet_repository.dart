@@ -23,7 +23,7 @@ class LocalDietRepository implements DietRepository {
 
   /// Bumped when the catalogue changes in a way that must reach an install
   /// that already has a stored copy.
-  static const int catalogueVersion = 3;
+  static const int catalogueVersion = 4;
 
   /// Rebuilds the list from the catalogue, keeping this user's own flags.
   ///

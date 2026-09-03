@@ -1,4 +1,5 @@
 import 'package:carbsai/data/local/json_store.dart';
+import 'package:carbsai/core/models/models.dart';
 import 'package:carbsai/data/local/local_diet_repository.dart';
 import 'package:carbsai/data/local/seed_data.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -70,5 +71,43 @@ void main() {
 
     final keto = SeedData.dietPlans.firstWhere((p) => p.id == 'plan-keto');
     expect(keto.goal.toLowerCase(), isNot(contains('heart health')));
+  });
+
+  test('every plan is an actual diet, not four numbers', () {
+    // A plan used to be calories and three macros, which is a target. Nothing
+    // said what to eat, so Keto and Vegan differed only in their bar lengths.
+    for (final plan in SeedData.dietPlans) {
+      expect(plan.eat, isNotEmpty, reason: '${plan.id} lists no foods');
+      expect(plan.limit, isNotEmpty, reason: '${plan.id} limits nothing');
+      expect(plan.day.length, 4, reason: '${plan.id} has no full day');
+      for (final meal in plan.day) {
+        expect(meal.items, isNotEmpty);
+        expect(meal.nutrition.calories, greaterThan(0));
+      }
+    }
+  });
+
+  test("the plan's macros are its day's macros", () {
+    // Derived rather than asserted: the plan used to state a round number that
+    // its own example day did not add up to, which is the same class of
+    // invention as the pre-favourited flags.
+    for (final plan in SeedData.dietPlans) {
+      final day = plan.day.fold(0.0, (sum, m) => sum + m.nutrition.calories);
+      expect(day, closeTo(plan.nutrition.calories, 1));
+    }
+  });
+
+  test('scaling a plan leaves its example day alone', () {
+    final keto = SeedData.dietPlans.firstWhere((p) => p.id == 'plan-keto');
+    final scaled = keto.scaledTo(const Nutrition(calories: 3000));
+
+    // The targets move; the day does not. Every item name carries its own
+    // portion, so scaling the numbers would contradict the words.
+    expect(scaled.nutrition.calories, 3000);
+    expect(
+      scaled.day.fold(0.0, (s, m) => s + m.nutrition.calories),
+      closeTo(keto.day.fold(0.0, (s, m) => s + m.nutrition.calories), 1),
+    );
+    expect(scaled.day.first.items.first.name, keto.day.first.items.first.name);
   });
 }

@@ -316,6 +316,28 @@ never appeared, and a corrected description never propagated. Content now comes 
 are the user's and the catalogue has no opinion about them. `catalogueVersion` gates a
 one-time reset of those flags for accounts seeded under v1.
 
+**A plan is a diet, not four numbers.** Until this, a plan was calories and three macros —
+a *target* — and nothing on the screen said what to eat, so Keto and Vegan differed only in
+their bar lengths. `DietPlan` now carries `eat`, `limit` and a `day` of `PlannedMeal`s.
+
+The day's items are `FoodItem`s rather than strings, and that is the point: the diary already
+accepts them, so **"Log this meal" writes the plan's breakfast straight into today** instead of
+making someone retype it into the search box. A plan you can follow with the app is the
+difference between a diet and a brochure.
+
+Two things that look like details and are not:
+
+- **The plan's macros are derived from its own day.** They used to be round numbers the day
+  did not add up to — the same class of invention as the pre-favourited flags.
+- **`scaledTo` does not scale the day.** Every item name carries its own portion — "Walnuts,
+  20 g", "Roti, 2 medium" — so multiplying the numbers while leaving the words alone produces
+  a card that contradicts itself. The macro cards are the user's target; the day states its own
+  total and says to scale the portions.
+
+The whole lower half of the detail screen is **one `Column`**, not positioned blocks. The
+first attempt gave each section a guessed height, the "Eat" chips wrapped to two rows on a
+narrow phone, and the day's heading drew straight through them.
+
 **A plan's goal lives on the plan.** `DietDetailScreen` carried it as a *constructor default*,
 so every plan in the catalogue was described as "Heart Health, Weight Maintenance" — including
 the ketogenic one, which is neither. It is a `DietPlan` field now, and the test asserts the

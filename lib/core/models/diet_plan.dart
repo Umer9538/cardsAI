@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'nutrition.dart';
+import 'planned_meal.dart';
 
 /// A published diet plan, as shown on the Diets and Favorites screens.
 @immutable
@@ -12,6 +13,9 @@ class DietPlan {
     required this.nutrition,
     this.description = '',
     this.goal = '',
+    this.eat = const [],
+    this.limit = const [],
+    this.day = const [],
     this.isFavorite = false,
     this.isMine = false,
     this.imageHeight = cardImageHeight,
@@ -36,6 +40,17 @@ class DietPlan {
   /// catalogue was described as "Heart Health, Weight Maintenance" — including
   /// the ketogenic one, which is neither.
   final String goal;
+
+  /// What the plan is built on, and what it keeps low.
+  ///
+  /// Two short lists rather than prose, because this is the part people scan
+  /// before deciding — "can I actually eat like this" is answered by seeing the
+  /// food, not by reading a paragraph about metabolic pathways.
+  final List<String> eat;
+  final List<String> limit;
+
+  /// An example day. The thing that makes this a diet rather than a target.
+  final List<PlannedMeal> day;
 
   /// Saved to Favorites.
   final bool isFavorite;
@@ -76,6 +91,13 @@ class DietPlan {
 
     final factor = targets.calories / energy;
     return copyWith(
+      // The day is deliberately **not** scaled.
+      //
+      // Each item's name carries its own portion — "Walnuts, 20 g", "Roti, 2
+      // medium" — so multiplying the numbers while leaving the name alone
+      // produces a card that contradicts itself. The macro cards above are the
+      // user's target; the day is an illustration of what eating this way looks
+      // like, and the screen shows its own total so nothing is implied.
       nutrition: Nutrition(
         calories: targets.calories,
         protein: (nutrition.protein * factor).roundToDouble(),
@@ -94,6 +116,9 @@ class DietPlan {
     Nutrition? nutrition,
     String? description,
     String? goal,
+    List<String>? eat,
+    List<String>? limit,
+    List<PlannedMeal>? day,
     bool? isFavorite,
     bool? isMine,
     double? imageHeight,
@@ -105,6 +130,9 @@ class DietPlan {
         nutrition: nutrition ?? this.nutrition,
         description: description ?? this.description,
         goal: goal ?? this.goal,
+        eat: eat ?? this.eat,
+        limit: limit ?? this.limit,
+        day: day ?? this.day,
         isFavorite: isFavorite ?? this.isFavorite,
         isMine: isMine ?? this.isMine,
         imageHeight: imageHeight ?? this.imageHeight,
@@ -117,6 +145,9 @@ class DietPlan {
         'nutrition': nutrition.toJson(),
         'description': description,
         'goal': goal,
+        'eat': eat,
+        'limit': limit,
+        'day': [for (final meal in day) meal.toJson()],
         'isFavorite': isFavorite,
         'isMine': isMine,
         'imageHeight': imageHeight,
@@ -131,6 +162,16 @@ class DietPlan {
         ),
         description: json['description'] as String? ?? '',
         goal: json['goal'] as String? ?? '',
+        eat: [
+          for (final v in (json['eat'] as List? ?? const [])) v as String,
+        ],
+        limit: [
+          for (final v in (json['limit'] as List? ?? const [])) v as String,
+        ],
+        day: [
+          for (final v in (json['day'] as List? ?? const []))
+            PlannedMeal.fromJson((v as Map).cast<String, dynamic>()),
+        ],
         isFavorite: json['isFavorite'] as bool? ?? false,
         isMine: json['isMine'] as bool? ?? false,
         imageHeight:
