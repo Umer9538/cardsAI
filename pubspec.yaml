@@ -93,7 +93,12 @@ flutter:
     - assets/images/auth/
     - assets/images/premium/
     - assets/images/app/
-    - assets/images/brand/
+    # Named file, not the directory. `brand/` also holds the icon masters —
+    # app_icon_1024.png and adaptive_foreground_432.png — which every one of
+    # the 25 platform icon files is generated from. They belong in the repo and
+    # not in the download: declaring the directory shipped half a megabyte of
+    # source art to every user.
+    - assets/images/brand/mascot.png
 
   fonts:
     # Static instances baked from Google's SpaceGrotesk[wght] variable font.

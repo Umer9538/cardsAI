@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and below (android:fullBackupContent).
+
+  Auto Backup is on by default and copies the app's whole data directory to the
+  user's Google Drive, then restores it onto any device they sign into. For this
+  app that would carry the Firebase Auth session with it: a restored backup
+  signs the new device in as the old one, without a password. That is a session
+  handed to whoever restores it.
+
+  Excluded rather than switched off entirely — the preferences worth keeping are
+  the harmless ones, and losing them on a device change is a small annoyance.
+-->
+<full-backup-content>
+  <!-- The signed-in session. -->
+  <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store.xml" />
+  <exclude domain="sharedpref" path="com.google.android.gms.appid.xml" />
+
+  <!-- Everything the local backend writes, including the session document.
+       Firestore's offline cache also lives under files/ and is per-account. -->
+  <exclude domain="database" path="." />
+  <exclude domain="file" path="." />
+</full-backup-content>
