@@ -278,13 +278,50 @@ class ScanResultScreen extends ConsumerWidget {
                     ),
                   ),
 
+                // Nothing was recognised.
+                //
+                // The model correctly returns no items for a photo with no
+                // food in it — but the screen used to render its shell around
+                // that: a 0 kcal card, four empty macro bars and a live-looking
+                // CTA, with nothing saying what had happened. Seen on a device
+                // by photographing a carpet. An estimate of nothing is the one
+                // result that has to explain itself, because the alternative
+                // reads as the app having failed.
+                if (foods.isEmpty && !state.isLoading && !state.hasError)
+                  Positioned(
+                    left: 20,
+                    top: _gridTop + _gridHeight + _gap,
+                    width: 388,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'No food found in that photo',
+                          style: AppTypography.cardTitle(),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          scan?.clarifyingQuestion ??
+                              'Try again with the plate filling more of the '
+                                  'frame, or describe the meal in words.',
+                          style: AppTypography.socialLabel(
+                            color: AppColors.placeholder,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // The design has no low-confidence treatment, so this sits
                 // under the list rather than on the items themselves.
                 //
                 // The model's own question, when it asked one, is more useful
                 // than the generic caveat — it names the thing that would
                 // actually change the numbers.
-                if (scan != null && scan.confidence != FoodConfidence.high)
+                if (foods.isNotEmpty &&
+                    scan != null &&
+                    scan.confidence != FoodConfidence.high)
                   Positioned(
                     left: 20,
                     top: _gridTop +
@@ -340,12 +377,21 @@ class _CaptureImage extends StatelessWidget {
   final String? path;
 
   /// The artboard's own photograph, used wherever there is nothing better.
-  static Widget _standIn() => Image.asset(
-        'assets/images/app/scan_food.png',
-        width: 428,
-        height: 351,
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
+  /// What stands in when there is no photograph.
+  ///
+  /// A neutral panel, not the design's own photograph of a meal. The stock
+  /// plate used to fill in for a searched food, a described one, and a packshot
+  /// still loading — which put a picture of fajitas above "Chicken breast,
+  /// stewed" and read as the app having recognised that dish. It had not.
+  static Widget _standIn() => ColoredBox(
+        color: AppColors.inkMuted,
+        child: Center(
+          child: Icon(
+            Icons.restaurant_menu,
+            size: 56,
+            color: AppColors.placeholder.withValues(alpha: 0.5),
+          ),
+        ),
       );
 
   @override
@@ -392,7 +438,24 @@ class _CaptureImage extends StatelessWidget {
       );
     }
 
-    final isAsset = source == null || source.startsWith('assets/');
+    // No photograph at all — a database search, or a meal typed in words.
+    //
+    // This used to fall back to the design's own photograph of fajitas, so
+    // "Chicken breast, stewed" was crowned with a picture of something else
+    // entirely. A stock photo above a number is a claim that the app
+    // recognised that dish; it did not, and looking like it did is worse than
+    // showing nothing.
+    if (source == null) {
+      return Positioned(
+        left: 0,
+        top: 0,
+        width: 428,
+        height: 351,
+        child: _standIn(),
+      );
+    }
+
+    final isAsset = source.startsWith('assets/');
     return Positioned(
       left: 0,
       top: 0,
@@ -400,7 +463,7 @@ class _CaptureImage extends StatelessWidget {
       height: 351,
       child: isAsset
           ? Image.asset(
-              path ?? 'assets/images/app/scan_food.png',
+              path!,
               width: 428,
               height: 351,
               fit: BoxFit.cover,
@@ -412,14 +475,11 @@ class _CaptureImage extends StatelessWidget {
               height: 351,
               fit: BoxFit.cover,
               filterQuality: FilterQuality.high,
-              // A capture can be deleted from under us; the design's photo is a
-              // better fallback than a broken-image glyph.
-              errorBuilder: (_, _, _) => Image.asset(
-                'assets/images/app/scan_food.png',
-                width: 428,
-                height: 351,
-                fit: BoxFit.cover,
-              ),
+              // A capture can be deleted from under us. The neutral panel,
+              // not the design's photograph: a picture of a meal nobody
+              // photographed is a claim, and a missing file is not a reason to
+              // make one.
+              errorBuilder: (_, _, _) => _standIn(),
             ),
     );
   }
@@ -556,24 +616,38 @@ class _AnalysingOverlayState extends State<_AnalysingOverlay>
   }
 }
 
-/// The capture, or the design's stand-in, filling whatever box it is given.
+/// The capture, filling whatever box it is given.
+///
+/// The whole point of this overlay is that it shows *your* plate being read.
+/// It used to fall back to the design's photograph when there was no capture —
+/// so describing a meal in words, or searching for one, showed a stranger's
+/// fajitas sweeping under a scan line. A neutral panel says "working" without
+/// claiming to have seen anything.
 class _CapturePreview extends StatelessWidget {
   const _CapturePreview({this.path});
 
   final String? path;
 
+  static Widget _blank() => const ColoredBox(color: AppColors.inkMuted);
+
   @override
   Widget build(BuildContext context) {
     final p = path;
-    if (p == null || p.startsWith('assets/')) {
-      return Image.asset(p ?? 'assets/images/app/scan_food.png',
-          fit: BoxFit.cover);
+    if (p == null) return _blank();
+    if (p.startsWith('http')) {
+      return Image.network(
+        p,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _blank(),
+      );
+    }
+    if (p.startsWith('assets/')) {
+      return Image.asset(p, fit: BoxFit.cover);
     }
     return Image.file(
       File(p),
       fit: BoxFit.cover,
-      errorBuilder: (_, _, _) =>
-          Image.asset('assets/images/app/scan_food.png', fit: BoxFit.cover),
+      errorBuilder: (_, _, _) => _blank(),
     );
   }
 }

@@ -184,6 +184,10 @@ class AppRoot extends ConsumerStatefulWidget {
 class _AppRootState extends ConsumerState<AppRoot> with WidgetsBindingObserver {
   _Stage _stage = _Stage.splash;
 
+  /// When the app last went to the background. See
+  /// [didChangeAppLifecycleState].
+  DateTime? _leftAt;
+
   /// Whether the personalisation quiz has been dealt with, either way.
   ///
   /// Read on every build rather than latched in `initState`. Deleting an
@@ -214,10 +218,25 @@ class _AppRootState extends ConsumerState<AppRoot> with WidgetsBindingObserver {
   /// camera and back does not cost an ad.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _leftAt = DateTime.now();
+      return;
+    }
     if (state != AppLifecycleState.resumed) return;
     if (_stage != _Stage.ready) return;
     if (ref.read(authStateProvider).value == null) return;
-    ref.read(adsServiceProvider).showAppOpenIfReady();
+
+    // How long the app was actually away, so a two-second system dialog is not
+    // mistaken for someone opening the app. Null on the first resume of a
+    // launch, which the service treats as "not an app-open" — the ad is for
+    // *returning*, and there is nothing to return from yet.
+    final leftAt = _leftAt;
+    _leftAt = null;
+    ref.read(adsServiceProvider).showAppOpenIfReady(
+          awayFor: leftAt == null
+              ? Duration.zero
+              : DateTime.now().difference(leftAt),
+        );
   }
 
   /// Splash is done. Returning users skip the carousel.

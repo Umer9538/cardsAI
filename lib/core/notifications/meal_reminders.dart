@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../ads/ads_providers.dart';
 import '../providers/providers.dart';
 import 'reminder_schedule.dart';
 
@@ -18,12 +19,27 @@ class MealReminders {
   static const String key = 'mealReminders';
 
   /// Rewrites the schedule from the last four weeks of the diary.
+  ///
+  /// Also reconciles the preference with the OS. Permission can be withdrawn in
+  /// system settings at any time and nothing tells the app; left alone, the
+  /// toggle goes on saying "on" while Android drops every notification. When
+  /// that has happened the preference is turned **off**, so what Settings shows
+  /// is what the person will actually get.
   Future<void> refresh() async {
     final settings = await _ref
         .read(notificationSettingsRepositoryProvider)
         .watch()
         .first;
-    await _apply(enabled: settings[key] ?? false);
+    var enabled = settings[key] ?? false;
+
+    if (enabled && !await _ref.read(reminderServiceProvider).hasPermission()) {
+      enabled = false;
+      await _ref
+          .read(notificationSettingsRepositoryProvider)
+          .setEnabled(key, enabled: false);
+    }
+
+    await _apply(enabled: enabled);
   }
 
   /// Handles the toggle.
@@ -38,6 +54,9 @@ class MealReminders {
   /// notification is worse than one that says off.
   Future<bool> setEnabled({required bool enabled}) async {
     if (enabled) {
+      // The system permission sheet pauses the app; coming back from it is not
+      // someone opening the app.
+      _ref.read(adsServiceProvider).suppressNextResume();
       final granted = await _ref.read(reminderServiceProvider).requestPermission();
       if (!granted) {
         await _ref.read(reminderServiceProvider).cancelAll();

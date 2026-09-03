@@ -61,6 +61,33 @@ class ReminderService {
     }
   }
 
+  /// Whether notifications are currently allowed — without prompting.
+  ///
+  /// Permission can be taken away after it was given, in system settings, and
+  /// nothing tells the app when that happens. Without this the toggle keeps
+  /// saying "on" over an OS that is dropping every notification, which is the
+  /// exact state this feature is written to avoid.
+  Future<bool> hasPermission() async {
+    if (!await _init()) return false;
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (android != null) {
+        return await android.areNotificationsEnabled() ?? false;
+      }
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      if (ios != null) {
+        final granted = await ios.checkPermissions();
+        return granted?.isEnabled ?? false;
+      }
+      return false;
+    } catch (error) {
+      debugPrint('permission check failed: $error');
+      return false;
+    }
+  }
+
   /// Asks for permission. Returns false if it was refused or is unavailable.
   Future<bool> requestPermission() async {
     if (!await _init()) return false;

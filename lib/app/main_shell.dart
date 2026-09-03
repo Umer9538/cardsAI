@@ -168,15 +168,26 @@ class _MainShellState extends ConsumerState<MainShell>
             messenger.showSnackBar(
               SnackBar(content: Text('${meal.name} saved to favourites.')),
             );
-            if (context.mounted) {
-              Navigator.of(context).popUntil((r) => r.isFirst);
-            }
+            if (context.mounted) _afterLogging(context);
           },
-          onAdd: () => Navigator.of(context).popUntil((r) => r.isFirst),
+          onAdd: () => _afterLogging(context),
           onUpgrade: _openPremium,
         ),
       ),
     );
+  }
+
+  /// Closes the scan flow and shows the day it just changed.
+  ///
+  /// Scan is a pushed route over whichever tab was showing, so logging a meal
+  /// from Settings used to drop the person back on Settings — having just
+  /// added something to a diary they could not see. The point of logging is the
+  /// day updating; land where that is visible.
+  void _afterLogging(BuildContext context) {
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    // Today, not whatever day was being browsed: the meal was logged now.
+    ref.read(selectedDateProvider.notifier).today();
+    if (_tab != AppTab.home) setState(() => _tab = AppTab.home);
   }
 
   void _openPremium() {

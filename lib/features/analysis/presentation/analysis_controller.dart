@@ -183,29 +183,49 @@ class AnalysisSummary {
     return (fat: fat / energy, carbs: carbs / energy, protein: protein / energy);
   }
 
+  /// How far a share may sit from its target before it is worth mentioning.
+  ///
+  /// Six points. Tight enough that a real drift is named, loose enough that a
+  /// single unusual meal in a week does not produce a verdict.
+  static const double macroTolerance = 0.06;
+
   /// The one-line read under the Macro Distribution heading.
   ///
   /// Deliberately descriptive, never prescriptive — it reports what the numbers
   /// say and does not tell anyone what to eat.
+  ///
+  /// It reports on **all three** macros. It used to test only "protein low" and
+  /// "fat high" and fall through to "your split is close to your plan"
+  /// otherwise — so a day of nothing but chicken breast, 0% carbohydrate
+  /// against an 18% target, was congratulated for being close to a plan it
+  /// missed by eighteen points. A summary that says everything is fine
+  /// whenever it has no rule for what went wrong is worse than no summary.
   String get macroInsight {
     if (isEmpty) return 'Log a few meals to see your split.';
 
     final share = macroShare;
-    final targetEnergy = targets.protein * 4 +
-        targets.carbs * 4 +
-        targets.fat * 9;
+    final targetEnergy =
+        targets.protein * 4 + targets.carbs * 4 + targets.fat * 9;
     if (targetEnergy <= 0) return 'Your macro split across this period.';
 
-    final proteinTarget = targets.protein * 4 / targetEnergy;
-    final fatTarget = targets.fat * 9 / targetEnergy;
+    // Signed gaps, in percentage points of energy.
+    final gaps = <({String noun, double gap})>[
+      (noun: 'protein', gap: share.protein - targets.protein * 4 / targetEnergy),
+      (noun: 'carbs', gap: share.carbs - targets.carbs * 4 / targetEnergy),
+      (noun: 'fat', gap: share.fat - targets.fat * 9 / targetEnergy),
+    ];
 
-    if (share.protein < proteinTarget - 0.05) {
-      return 'You’re consistently low on protein.';
+    // The biggest miss is the one worth a sentence; naming three at once is a
+    // paragraph nobody reads.
+    final worst = gaps.reduce((a, b) => a.gap.abs() >= b.gap.abs() ? a : b);
+    if (worst.gap.abs() <= macroTolerance) {
+      return 'Your split is close to your plan.';
     }
-    if (share.fat > fatTarget + 0.08) {
-      return 'Fat is running higher than your plan.';
-    }
-    return 'Your split is close to your plan.';
+
+    final points = (worst.gap.abs() * 100).round();
+    return worst.gap < 0
+        ? 'Running $points points under your plan on ${worst.noun}.'
+        : 'Running $points points over your plan on ${worst.noun}.';
   }
 }
 

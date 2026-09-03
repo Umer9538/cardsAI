@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/ads/ads_providers.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/repositories/repositories.dart';
 
@@ -41,6 +42,10 @@ class SubscriptionController extends AsyncNotifier<void> {
       );
       return Future.value(false);
     }
+    // The store's own sheet — password, biometric, payment method — routinely
+    // outlasts the away-time backstop. An ad on the way back from *paying to
+    // remove ads* would be the worst moment in the app.
+    ref.read(adsServiceProvider).suppressNextResume();
     return _run(
       () => ref.read(subscriptionRepositoryProvider).purchase(id),
     );

@@ -39,3 +39,19 @@ abstract final class NutritionFormat {
         'Fat: ${grams(n.fat)}',
       ];
 }
+
+/// Counted nouns, so the app stops saying "1 days".
+///
+/// Small, but it is the kind of thing a reader notices immediately and reads as
+/// carelessness — and this app's whole argument is that its numbers are looked
+/// after. English only, which is what the app ships in; a real localisation
+/// would replace this with ICU plural rules rather than extend it.
+abstract final class Plural {
+  /// "1 day", "3 days". [plural] defaults to [singular] + "s".
+  static String of(int count, String singular, [String? plural]) =>
+      '$count ${count == 1 ? singular : (plural ?? '${singular}s')}';
+
+  /// Just the noun, for when the number is rendered separately.
+  static String word(int count, String singular, [String? plural]) =>
+      count == 1 ? singular : (plural ?? '${singular}s');
+}

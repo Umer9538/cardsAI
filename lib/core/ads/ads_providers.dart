@@ -26,7 +26,10 @@ final adsServiceProvider = Provider<AdsService>((ref) {
   if (!ref.watch(adsEnabledProvider) || ref.watch(isPremiumProvider)) {
     return const NoAdsService();
   }
-  final service = AdMobService();
+  // The store is what makes the frequency caps survive a cold start. Without
+  // it, force-closing the app reset both the cooldown and the two-a-day
+  // budget — and a calorie tracker is closed and reopened all day by design.
+  final service = AdMobService(ref.watch(jsonStoreProvider));
   ref.onDispose(service.dispose);
   // Fire and forget: nothing should wait on the ad SDK to render a screen.
   service.initialize();
@@ -56,7 +59,12 @@ class RewardController extends AsyncNotifier<void> {
   Future<int?> watchForScans() async {
     state = const AsyncLoading();
 
-    final earned = await ref.read(adsServiceProvider).showRewarded();
+    final ads = ref.read(adsServiceProvider);
+    // A rewarded ad runs longer than the away-time backstop, so without this
+    // the resume afterwards serves an app-open ad on top of it. Two ads back
+    // to back is the single most-cited reason people abandon a tracker.
+    ads.suppressNextResume();
+    final earned = await ads.showRewarded();
     if (!earned) {
       state = const AsyncData(null);
       return null;
