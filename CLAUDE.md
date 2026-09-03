@@ -1164,6 +1164,33 @@ forget, so a failed deletion looked identical to a successful one.
   it, so a new logo means replacing one file and re-running the generation rather
   than editing icons by hand.
 
+## The legal copy describes the app, and is not generated any more
+
+`legal_content.dart` says it was generated from the artboards. It was, and the
+generated copy was wrong in a way that would have failed store review: the privacy
+policy named the operator **"us."** — a placeholder never filled — and disclosed
+sharing with *"Google Fit, Apple Health, if you authorize them"*, neither of which
+this app integrates with. It disclosed nothing about the thing that actually matters:
+**a photograph of the user's food leaves the device and goes to a third-party AI
+provider.** Both stores check a policy against the app's declared data practices.
+
+It is hand-written now and describes what this repository does — Firebase, Cloudflare,
+OpenRouter, USDA FDC, Open Food Facts, AdMob, and no analytics SDK. **If you change
+where data goes, change this in the same commit.**
+
+`LegalOperator` holds the three things a policy cannot be written without — legal
+name, contact inbox, jurisdiction — and all three are **deliberately obvious
+placeholders**. A plausible-looking wrong support address ships silently; these do
+not survive a read-through. `legal_content_test.dart` asserts the disclosures are
+present and the dead integrations are gone.
+
+The page's canvas height is an estimate, because `DesignCanvas` needs a height before
+the text is laid out. The old estimate assumed 58 characters a line; 15pt Space
+Grotesk wraps at about 46 across a 388pt column, so real paragraphs ran 98pt past the
+end of the canvas — clipping the contact section, which is the one part of a policy
+that has to be reachable. The test asserts the rendered column against the reserved
+height, and fails on the old figure.
+
 ## Firebase setup still needed
 
 1. **Authentication → Sign-in method → enable Email/Password.** Until then sign-in

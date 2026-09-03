@@ -1,9 +1,49 @@
-// GENERATED from the Figma artboards — do not hand-edit.
-//
 // Long-form copy for Figma frames `43_Terms and Conditions` (2002:804),
-// `44_Privacy Policy` (2002:781) and `45_Help` (2002:757). Extracted straight
-// from the design file so the wording matches exactly; re-extract rather than
-// retyping if the copy changes.
+// `44_Privacy Policy` (2002:781) and `45_Help` (2002:757).
+//
+// This file WAS generated from the artboards. It is hand-written now, and
+// deliberately so: the extracted copy described a different app.
+//
+// The privacy policy said the operator's name was "us." — a placeholder that
+// was never filled — and disclosed sharing with "Google Fit, Apple Health, if
+// you authorize them", neither of which this app integrates with. Meanwhile it
+// disclosed none of what actually happens: a photograph of the user's food
+// leaves the device and is sent to a third-party AI provider. That is the most
+// significant thing this app does with personal data, and the one thing the
+// policy did not mention. Both stores' review processes check a policy against
+// the app's declared data practices, and an inaccurate policy is a rejection
+// as well as a legal exposure.
+//
+// The copy below describes what the code in this repository actually does. If
+// you change where data goes — a new provider, an analytics SDK, a health
+// integration — change this too, in the same commit.
+//
+// NOT LEGAL ADVICE. Have a lawyer read it before release, and fill in
+// [LegalOperator] first.
+
+/// The three facts a policy cannot be written without.
+///
+/// **All three are placeholders and must be replaced before release.** They are
+/// deliberately obvious rather than plausible: a wrong-but-plausible support
+/// address ships silently, whereas this one does not survive a read-through.
+///
+/// The email must be a real inbox someone reads. Both stores require a working
+/// contact route for privacy requests, and the GDPR gives people a right to a
+/// reply within a month.
+abstract final class LegalOperator {
+  /// The legal entity that operates the app — a company or a named individual.
+  static const String name = 'REPLACE-WITH-YOUR-LEGAL-NAME';
+
+  /// A monitored inbox for privacy and support requests.
+  static const String email = 'REPLACE-WITH-YOUR-SUPPORT-EMAIL';
+
+  /// Whose law governs, e.g. "England and Wales", "Pakistan".
+  static const String jurisdiction = 'REPLACE-WITH-YOUR-JURISDICTION';
+
+  /// Shown at the top of both documents. Update whenever the copy changes —
+  /// a policy whose date predates the practices it describes reads as stale.
+  static const String updated = '3 September 2026';
+}
 
 /// One block of a legal page. [isHeading] blocks are the 17pt section titles;
 /// the rest is 15pt body copy.
@@ -14,43 +54,269 @@ class LegalBlock {
   final bool isHeading;
 }
 
-/// Terms and Conditions — Figma frame content.
+/// Terms and Conditions.
 const List<LegalBlock> termsAndConditions = [
-  LegalBlock('Last Updated: 12 June,2024'),
-  LegalBlock('Welcome to Carbsai, your AI-powered nutrition assistant. Please read these Terms and Conditions carefully before using the Carbsai mobile application operated by us.'),
-  LegalBlock('By using Carbsai, you agree to be bound by these Terms. If you do not agree with any part of the Terms, please do not access or use the App.'),
-  LegalBlock('1. Eligibility', isHeading: true),
-  LegalBlock('You must be at least 13 years old to use Carbsai. If you are under 18, you may use the App only with parental or guardian consent.'),
-  LegalBlock('2. Health Disclaimer', isHeading: true),
-  LegalBlock('Carbsai provides calorie tracking, dietary insights, and AI-generated meal recommendations. However:'),
-  LegalBlock('Carbsai is not a medical or healthcare provider.'),
-  LegalBlock('The App does not offer medical advice or substitute professional consultation.'),
-  LegalBlock('Always consult your doctor or a qualified health provider before starting any diet or fitness program, especially if you have any medical conditions.'),
-  LegalBlock('3. User Accounts', isHeading: true),
-  LegalBlock('When you create an account with us:'),
-  LegalBlock('You agree to provide accurate, complete, and updated information.'),
-  LegalBlock('You are responsible for maintaining the confidentiality of your login credentials.'),
-  LegalBlock('You may not share your account or impersonate another person.'),
+  LegalBlock('Last updated: ${LegalOperator.updated}'),
+  LegalBlock(
+    'Carbsai is operated by ${LegalOperator.name}. Please read these Terms '
+    'before using the app. By creating an account or using Carbsai, you agree '
+    'to them. If you do not agree, do not use the app.',
+  ),
+
+  LegalBlock('1. Who can use Carbsai', isHeading: true),
+  LegalBlock(
+    'You must be at least 13 years old. If you are under 18, use Carbsai only '
+    'with the consent of a parent or guardian. Carbsai is not designed for '
+    'children and we do not knowingly collect data from anyone under 13.',
+  ),
+
+  LegalBlock('2. Carbsai is not medical advice', isHeading: true),
+  LegalBlock(
+    'Carbsai estimates the nutrition in your food and suggests calorie and '
+    'macronutrient targets. It is not a medical device, not a healthcare '
+    'provider, and not a substitute for professional advice.',
+  ),
+  LegalBlock(
+    '• Speak to a doctor or a registered dietitian before starting any diet, '
+    'especially if you are pregnant, have an eating disorder, diabetes, or any '
+    'other medical condition.',
+  ),
+  LegalBlock(
+    '• Do not use Carbsai to manage a medical condition or to decide on '
+    'medication.',
+  ),
+
+  LegalBlock('3. Estimates are estimates', isHeading: true),
+  LegalBlock(
+    'Nutrition figures produced from a photograph or a description are '
+    'generated by an AI model and are approximate. Published evaluations of '
+    'the best vision models on food photographs report average errors of '
+    'roughly a third on calories and higher on individual macronutrients. '
+    'Carbsai shows how confident it is and lets you correct any figure; '
+    'corrected values are the ones your diary counts. Treat every number as a '
+    'guide, not a measurement.',
+  ),
+
+  LegalBlock('4. Your account', isHeading: true),
+  LegalBlock('• Give accurate information and keep it up to date.'),
+  LegalBlock(
+    '• Keep your password to yourself. You are responsible for what happens '
+    'under your account.',
+  ),
+  LegalBlock('• Do not share an account, or use somebody else’s.'),
+  LegalBlock(
+    '• You can delete your account at any time from Settings → More '
+    '→ Delete Account. This removes your account and your data. It cannot '
+    'be undone.',
+  ),
+
+  LegalBlock('5. Subscriptions and payment', isHeading: true),
+  LegalBlock(
+    'Carbsai Premium is sold as an auto-renewing subscription through the '
+    'Apple App Store or Google Play. The store takes the payment, not us.',
+  ),
+  LegalBlock(
+    '• Payment is charged to your store account at confirmation of purchase.',
+  ),
+  LegalBlock(
+    '• The subscription renews automatically unless you cancel at least 24 '
+    'hours before the end of the current period, and your account is charged '
+    'for renewal within that window.',
+  ),
+  LegalBlock(
+    '• Manage or cancel a subscription in your App Store or Google Play '
+    'account settings. Uninstalling the app does not cancel it.',
+  ),
+  LegalBlock(
+    '• Refunds are handled by the store under its own policy. We cannot issue '
+    'them.',
+  ),
+  LegalBlock(
+    '• Prices may change. We will tell you before a change affects a renewal.',
+  ),
+
+  LegalBlock('6. Free scans, ads and rewards', isHeading: true),
+  LegalBlock(
+    'Free accounts get a monthly allowance of AI scans. You can earn extra '
+    'scans by watching a rewarded advert, up to a daily limit. Searching the '
+    'food database, scanning a barcode and entering food by hand are '
+    'unlimited and always free. Premium accounts see no adverts at all.',
+  ),
+
+  LegalBlock('7. Acceptable use', isHeading: true),
+  LegalBlock('Do not:'),
+  LegalBlock(
+    '• Try to break, overload, reverse-engineer or gain unauthorised access to '
+    'the app or its servers.',
+  ),
+  LegalBlock(
+    '• Use automated tools to make scans, or otherwise work around the scan '
+    'allowance.',
+  ),
+  LegalBlock('• Upload anything unlawful, or anyone else’s photographs.'),
+  LegalBlock(
+    'We may suspend or close an account that does, without a refund.',
+  ),
+
+  LegalBlock('8. Your content', isHeading: true),
+  LegalBlock(
+    'Your photographs and diary entries remain yours. You give us permission '
+    'to process them only so far as is needed to run the app for you — which '
+    'includes sending a food photograph to our AI provider to be analysed. We '
+    'do not use your photographs to train AI models, and we do not sell them.',
+  ),
+
+  LegalBlock('9. Availability and liability', isHeading: true),
+  LegalBlock(
+    'Carbsai is provided as it is. We do not promise it will be uninterrupted '
+    'or error-free, and we depend on services we do not control. To the extent '
+    'the law allows, we are not liable for indirect or consequential loss, or '
+    'for any health outcome arising from following an estimate. Nothing here '
+    'limits liability that cannot lawfully be limited.',
+  ),
+
+  LegalBlock('10. Changes and ending', isHeading: true),
+  LegalBlock(
+    'We may change these Terms; material changes will be shown in the app '
+    'before they take effect. You can stop using Carbsai at any time. We may '
+    'end your access if you break these Terms.',
+  ),
+
+  LegalBlock('11. Governing law', isHeading: true),
+  LegalBlock(
+    'These Terms are governed by the law of ${LegalOperator.jurisdiction}.',
+  ),
+
+  LegalBlock('12. Contact', isHeading: true),
+  LegalBlock(LegalOperator.email),
 ];
 
-/// Privacy Policy — Figma frame content.
+/// Privacy Policy.
 const List<LegalBlock> privacyPolicy = [
-  LegalBlock('Last Updated: 12 June,2024'),
-  LegalBlock('Thank you for trusting Carbsai. Your privacy is important to us. This Privacy Policy explains how us. collects, uses, and protects your personal information when you use the Carbsai mobile application.'),
-  LegalBlock('By using Carbsai, you agree to be bound by these Terms. If you do not agree with any part of the Terms, please do not access or use the App.'),
-  LegalBlock('1. How We Use Your Data', isHeading: true),
-  LegalBlock('We use the collected information to:'),
-  LegalBlock('Personalize your diet and calorie tracking experience'),
-  LegalBlock('Offer AI-powered meal suggestions and insights'),
-  LegalBlock('Track your progress and health goals'),
-  LegalBlock('Improve app functionality and user experience'),
-  LegalBlock('Communicate with you (e.g., notifications, updates)'),
-  LegalBlock('2. How We Share Your Information', isHeading: true),
-  LegalBlock('We do not sell your personal data.'),
-  LegalBlock('We may share limited data with:'),
-  LegalBlock('Service providers (for hosting, analytics, or messaging)'),
-  LegalBlock('Third-party integrations (e.g., Google Fit, Apple Health, if you authorize them)'),
-  LegalBlock('Legal authorities if required by law or to protect our rights'),
+  LegalBlock('Last updated: ${LegalOperator.updated}'),
+  LegalBlock(
+    'Carbsai is operated by ${LegalOperator.name}. This policy explains what '
+    'the app collects, where it goes, and what you can do about it. It '
+    'describes what the app actually does — if something here is not true of '
+    'the app you are using, tell us at ${LegalOperator.email}.',
+  ),
+
+  LegalBlock('1. What we collect', isHeading: true),
+  LegalBlock(
+    '• Account: your email address and display name. Your password is handled '
+    'by Firebase Authentication and is never visible to us.',
+  ),
+  LegalBlock(
+    '• About you: age, sex, height, weight, activity level and goal, from the '
+    'questions asked when you sign up. These are used to calculate your '
+    'calorie target and nothing else. Every question is skippable.',
+  ),
+  LegalBlock(
+    '• Your diary: the meals you log, the foods and portions in them, when you '
+    'ate, and any photograph you take.',
+  ),
+  LegalBlock('• Your weight, if you record it.'),
+  LegalBlock(
+    '• Scan records: for each AI scan, which model ran, how many tokens it '
+    'used, what it cost and what the model said. This is how we keep the '
+    'service affordable and improve accuracy. It is stored under your account.',
+  ),
+  LegalBlock(
+    '• Adverts: if you are not a Premium subscriber, Google AdMob may collect '
+    'your device’s advertising identifier and technical information to '
+    'show and cap adverts. On iOS you are asked first, and on Android and in '
+    'the EEA and UK a consent form runs before any advert is requested. '
+    'Premium accounts never initialise the advertising SDK at all.',
+  ),
+  LegalBlock(
+    'We do not use a third-party analytics or crash-reporting SDK, and we do '
+    'not collect your location or your contacts.',
+  ),
+
+  LegalBlock('2. Where your data goes', isHeading: true),
+  LegalBlock(
+    '• Google Firebase (Authentication and Cloud Firestore) stores your '
+    'account and everything in it.',
+  ),
+  LegalBlock(
+    '• Cloudflare Workers runs our server, and Cloudflare R2 stores meal '
+    'photographs.',
+  ),
+  LegalBlock(
+    '• Our AI provider (currently OpenRouter, routing to OpenAI) receives the '
+    'photograph or written description of your meal, and any note you add, in '
+    'order to estimate its nutrition. It does not receive your name, your '
+    'email or your account identifier. This is the most significant thing the '
+    'app does with your data, and it only happens when you scan or describe a '
+    'meal.',
+  ),
+  LegalBlock(
+    '• The USDA FoodData Central database and Open Food Facts receive your '
+    'search terms and scanned barcodes — the words or numbers only, with '
+    'nothing that identifies you.',
+  ),
+  LegalBlock(
+    '• Google AdMob, for adverts, as described above.',
+  ),
+  LegalBlock(
+    'These providers process data on our behalf, or independently in the case '
+    'of advertising. This means your data may be processed outside your '
+    'country, including in the United States. We do not sell your personal '
+    'data, and we do not use it to train AI models.',
+  ),
+
+  LegalBlock('3. Why we are allowed to', isHeading: true),
+  LegalBlock(
+    'Where the UK or EU GDPR applies: we process your account and diary to '
+    'perform our contract with you; we use adverts and store scan records on '
+    'the basis of our legitimate interest in running a sustainable free tier '
+    'and improving accuracy; and personalised advertising runs only with your '
+    'consent, which you can withdraw.',
+  ),
+
+  LegalBlock('4. How long we keep it', isHeading: true),
+  LegalBlock(
+    'Your data is kept while your account exists. Delete your account and it '
+    'goes with it — the diary, the photographs, the scan records, the '
+    'subscription record and the account itself. Backups roll off within 30 '
+    'days. Some records we are legally required to keep, such as proof of a '
+    'transaction, are kept for as long as the law requires.',
+  ),
+
+  LegalBlock('5. Your rights', isHeading: true),
+  LegalBlock(
+    'You can ask for a copy of your data, ask us to correct or delete it, '
+    'object to how we use it, or ask us to restrict it. Write to '
+    '${LegalOperator.email} and we will reply within one month. You can also '
+    'complain to your data protection regulator.',
+  ),
+  LegalBlock(
+    'You can delete everything yourself, at any time, from Settings → '
+    'More → Delete Account. You do not have to ask us.',
+  ),
+
+  LegalBlock('6. Security', isHeading: true),
+  LegalBlock(
+    'Data is encrypted in transit. Our servers reach your data with '
+    'per-account rules that prevent one account from reading another’s. '
+    'No system is perfectly secure, but we do not hold payment card details at '
+    'any point — the stores handle payment.',
+  ),
+
+  LegalBlock('7. Children', isHeading: true),
+  LegalBlock(
+    'Carbsai is not for children under 13. If you believe a child has given us '
+    'personal data, write to ${LegalOperator.email} and we will delete it.',
+  ),
+
+  LegalBlock('8. Changes', isHeading: true),
+  LegalBlock(
+    'If we change this policy we will update the date above and, for a '
+    'material change, tell you in the app before it takes effect.',
+  ),
+
+  LegalBlock('9. Contact', isHeading: true),
+  LegalBlock(LegalOperator.email),
 ];
 
 /// Help — Figma frame content.
@@ -65,10 +331,9 @@ const List<LegalBlock> help = [
   LegalBlock('      Understand what works best for your goals'),
   LegalBlock('Contact Support', isHeading: true),
   LegalBlock('Can’t find what you\'re looking for?'),
-  LegalBlock('[ Send Us a Message ]'),
+  LegalBlock(LegalOperator.email),
   LegalBlock('We usually respond within 24 hours.'),
   LegalBlock('Helpful Links', isHeading: true),
   LegalBlock('Privacy Policy'),
   LegalBlock('Terms & Conditions'),
 ];
-
