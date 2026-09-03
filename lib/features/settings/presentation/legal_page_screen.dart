@@ -42,15 +42,28 @@ class LegalPageScreen extends StatelessWidget {
         onBack: onBack,
       );
 
-  /// Rough height estimate so the canvas can grow with the copy. Generous by
-  /// design — surplus is background, whereas a short canvas would clip.
+  /// Room the canvas has to reserve for the copy.
+  ///
+  /// An estimate, because `DesignCanvas` needs its height before the text is
+  /// laid out. Deliberately generous: surplus is background you can scroll
+  /// past, whereas an under-estimate clips the end of the document — and the
+  /// end of a policy is where the contact address is.
+  ///
+  /// 44 characters a line, not 58. 15pt Space Grotesk across the 388pt column
+  /// wraps at around 46, and the old figure only looked right because the
+  /// original copy was made of short lines. Rewriting the policy into real
+  /// paragraphs was exactly the case it got wrong.
   double get _contentHeight {
     var h = 147.0;
     for (final b in blocks) {
-      h += b.isHeading ? 33 : 22.0 * (1 + b.text.length ~/ 58) + 12;
+      h += b.isHeading ? 33 : 22.0 * (1 + b.text.length ~/ 44) + 12;
     }
-    return h + 80;
+    return h + 120;
   }
+
+  /// Exposed so a test can check the estimate against what actually rendered.
+  @visibleForTesting
+  double get reservedHeight => _contentHeight;
 
   @override
   Widget build(BuildContext context) {
