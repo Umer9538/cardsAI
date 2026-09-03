@@ -1,4 +1,5 @@
 import { HttpsError } from "./callable.js";
+import { assertUnderDailyCap, recordSpend } from "./spend.js";
 import type { Env } from "./env.js";
 import { Firestore, documentId, increment, serverTimestamp } from "./firestore.js";
 import { PROMPT_VERSION, SYSTEM_PROMPT, describePrompt, photoPrompt } from "./prompt.js";
@@ -61,6 +62,12 @@ const DEFAULTS = {
   inputPricePerMTok: 0.2,
   outputPricePerMTok: 1.2,
   monthlyQuota: 100,
+  /**
+   * USD per day across the whole app before the model is refused. A fuse, not
+   * accounting — see `spend.ts`. Server-side config, so it can be raised
+   * without a deploy the moment real traffic justifies it.
+   */
+  dailySpendCapUsd: 20,
   /** Free scans in total, ever — the bucket never resets. */
   freeScanLimit: 3,
   /** Portion estimation depends on the texture downsampling destroys. */
@@ -68,6 +75,16 @@ const DEFAULTS = {
 };
 
 export type ScanConfig = typeof DEFAULTS;
+
+/** Longest free text accepted on `hint` or `description`. */
+const MAX_TEXT = 400;
+
+function clampText(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed.slice(0, max);
+}
+
 
 /**
  * Reads `config/scan`, falling back per-field to [DEFAULTS].
@@ -173,8 +190,22 @@ export async function analyzeMeal(
   const db = new Firestore(env);
   const config = await loadConfig(db);
 
-  const { imageBase64, mimeType, hint, description } = data;
+  const { imageBase64, mimeType } = data;
   const isPhoto = typeof imageBase64 === "string" && imageBase64.length > 0;
+
+  // Both free-text fields are clamped before they go anywhere near the prompt.
+  //
+  // `prompt.ts` interpolates them raw, so an unbounded string is an unbounded
+  // bill: a one-megabyte "description" is roughly 250k input tokens charged
+  // against a single quota unit, a ~40x multiplier on a scan that is supposed
+  // to cost a tenth of a cent. The image had a size guard from the start and
+  // these did not, which mattered less while nothing in the app could reach
+  // `hint` — the capture screen offers it now.
+  //
+  // Truncated rather than rejected: a long note is a person typing, not an
+  // attack, and 400 characters is far more than the field is for.
+  const hint = clampText(data.hint, MAX_TEXT);
+  const description = clampText(data.description, MAX_TEXT);
 
   if (!isPhoto && !description?.trim()) {
     throw new HttpsError("invalid-argument", "Send either a photo or a description.");
@@ -188,6 +219,10 @@ export async function analyzeMeal(
       "That image is too large. It should be downsized before upload.",
     );
   }
+
+  // Before the per-user quota, because it is the cheaper check and the one
+  // that protects the account rather than the person.
+  await assertUnderDailyCap(db, config.dailySpendCapUsd);
 
   const bucket = await quotaBucket(db, uid, config);
   await reserveQuota(db, uid, bucket);
@@ -333,6 +368,10 @@ export async function analyzeMeal(
       latencyMs,
       createdAt: serverTimestamp(),
     });
+
+    // Not awaited into the response: a failure to record spend must never fail
+    // a scan the user has already waited for. See `recordSpend`.
+    void recordSpend(db, costUsd);
 
     console.log("scan complete", JSON.stringify({
       uid, model: config.model, itemCount: analysis.items.length,

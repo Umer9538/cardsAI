@@ -1,6 +1,7 @@
 import { HttpsError } from "./callable.js";
 import type { Env } from "./env.js";
 import { Firestore, serverTimestamp } from "./firestore.js";
+import { assertUnderDailyCap, recordSpend } from "./spend.js";
 import { PLAN_SCHEMA, PLAN_SYSTEM_PROMPT, planPrompt, type PlanRequest } from "./planPrompt.js";
 import { loadConfig, modelApiKey, UpstreamError } from "./scan.js";
 
@@ -99,9 +100,10 @@ export async function generatePlan(
     notes: (data.notes ?? "").slice(0, 400),
   };
 
+  const config = await loadConfig(db);
+  await assertUnderDailyCap(db, config.dailySpendCapUsd);
   await reserve(db, uid);
 
-  const config = await loadConfig(db);
   const startedAt = Date.now();
 
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -156,6 +158,8 @@ export async function generatePlan(
     console.error("planner unparseable", uid, raw.slice(0, 400));
     throw new HttpsError("internal", "The plan came back malformed. Try again.");
   }
+
+  void recordSpend(db, Number(body.usage?.cost ?? 0));
 
   console.log(
     "plan generated",

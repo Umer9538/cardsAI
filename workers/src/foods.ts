@@ -1,4 +1,5 @@
 import { HttpsError } from "./callable.js";
+import { Firestore } from "./firestore.js";
 import type { Env } from "./env.js";
 
 /**
@@ -92,12 +93,44 @@ interface FdcFood {
   foodNutrients?: FdcNutrient[];
 }
 
+/** Longest query accepted. FDC ignores more and it is a prompt-free path. */
+const MAX_QUERY = 80;
+
+/** Searches one account may run in an hour. */
+const MAX_SEARCHES_PER_HOUR = 120;
+
+/**
+ * Counts a search against this account's hour.
+ *
+ * Deliberately generous: a person typing "chicken biryani" with a 450ms debounce
+ * spends a handful, and 120 is far above any real session. It is there to stop a
+ * script, not to ration a user — so it refuses rather than degrading, and says
+ * to wait rather than blaming the food database.
+ */
+async function assertSearchAllowed(db: Firestore, uid: string): Promise<void> {
+  const hour = new Date().toISOString().slice(0, 13);
+  const path = `users/${uid}/private/search`;
+
+  await db.transaction(async (tx) => {
+    const data = await tx.get(path);
+    const used = data?.hour === hour ? ((data?.count as number | undefined) ?? 0) : 0;
+
+    if (used >= MAX_SEARCHES_PER_HOUR) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "That is a lot of searching. Give it a few minutes.",
+      );
+    }
+    tx.set(path, { hour, count: used + 1 });
+  });
+}
+
 export async function searchFoods(
   env: Env,
-  _uid: string,
+  uid: string,
   data: { query?: string; limit?: number },
 ): Promise<{ items: unknown[] }> {
-  const query = (data.query ?? "").trim();
+  const query = (data.query ?? "").trim().slice(0, MAX_QUERY);
   // Two characters is the shortest query worth a round trip; below that the
   // result set is noise.
   if (query.length < 2) return { items: [] };
@@ -105,6 +138,12 @@ export async function searchFoods(
   if (!env.USDA_API_KEY) {
     throw new HttpsError("failed-precondition", "Food search is not configured yet.");
   }
+
+  // One shared FDC key serves everyone, at 1000 requests an hour, and this
+  // route retries up to five times per call. Unmetered, one client typing fast
+  // could exhaust the hour for every other user — search being the path that is
+  // meant to always work makes that the worst thing to leave open.
+  await assertSearchAllowed(new Firestore(env), uid);
 
   // Built by hand rather than with URLSearchParams, which encodes a space as
   // `+`. That is correct for form bodies and merely legal in a query string;

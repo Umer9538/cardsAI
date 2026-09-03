@@ -178,6 +178,25 @@ cannot express (fibre ≤ carbs) and flags gross energy-vs-macro mismatches by t
 Atwater factors. Anything it corrects drops to `low` confidence rather than being
 silently "fixed".
 
+**A daily spend cap sits in front of every model call, and it fails closed.** The per-user
+quota caps how many scans one *person* gets; nothing capped the total, which is the number that
+matters when something goes wrong — and uids are free. `spend.ts` refuses when today's spend is
+over `config/scan.dailySpendCapUsd`, and refuses when it cannot read the counter at all,
+because a limiter that opens under failure is not one. Spend is counted in **micro-dollars**:
+the Firestore increment transform here writes `integerValue`, so storing $0.0012 as dollars
+would round to zero every call and the counter would sit at zero while the bill grew.
+
+**Both free-text fields are clamped server-side.** `prompt.ts` interpolates `hint` and
+`description` raw, so an unbounded string was an unbounded bill — a 1MB "description" is
+roughly 250k input tokens against one quota unit, a ~40x multiplier. The image had a size guard
+from the start and these did not, which mattered little while nothing in the app could reach
+`hint`; the capture screen offers it now.
+
+**`searchFoods` is rate-limited per account** (120/hour). One shared FDC key serves everyone at
+1000 requests an hour and this route retries five times per call, so unmetered, one client
+typing fast could exhaust the hour for every other user — and search is the path that is meant
+to always work.
+
 Quota is reserved *before* the model call and refunded on failure. Checking after
 would let ten concurrent scans all pass against the same stale count.
 
