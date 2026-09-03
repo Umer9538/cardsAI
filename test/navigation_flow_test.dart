@@ -1,3 +1,4 @@
+import 'package:carbsai/features/app/presentation/home_screen.dart';
 import 'package:carbsai/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -199,6 +200,30 @@ void main() {
         reason: 'back from $icon should land on home, not close the app',
       );
     }
+  });
+
+  // The featured plan on Home was the only card in the app that did nothing at
+  // all. It matters more now that a plan carries a day you can log from.
+  testWidgets('the plan card on Home opens the plan', (tester) async {
+    await boot(tester);
+    await reachLogin(tester);
+    await signIn(tester);
+
+    await tester.dragUntilVisible(
+      find.text('Diet Plan'),
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -220),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // By type, not by text: "Diet Plan" is the section heading and the plan's
+    // own name varies with the profile's diet preference. The macro row is
+    // unique to the card.
+    await tester.tap(find.byType(NutritionRow).last, warnIfMissed: false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('How It Works'), findsOneWidget);
   });
 
   testWidgets('scan opens the camera and reaches the result', (tester) async {

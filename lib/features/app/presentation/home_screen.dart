@@ -32,11 +32,19 @@ class HomeScreen extends ConsumerWidget {
     this.onTabSelected,
     this.onPremium,
     this.onNotifications,
+    this.onPlanTap,
   });
 
   final ValueChanged<AppTab>? onTabSelected;
   final VoidCallback? onPremium;
   final VoidCallback? onNotifications;
+
+  /// Opens the featured plan.
+  ///
+  /// Home showed a plan card that did nothing at all — the only card in the app
+  /// that was purely an image. It matters more now that a plan carries a day
+  /// you can log from: the card is the shortest route to it.
+  final ValueChanged<DietPlan>? onPlanTap;
 
   /// Bottom edge of the two macro cards: they sit at y=574 and are 173 tall.
   static const double _macroCardsBottom = 747;
@@ -157,7 +165,12 @@ class HomeScreen extends ConsumerWidget {
                   onDelete: (meal) => _confirmDelete(context, ref, meal),
                 ),
                 _SectionTitle(text: 'Diet Plan', top: _dietPlanTop + shift),
-                if (plan != null) _DietCard(plan: plan, top: 827 + shift),
+                if (plan != null)
+                  _DietCard(
+                    plan: plan,
+                    top: 827 + shift,
+                    onTap: onPlanTap == null ? null : () => onPlanTap!(plan),
+                  ),
               ],
             ),
             // Floats above the scrolling content, pinned to the viewport.
@@ -191,7 +204,8 @@ class HomeScreen extends ConsumerWidget {
           children: [
             ConfirmDialog(
               title: 'Remove this meal?',
-              body: '${meal.name} will be taken off '
+              body:
+                  '${meal.name} will be taken off '
                   '${_isToday(meal.day) ? "today's" : "that day's"} total.',
               secondaryLabel: 'Keep',
               primaryLabel: 'Remove',
@@ -290,8 +304,8 @@ class _Greeting extends StatelessWidget {
     final greeting = hour < 12
         ? 'Good Morning'
         : hour < 17
-            ? 'Good Afternoon'
-            : 'Good Evening';
+        ? 'Good Afternoon'
+        : 'Good Evening';
     return Text(greeting, style: AppTypography.label());
   }
 }
@@ -798,7 +812,7 @@ class _Pair extends StatelessWidget {
         target <= 0
             ? '$label ${NutritionFormat.grams(consumed)}'
             : '$label ${NutritionFormat.grams(consumed)}'
-                ' / ${NutritionFormat.grams(target)}',
+                  ' / ${NutritionFormat.grams(target)}',
         style: AppTypography.meta(color: AppColors.placeholder),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -866,10 +880,11 @@ class _MacroCard extends StatelessWidget {
 
 /// Diet plan card: a 220pt image over a title and a divided macro row.
 class _DietCard extends StatelessWidget {
-  const _DietCard({required this.plan, required this.top});
+  const _DietCard({required this.plan, required this.top, this.onTap});
 
   final DietPlan plan;
   final double top;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -877,25 +892,32 @@ class _DietCard extends StatelessWidget {
       left: 20,
       top: top,
       width: 388,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Image.asset(
-              plan.image,
-              width: 388,
-              height: 220,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.high,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                plan.image,
+                width: 388,
+                height: 220,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(plan.name, style: AppTypography.cardHeading()),
-          const SizedBox(height: 4),
-          SizedBox(height: 19, child: NutritionRow(nutrition: plan.nutrition)),
-        ],
+            const SizedBox(height: 12),
+            Text(plan.name, style: AppTypography.cardHeading()),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 19,
+              child: NutritionRow(nutrition: plan.nutrition),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -919,7 +941,9 @@ class NutritionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (final (i, item) in NutritionFormat.macroRow(nutrition).indexed) ...[
+        for (final (i, item) in NutritionFormat.macroRow(
+          nutrition,
+        ).indexed) ...[
           if (i > 0) ...[
             const SizedBox(width: 8),
             SizedBox(width: 1, height: 16, child: ColoredBox(color: colour)),

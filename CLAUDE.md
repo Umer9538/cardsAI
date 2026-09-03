@@ -607,6 +607,10 @@ difference between an estimate you can act on and a number you have to take on f
 Two things the app needs that no artboard covers. Both are built from components the
 design does define, so they read as part of it rather than bolted on.
 
+- **The featured plan card on Home is tappable.** It was the only card in the app that did
+  nothing at all — `HomeScreen` never took an `onPlanTap` and `_DietCard` had no gesture. That
+  mattered little when a plan was four numbers and matters a lot now it carries a day you can
+  log from: the card is the shortest route to it.
 - **The day's meals, on Home** (`_MealsSection` + `MealCard`). Without it the diary is
   write-only: you could log a meal and never see it again, and tapping a day in the
   calendar changed nothing visible. It sits between the macro cards and Diet Plan, and

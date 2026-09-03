@@ -295,6 +295,15 @@ class _MainShellState extends ConsumerState<MainShell> {
         HomeScreen(
           onTabSelected: _selectTab,
           onPremium: _openPremium,
+          onPlanTap: (plan) => _push(
+            Builder(
+              builder: (c) => DietDetailScreen(
+                plan: plan,
+                onBack: () => Navigator.of(c).pop(),
+                onAdd: () => Navigator.of(c).pop(),
+              ),
+            ),
+          ),
           onNotifications: () => _push(
             Builder(
               builder: (c) =>
