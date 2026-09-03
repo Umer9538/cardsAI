@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/design_canvas.dart';
 import '../../../core/models/models.dart';
+import '../../../core/nutrition/recent_foods.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/repositories/repositories.dart';
 import '../../../core/theme/app_colors.dart';
@@ -42,6 +43,14 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
   final _query = TextEditingController();
   final _picked = <FoodItem>[];
 
+  /// The foods this person already logs, shown until they type.
+  ///
+  /// Held in state rather than read in `build` so the list does not reshuffle
+  /// under a finger when the diary stream ticks mid-tap.
+  List<FrequentFood> _recent = const [];
+
+  final _focus = FocusNode();
+
   Timer? _debounce;
   late List<FoodItem> _results = widget.results ?? const [];
   bool _searching = false;
@@ -53,9 +62,39 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
   static const Duration _debounceFor = Duration(milliseconds: 450);
 
   @override
+  void initState() {
+    super.initState();
+    // Read once, on open. The screen is short-lived and the diary does not
+    // change while it is up.
+    _loadRecent();
+  }
+
+  /// Reads the diary once, on open. The screen is short-lived and the diary
+  /// does not change while it is up.
+  Future<void> _loadRecent() async {
+    List<FrequentFood> foods;
+    try {
+      foods = await ref.read(recentFoodsProvider.future);
+    } catch (_) {
+      // A diary that will not load is the empty case for this screen's
+      // purposes. Search still works.
+      foods = const [];
+    }
+    if (!mounted) return;
+    setState(() => _recent = foods);
+
+    // The keyboard is raised only when there is nothing to tap. With recents on
+    // screen it would cover the very list that makes this screen worth opening;
+    // with an empty diary, typing is the only thing to do, so not raising it
+    // would cost a tap.
+    if (foods.isEmpty) _focus.requestFocus();
+  }
+
+  @override
   void dispose() {
     _debounce?.cancel();
     _query.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -100,6 +139,13 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
     widget.onDone?.call();
   }
 
+  /// True while the list is showing recents rather than search results.
+  bool get _showingRecent => _query.text.trim().length < 2 && _results.isEmpty;
+
+  /// What the list is actually drawing.
+  List<FoodItem> get _rows =>
+      _showingRecent ? [for (final f in _recent) f.item] : _results;
+
   double get _listTop => _picked.isEmpty ? 300 : 300 + 44.0;
 
   /// Row pitch: a 66pt row and a 12pt gap.
@@ -119,8 +165,8 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
   /// the end of the canvas, where no amount of scrolling reaches them. The
   /// list's own geometry is the only thing that can say how tall it is.
   double get _contentHeight {
-    if (_results.isEmpty) return DesignCanvas.designHeight;
-    final listBottom = _listTop + _results.length * _rowPitch - 12;
+    if (_rows.isEmpty) return DesignCanvas.designHeight;
+    final listBottom = _listTop + _rows.length * _rowPitch - 12;
     final bottom = listBottom + _ctaClearance;
     return bottom < DesignCanvas.designHeight
         ? DesignCanvas.designHeight
@@ -157,7 +203,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                       Expanded(
                         child: TextField(
                           controller: _query,
-                          autofocus: true,
+                          focusNode: _focus,
                           style: AppTypography.body(),
                           cursorColor: AppColors.primary,
                           textInputAction: TextInputAction.search,
@@ -192,8 +238,12 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                 width: 388,
                 height: 60,
                 child: Text(
-                  'Results come from Open Food Facts, a community database of '
-                  'packaged foods. Loose produce may not be listed.',
+                  _showingRecent && _recent.isNotEmpty
+                      ? 'Foods you log often. Tap to add one again, or search '
+                          'for something else.'
+                      : 'Results come from Open Food Facts, a community '
+                          'database of packaged foods. Loose produce may not '
+                          'be listed.',
                   style: AppTypography.meta(color: AppColors.muted),
                 ),
               ),
@@ -210,7 +260,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                   ),
                 ),
 
-              if (_error != null)
+              if (_error != null && !_showingRecent)
                 Positioned(
                   left: 20,
                   top: _listTop,
@@ -224,7 +274,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                   ),
                 ),
 
-              for (final (i, food) in _results.indexed)
+              for (final (i, food) in _rows.indexed)
                 Positioned(
                   left: 20,
                   top: _listTop + i * _rowPitch,

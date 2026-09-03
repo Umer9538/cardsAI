@@ -718,7 +718,13 @@ design does define, so they read as part of it rather than bolted on.
   empty text box is the main reason this kind of input goes unused.
 - **Search the food database** (`FoodSearchScreen`). The path that always works: no
   camera, no model, no quota, no cost — which makes it the honest option once someone
-  has used up their scans.
+  has used up their scans. It **opens on the foods this person already logs**
+  (`RecentFoods`, read straight out of the diary — no new collection, no new writes,
+  works offline). Ranked by frequency, tie-broken by recency, and the portion offered
+  is the one most recently logged, so someone who moved to a bigger bowl gets the
+  bigger bowl back. One food counts once per meal however many rows it has, or a
+  single messy scan would own the list. The keyboard is raised only when that list is
+  empty — otherwise it covers the thing worth opening the screen for.
 - **A photo from anywhere on the phone.** Selecting AI Gallery opens a chooser —
   **Photos** (camera roll) or **Files** (`file_picker`, i.e. Android's Storage Access
   Framework). Two entries because no single Android picker covers both: the system

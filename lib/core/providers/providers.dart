@@ -28,6 +28,7 @@ import '../../data/worker/worker_food_repository.dart';
 import '../app_config.dart';
 import '../models/models.dart';
 import '../notifications/meal_reminders.dart';
+import '../nutrition/recent_foods.dart';
 import '../notifications/reminder_service.dart';
 import '../nutrition/target_calculator.dart';
 import '../repositories/repositories.dart';
@@ -393,6 +394,19 @@ final todayLogProvider = Provider<DailyLog>((ref) {
     meals: ref.watch(dayMealsProvider(today)).value ?? const [],
     targets: ref.watch(targetsProvider),
   );
+});
+
+/// The foods this person logs most, for the search screen's opening state.
+///
+/// Recomputed whenever today's diary changes, so a food logged a minute ago is
+/// at the top of the list the next time the screen opens.
+final recentFoodsProvider = FutureProvider<List<FrequentFood>>((ref) async {
+  ref.watch(dayMealsProvider(SelectedDate._midnight(DateTime.now())));
+  final now = DateTime.now();
+  final meals = await ref
+      .watch(diaryRepositoryProvider)
+      .mealsBetween(now.subtract(RecentFoods.window), now);
+  return RecentFoods.from(meals, now: now);
 });
 
 final streakProvider = FutureProvider<int>((ref) {
