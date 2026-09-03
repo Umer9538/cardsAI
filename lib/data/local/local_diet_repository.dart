@@ -21,11 +21,50 @@ class LocalDietRepository implements DietRepository {
   List<DietPlan> _plans = const [];
   bool _loaded = false;
 
+  /// Bumped when the catalogue changes in a way that must reach an install
+  /// that already has a stored copy.
+  static const int catalogueVersion = 2;
+
+  /// Rebuilds the list from the catalogue, keeping this user's own flags.
+  ///
+  /// It used to read the stored copy verbatim and only ever seed when nothing
+  /// was stored — so the catalogue was frozen at whatever it looked like the
+  /// day the app was first opened. A plan added later never appeared, and a
+  /// corrected description never propagated. Content comes from [SeedData] now;
+  /// `isMine` and `isFavorite` come from what was stored, because those are the
+  /// user's and the catalogue has no opinion about them.
+  ///
+  /// **Except once.** Version 1 of the catalogue shipped three plans with
+  /// `isMine` and `isFavorite` already true, so every install seeded under it
+  /// opened onto a My Diets tab full of choices nobody had made. Those flags
+  /// were never a decision, so they are cleared on the way to version 2 — and
+  /// exactly once, or it would wipe the real choices made afterwards.
   void _load() {
     final stored = _store.readList(StoreKeys.plans);
-    _plans =
-        stored == null ? SeedData.dietPlans : stored.map(DietPlan.fromJson).toList();
-    if (stored == null) unawaited(_persist());
+    final version =
+        int.tryParse(_store.readString(StoreKeys.plansVersion) ?? '') ?? 1;
+    final keepFlags = stored != null && version >= catalogueVersion;
+
+    final flags = <String, ({bool mine, bool favourite})>{};
+    if (keepFlags) {
+      for (final json in stored) {
+        final plan = DietPlan.fromJson(json);
+        flags[plan.id] = (mine: plan.isMine, favourite: plan.isFavorite);
+      }
+    }
+
+    _plans = [
+      for (final plan in SeedData.dietPlans)
+        plan.copyWith(
+          isMine: flags[plan.id]?.mine ?? false,
+          isFavorite: flags[plan.id]?.favourite ?? false,
+        ),
+    ];
+
+    unawaited(_persist());
+    unawaited(
+      _store.writeString(StoreKeys.plansVersion, '$catalogueVersion'),
+    );
     _loaded = true;
     _controller.add(_plans);
   }

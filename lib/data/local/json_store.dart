@@ -91,6 +91,10 @@ abstract final class StoreKeys {
   /// every launch.
   static const String quizSeen = 'carbsai.quizSeen';
 
+  /// Which revision of the plan catalogue the stored copy was written from.
+  /// See `LocalDietRepository._load`.
+  static const String plansVersion = 'carbsai.plansVersion';
+
   /// Metric or imperial, for display only. Deliberately NOT in [all]: deleting
   /// an account should not put an American back on centimetres.
   static const String units = 'carbsai.units';

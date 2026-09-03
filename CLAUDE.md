@@ -308,6 +308,22 @@ Home and Analysis were already computed — Home off the diary, Analysis off rea
 `mealsBetween` ranges with real buckets. Diets was not, in two ways, and both made the
 honest screens look invented by association:
 
+**The catalogue reconciles on every launch; it is not seeded once.** Both repositories used
+to write the plans only when the collection was empty and never look again, so every account
+was frozen on whatever the catalogue looked like the day it was created — a plan added later
+never appeared, and a corrected description never propagated. Content now comes from
+`SeedData` on each load; `isMine` and `isFavorite` come from what was stored, because those
+are the user's and the catalogue has no opinion about them. `catalogueVersion` gates a
+one-time reset of those flags for accounts seeded under v1.
+
+**Do not gate a Firestore repair on `!snap.metadata.isFromCache`.** That is what the old
+seeding waited for, and it is why the repair above appeared not to work: Firestore's offline
+cache serves reads and accepts writes with **no server at all**, so an app whose database is
+unreachable — or, as here, not yet created — runs happily on cached documents and *never*
+emits a non-cache snapshot. Anything behind that condition simply never runs. The reconcile
+fires once per repository instead; the write lands in the cache immediately and replays when a
+server appears.
+
 - **Three plans shipped with `isMine` and `isFavorite` already true.** A brand-new account
   opened onto a My Diets tab and a Favourites tab full of choices nobody had made. An app that
   pretends you did something is the clearest signal its numbers are decoration. The catalogue

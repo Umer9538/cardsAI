@@ -228,8 +228,19 @@ class FirestoreDietRepository with _UserScoped implements DietRepository {
 
   Stream<List<DietPlan>> _watch(bool Function(DietPlan) where) => whenSignedIn(
         () => _plans.snapshots().asyncMap((snap) async {
+          // Not gated on `!snap.metadata.isFromCache`, which is what the
+          // seeding used to wait for.
+          //
+          // Firestore's offline cache serves reads and accepts writes with no
+          // server at all, so an app whose database is unreachable — or simply
+          // not created yet — runs happily on cached documents and *never*
+          // emits a non-cache snapshot. The reconcile behind that condition
+          // therefore never ran, and the stale flags it was written to clear
+          // stayed exactly where they were. Once per repository instead: the
+          // write lands in the cache immediately and replays when a server
+          // shows up.
+          await _syncOnce();
           if (snap.docs.isEmpty && !snap.metadata.isFromCache) {
-            await seedIfEmpty();
             return const <DietPlan>[];
           }
           return snap.docs
@@ -266,19 +277,67 @@ class FirestoreDietRepository with _UserScoped implements DietRepository {
 
   /// Copies the starter catalogue into a new account.
   ///
-  /// Guarded by a read so a second device signing into the same account does
-  /// not duplicate it. Not transactional: worst case two devices race and write
-  /// the same eight documents with the same ids, which is idempotent.
-  Future<void> seedIfEmpty() async {
-    final existing = await _plans.limit(1).get();
-    if (existing.docs.isNotEmpty) return;
+  /// Not transactional: worst case two devices race and write the same
+  /// documents with the same ids, which is idempotent.
+  ///
+  /// **This reconciles rather than seeding once.** The old version wrote the
+  /// catalogue only when the collection was empty and never looked again, so a
+  /// plan added to `SeedData` after a user first signed in never reached them,
+  /// and a corrected description never propagated. Every existing account was
+  /// frozen on whatever the catalogue looked like the day they joined.
+  ///
+  /// Content is refreshed from the catalogue; `isMine` and `isFavorite` are
+  /// left alone, because those are the user's and the catalogue has no opinion
+  /// about them.
+  Future<void>? _syncing;
+
+  /// At most one reconcile per repository, shared by all three streams.
+  Future<void> _syncOnce() => _syncing ??= syncCatalogue();
+
+  Future<void> syncCatalogue() async {
+    final existing = await _plans.get();
+    final byId = {for (final doc in existing.docs) doc.id: doc.data()};
+
+    // v1 shipped three plans with `isMine` and `isFavorite` already true, so
+    // every account seeded under it opened onto a My Diets tab full of choices
+    // nobody had made. Those flags were never a user decision, so clearing them
+    // once loses nothing real — but it does have to happen exactly once, or it
+    // would wipe the genuine choices made afterwards.
+    final marker = await _prefs.doc('plans').get();
+    final version = (marker.data()?['seedVersion'] as num?)?.toInt() ?? 1;
+    final resetFlags = existing.docs.isNotEmpty && version < _catalogueVersion;
 
     final batch = firestore.batch();
     for (final plan in SeedData.dietPlans) {
-      batch.set(_plans.doc(plan.id), plan.toJson());
+      final stored = byId[plan.id];
+      if (stored == null) {
+        batch.set(_plans.doc(plan.id), plan.toJson());
+        continue;
+      }
+      batch.set(
+        _plans.doc(plan.id),
+        plan
+            .copyWith(
+              isMine: resetFlags ? false : stored['isMine'] as bool? ?? false,
+              isFavorite:
+                  resetFlags ? false : stored['isFavorite'] as bool? ?? false,
+            )
+            .toJson(),
+      );
     }
+    batch.set(
+      _prefs.doc('plans'),
+      {'seedVersion': _catalogueVersion},
+      SetOptions(merge: true),
+    );
     await batch.commit();
   }
+
+  /// Bumped whenever the catalogue changes in a way that must reach accounts
+  /// that already exist.
+  static const int _catalogueVersion = 2;
+
+  CollectionReference<Map<String, dynamic>> get _prefs => collection('prefs');
 }
 
 // ---------------------------------------------------------------------------
