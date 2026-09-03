@@ -43,9 +43,38 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> {
+class _MainShellState extends ConsumerState<MainShell>
+    with WidgetsBindingObserver {
   AppTab _tab = AppTab.home;
   DietsTab _dietsTab = DietsTab.all;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // After the first frame: the schedule reads the diary, and nothing about
+    // it should delay the app appearing.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncReminders());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Reminders are scheduled a day at a time and the times move as habits
+    // move, so they are rewritten whenever the app comes back rather than only
+    // at a cold start — which on a phone that is never killed would be never.
+    if (state == AppLifecycleState.resumed) _syncReminders();
+  }
+
+  void _syncReminders() {
+    if (!mounted) return;
+    ref.read(mealRemindersProvider).refresh();
+  }
 
   Future<void> _push(Widget screen) {
     return Navigator.of(context).push(
@@ -273,6 +302,18 @@ class _MainShellState extends ConsumerState<MainShell> {
     // itself — which is the whole signed-in app. Pressing back on Settings
     // therefore closed the app. Every other tabbed app treats back as "up one
     // level" here, and Home is the level above a tab.
+    // A logged meal is new evidence about when this person eats, so the
+    // schedule is rewritten as soon as one lands. Listening to today's meals
+    // catches every logging path — camera, barcode, search, description —
+    // without each of them having to remember to call it.
+    final now = DateTime.now();
+    ref.listen(dayMealsProvider(DateTime(now.year, now.month, now.day)), (
+      _,
+      next,
+    ) {
+      _syncReminders();
+    });
+
     return PopScope(
       canPop: _tab == AppTab.home,
       onPopInvokedWithResult: (didPop, _) {
