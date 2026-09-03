@@ -666,6 +666,29 @@ surround and a sharp window. Drawing it above the blur instead left the whole sc
 around the window, because the blur had nothing to blur. This is still one texture; it is not
 the two-previews mistake that comment warns about.
 
+**The viewfinder's motion is information, not decoration.** Three states on `_Viewfinder`,
+each answering a question the screen could not answer before:
+
+- **sweeping** — a green line travels the window while the barcode reader is live. Nothing
+  said the reader was running: you pointed a still, silent rectangle at a packet and hoped.
+  The line has a trailing gradient because the trail is what reads as *direction*, and it runs
+  top-to-bottom and restarts rather than ping-ponging, because that is what a scanner does.
+- **waking** — the brackets breathe through the camera handoff, so the beat where neither
+  camera is mounted reads as the app working rather than as a dead black window.
+- **confirmed** — the brackets snap in 6pt and turn green for 220ms on a read, with a haptic,
+  before the result screen pushes. Every supermarket scanner beeps; ours changed screens and
+  left you to infer that anything had happened.
+
+All of it is suppressed under `MediaQuery.disableAnimationsOf` — a repeating sweep over most
+of the screen is exactly what that setting exists to stop, and `scan_motion_test.dart` proves
+it. **A screen with a repeating animation never settles, so `pumpAndSettle` on it hangs
+until the timeout**; `navigation_flow_test` uses bounded pumps for the same reason the render
+harness does.
+
+The shutter answers the finger (`pressed`) as well as the capture (`busy`). It used to react
+only to `busy`, which is set *after* the capture starts — so on a slow camera the press
+produced nothing for a beat and read as a dead control.
+
 **The reader restarts when it is uncovered.** `_openResult` *pushes* the result screen over
 the scanning screen rather than replacing it, so the scanner stays mounted underneath — and it
 stops itself the instant it reads a code, because a reader that keeps firing turns one product

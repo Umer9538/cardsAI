@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
@@ -78,6 +79,20 @@ class ScanningScreen extends ConsumerStatefulWidget {
 class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   late ScanMode _mode = widget.mode;
   bool _busy = false;
+
+  /// True for the beat between reading a code and leaving for the result.
+  ///
+  /// A scanner that changes screens the instant it reads gives you nothing to
+  /// tell a successful read from a mis-tap. Every supermarket scanner in the
+  /// world beeps; this flashes the brackets green and buzzes, then goes.
+  bool _confirmed = false;
+
+  Timer? _confirmTimer;
+
+  /// Finger is down on the shutter. Separate from [_busy], which only becomes
+  /// true once the capture is under way — the button has to answer the touch
+  /// before it answers the camera.
+  bool _pressing = false;
 
   /// What the person told us the photo cannot show.
   ///
@@ -213,7 +228,25 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   @override
   void dispose() {
     _handoffTimer?.cancel();
+    _confirmTimer?.cancel();
     super.dispose();
+  }
+
+  /// A code was read. Acknowledge it, then hand over.
+  ///
+  /// 220ms: long enough to register as confirmation, short enough that nobody
+  /// experiences it as the app being slow. The reader has already stopped
+  /// itself, so nothing can fire twice in the gap.
+  void _onDetected(String code) {
+    if (_confirmed) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _confirmed = true);
+    _confirmTimer?.cancel();
+    _confirmTimer = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      setState(() => _confirmed = false);
+      widget.onBarcode?.call(code);
+    });
   }
 
   /// Picks an image, with our camera released while the picker is open.
@@ -329,9 +362,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             // mistake the [_WindowCutout] comment warns about.
             if (_mode == ScanMode.barcode && !_switching)
               Positioned.fill(
-                child: BarcodeScannerView(
-                  onDetected: (code) => widget.onBarcode?.call(code),
-                ),
+                child: BarcodeScannerView(onDetected: _onDetected),
               ),
 
             // Black at 50% over the scrim blur, then the same preview redrawn
@@ -365,7 +396,14 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             ),
             // Barcode is a different camera package, so it does get its own
             // view inside the window — ours is released before this appears.
-            Positioned.fromRect(rect: _window, child: const _Viewfinder()),
+            Positioned.fromRect(
+              rect: _window,
+              child: _Viewfinder(
+                sweeping: _mode == ScanMode.barcode,
+                waking: _switching,
+                confirmed: _confirmed,
+              ),
+            ),
 
             // Sits in the 59pt gap the artboard leaves between the viewfinder
             // and the mode sheet. Collapsed to a pill until it has something to
@@ -483,8 +521,11 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
                 height: 56,
                 child: GestureDetector(
                   onTap: _shutter,
+                  onTapDown: (_) => setState(() => _pressing = true),
+                  onTapUp: (_) => setState(() => _pressing = false),
+                  onTapCancel: () => setState(() => _pressing = false),
                   behavior: HitTestBehavior.opaque,
-                  child: _ShutterButton(busy: _busy),
+                  child: _ShutterButton(busy: _busy, pressed: _pressing),
                 ),
               ),
 
@@ -734,13 +775,97 @@ class _Preview extends ConsumerWidget {
 /// a white cross through it, which is not the design. Measured from the
 /// artboard render: the straight runs are x 32..93 / 248..309 top and bottom,
 /// and y 32..129 / 284..380 left and right.
-class _Viewfinder extends StatelessWidget {
-  const _Viewfinder();
+/// The window: the design's gradient wash, its corner brackets, and the motion
+/// that tells you what the camera is doing.
+///
+/// Three states, and each one answers a question the screen could not answer
+/// before.
+///
+/// **Sweeping** — a line travelling the window while the barcode reader is
+/// live. Nothing on this screen said the reader was running: you pointed a
+/// still, silent rectangle at a packet and hoped. The sweep is the scanner
+/// idiom for a reason, and here it is literally true — detection *is* running
+/// continuously, and there is no shutter to press.
+///
+/// **Waking** — the brackets breathe during the camera handoff, so the beat
+/// where neither camera is on screen reads as the app working rather than as a
+/// dead black window.
+///
+/// **Confirmed** — the brackets snap in and turn green when a code is read.
+/// Every real scanner acknowledges the read; ours changed screens and left you
+/// to infer it.
+///
+/// All of it is suppressed when the OS asks for reduced motion. A sweeping line
+/// is exactly the kind of repeating movement that setting exists to stop.
+class _Viewfinder extends StatefulWidget {
+  const _Viewfinder({
+    this.sweeping = false,
+    this.waking = false,
+    this.confirmed = false,
+  });
+
+  final bool sweeping;
+  final bool waking;
+  final bool confirmed;
+
+  @override
+  State<_Viewfinder> createState() => _ViewfinderState();
+}
+
+class _ViewfinderState extends State<_Viewfinder>
+    with SingleTickerProviderStateMixin {
+  /// One controller drives both the sweep and the breathe. They never run at
+  /// the same time — the reader is either starting or started — so a second
+  /// ticker would only be a second thing to keep in sync.
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_Viewfinder old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    final wants = widget.sweeping || widget.waking;
+    if (wants && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!wants && _controller.isAnimating) {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final still = MediaQuery.disableAnimationsOf(context);
+
     return Stack(
       children: [
+        if (widget.sweeping && !still)
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) => CustomPaint(
+                painter: _SweepPainter(_controller.value),
+              ),
+            ),
+          ),
+
         // Figma: white 20% -> 100%, with the whole fill at 50% opacity, so the
         // effective alpha runs 0.1 -> 0.5. Taking the stops at face value
         // washes the bottom of the window to pure white.
@@ -765,14 +890,99 @@ class _Viewfinder extends StatelessWidget {
             ),
           ),
         ),
-        const Positioned.fill(child: CustomPaint(painter: _BracketPainter())),
+        Positioned.fill(
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              // Breathing only while waking, and only if motion is allowed.
+              final breathe = widget.waking && !still
+                  ? 0.45 + 0.55 * (0.5 - 0.5 * math.cos(
+                      _controller.value * 2 * math.pi))
+                  : 1.0;
+              return CustomPaint(
+                painter: _BracketPainter(
+                  colour: widget.confirmed
+                      ? AppColors.accentGreen
+                      : AppColors.white,
+                  opacity: breathe,
+                  // The snap inward on a successful read: 6pt, enough to feel
+                  // deliberate and not enough to look like a glitch.
+                  inset: widget.confirmed ? 6 : 0,
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }
 }
 
+/// The line that travels the window while the reader is live.
+///
+/// A bright 2pt core with a soft trail behind it, rather than a plain line: the
+/// trail is what reads as direction, and direction is what makes it look like
+/// something is being examined rather than a bar sliding about.
+///
+/// It runs top to bottom and restarts, which is what a scanner does. Ping-pong
+/// would be prettier and would say the wrong thing.
+class _SweepPainter extends CustomPainter {
+  const _SweepPainter(this.t);
+
+  /// 0 to 1, one full pass.
+  final double t;
+
+  static const double _trail = 72;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Ease so the line settles at the ends rather than teleporting back.
+    final eased = Curves.easeInOutSine.transform(t);
+    final y = size.height * eased;
+
+    final trailTop = (y - _trail).clamp(0.0, size.height);
+    if (y > trailTop) {
+      canvas.drawRect(
+        Rect.fromLTRB(0, trailTop, size.width, y),
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.accentGreen.withValues(alpha: 0),
+              AppColors.accentGreen.withValues(alpha: 0.28),
+            ],
+          ).createShader(Rect.fromLTRB(0, trailTop, size.width, y)),
+      );
+    }
+
+    // Fade the core at the very ends so it arrives and leaves rather than
+    // blinking on at the edge.
+    final edge = math.min(eased, 1 - eased) * 8;
+    canvas.drawRect(
+      Rect.fromLTWH(0, y - 1, size.width, 2),
+      Paint()
+        ..color = AppColors.accentGreen
+            .withValues(alpha: 0.9 * edge.clamp(0.0, 1.0)),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SweepPainter old) => old.t != t;
+}
+
 class _BracketPainter extends CustomPainter {
-  const _BracketPainter();
+  const _BracketPainter({
+    this.colour = AppColors.white,
+    this.opacity = 1,
+    this.inset = 0,
+  });
+
+  final Color colour;
+  final double opacity;
+
+  /// Pulls the brackets in from the window edge, for the confirmation snap.
+  final double inset;
 
   static const double _stroke = 4;
   static const double _radius = 32;
@@ -783,16 +993,16 @@ class _BracketPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.white
+      ..color = colour.withValues(alpha: opacity.clamp(0.0, 1.0))
       ..style = PaintingStyle.stroke
       ..strokeWidth = _stroke
       ..strokeCap = StrokeCap.butt;
 
     // The stroke is inside the window, so its centreline is inset by half.
-    final inset = _stroke / 2;
-    final r = _radius - inset;
-    final l = inset, t = inset;
-    final rt = size.width - inset, b = size.height - inset;
+    final edge = _stroke / 2 + inset;
+    final r = _radius - edge;
+    final l = edge, t = edge;
+    final rt = size.width - edge, b = size.height - edge;
     final cx = size.width / 2, cy = size.height / 2;
 
     final path = Path()
@@ -822,7 +1032,8 @@ class _BracketPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_BracketPainter oldDelegate) => false;
+  bool shouldRepaint(_BracketPainter old) =>
+      old.colour != colour || old.opacity != opacity || old.inset != inset;
 }
 
 class _ModeTile extends StatelessWidget {
@@ -898,22 +1109,40 @@ class _TextAction extends StatelessWidget {
 /// While a capture is in flight the disc shrinks and dims. The design has no
 /// busy state, and this reads as pressed rather than as a new control.
 class _ShutterButton extends StatelessWidget {
-  const _ShutterButton({this.busy = false});
+  const _ShutterButton({this.busy = false, this.pressed = false});
 
   final bool busy;
 
+  /// A finger is on it right now.
+  ///
+  /// The button used to react only to [busy], which is set after the capture
+  /// starts — so on a slow camera the press produced nothing for a beat and
+  /// read as a dead control. This answers the touch itself.
+  final bool pressed;
+
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    // The ring tightens under the finger, the way a physical shutter gives.
+    final ring = pressed ? 2.0 : 3.0;
+    final inner = busy
+        ? 32.0
+        : pressed
+            ? 36.0
+            : 44.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 90),
+      curve: Curves.easeOut,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.white, width: 3),
+        border: Border.all(color: AppColors.white, width: ring),
       ),
       child: Center(
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: busy ? 32 : 44,
-          height: busy ? 32 : 44,
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          width: inner,
+          height: inner,
           decoration: BoxDecoration(
             color: AppColors.white.withValues(alpha: busy ? 0.6 : 1),
             shape: BoxShape.circle,

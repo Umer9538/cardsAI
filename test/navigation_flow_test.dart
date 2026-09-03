@@ -213,9 +213,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('AI Camera'), findsWidgets, reason: 'camera');
 
-    // The shutter.
+    // Bounded pumps, not pumpAndSettle: barcode mode runs a repeating sweep
+    // over the viewfinder to show the reader is live, and a repeating
+    // animation never settles. Same reason the render harness avoids
+    // pumpAndSettle on anything with a progress indicator.
     await tester.tap(find.text('AI Barcode'), warnIfMissed: false);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    // Past the camera handoff, so the reader has taken over.
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('AI Camera'), findsWidgets);
   });
 
