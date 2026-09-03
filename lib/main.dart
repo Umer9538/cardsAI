@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/main_shell.dart';
 import 'core/ads/ads_providers.dart';
 import 'core/app_config.dart';
+import 'core/route_observer.dart';
 import 'core/providers/providers.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_typography.dart';
@@ -144,6 +145,9 @@ class CarbsaiApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Carbsai',
+      // So a screen holding a camera can tell when another route covers it.
+      // See [appRouteObserver].
+      navigatorObservers: [appRouteObserver],
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

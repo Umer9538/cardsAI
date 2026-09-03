@@ -666,6 +666,14 @@ surround and a sharp window. Drawing it above the blur instead left the whole sc
 around the window, because the blur had nothing to blur. This is still one texture; it is not
 the two-previews mistake that comment warns about.
 
+**The reader restarts when it is uncovered.** `_openResult` *pushes* the result screen over
+the scanning screen rather than replacing it, so the scanner stays mounted underneath — and it
+stops itself the instant it reads a code, because a reader that keeps firing turns one product
+into a dozen lookups. Coming back therefore landed on a live widget holding a stopped camera:
+a black viewfinder nothing would ever restart. `BarcodeScannerView` is `RouteAware` against
+`appRouteObserver` now, stopping on `didPushNext` and restarting on `didPopNext`. Anything
+else that owns a camera under a pushed route wants the same.
+
 Barcode has no shutter — detection is continuous, so there is nothing for a button to trigger
 — which left the mode with no control at all and no way forward when a code will not read.
 **"Type the number"** takes the digits printed under the bars, which is the path that always

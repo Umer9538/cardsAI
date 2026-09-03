@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../core/design/design_canvas.dart';
+import '../../../core/route_observer.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 
@@ -25,7 +26,8 @@ class BarcodeScannerView extends StatefulWidget {
   State<BarcodeScannerView> createState() => _BarcodeScannerViewState();
 }
 
-class _BarcodeScannerViewState extends State<BarcodeScannerView> {
+class _BarcodeScannerViewState extends State<BarcodeScannerView>
+    with RouteAware {
   late final MobileScannerController _controller = MobileScannerController(
     // Only the symbologies actually printed on food packaging. Narrowing the
     // set measurably speeds up detection and stops QR codes on a menu being
@@ -42,7 +44,36 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   bool _handled = false;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    // Null in a widget test that pumps this view bare, and not a PageRoute
+    // inside a sheet. Neither needs the subscription.
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
+  }
+
+  /// The result screen has been pushed over us.
+  ///
+  /// Nothing to do — [_onDetect] already stopped the reader — but the pairing
+  /// with [didPopNext] is the point: this class now has one place that says
+  /// what happens when the screen is covered and uncovered.
+  @override
+  void didPushNext() => _stop();
+
+  /// Back from the result screen, onto a scanner that stopped itself when it
+  /// read the code. Without this the viewfinder is black and nothing will ever
+  /// restart it — scan once, come back, and the camera is dead for good.
+  @override
+  void didPopNext() {
+    _handled = false;
+    unawaited(_controller.start().catchError((Object _) {}));
+  }
+
+  void _stop() => unawaited(_controller.stop().catchError((Object _) {}));
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _controller.dispose();
     super.dispose();
   }
@@ -60,7 +91,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     // Best effort. If the platform side has already gone away, stopping is
     // moot — and letting it throw here would surface as an unhandled async
     // error on top of a scan that actually succeeded.
-    unawaited(_controller.stop().catchError((_) {}));
+    _stop();
     widget.onDetected(value);
   }
 
