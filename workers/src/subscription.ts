@@ -1,6 +1,9 @@
 import { HttpsError } from "./callable.js";
 import type { Env } from "./env.js";
 import { Firestore, serverTimestamp } from "./firestore.js";
+import { appleConfigured, validateAppleReceipt } from "./appstore.js";
+import { playConfigured, validatePlayPurchase } from "./play.js";
+import { rememberPurchase } from "./storeNotify.js";
 
 /**
  * Entitlement lives on the server and nowhere else.
@@ -10,31 +13,22 @@ import { Firestore, serverTimestamp } from "./firestore.js";
  * a service-account token, exactly as the Admin SDK did. An entitlement a
  * client can write is not an entitlement.
  *
- * ---------------------------------------------------------------------------
- * RECEIPTS ARE STILL NOT VALIDATED
- * ---------------------------------------------------------------------------
- * The client sends a real store receipt and platform, and this grants the plan
- * without checking either — because there are no App Store / Play Console
- * products to check against until those are created.
+ * Receipts are now checked with the store that issued them: `play.ts` asks
+ * Play what a purchase token is worth, `appstore.ts` asks Apple what a receipt
+ * holds, and the plan and expiry written here come from that answer rather
+ * than from anything the caller sent. A caller can no longer name their own
+ * plan, or their own renewal date.
  *
- * When they exist, the ONLY code that changes is `validateReceipt` below:
+ * With neither store configured this **refuses**, unless
+ * `ALLOW_UNVERIFIED_PURCHASES` is explicitly set — which is for development
+ * against a build that has no store products yet. Refusing is the safe
+ * default, and the previous version had it the other way round: it granted
+ * whatever was asked for and only wrote a warning to the log.
  *
- *   Google Play → androidpublisher.purchases.subscriptionsv2.get, using a
- *     service account with "View financial data" granted in Play Console.
- *   Apple → the App Store Server API (verifyReceipt is deprecated), with an
- *     in-app purchase key from App Store Connect.
- *
- * Both calls are ordinary HTTPS, so a Worker can make them — which the Spark
- * plan could not. Everything around them is already shaped for it.
- *
- * Both stores also send server notifications when a subscription renews,
- * lapses, is refunded or is cancelled. Without handling those, a lapsed
- * subscription stays active here until its renewsAt passes. That needs one
- * more route per store.
- *
- * DO NOT SHIP with validateReceipt as it stands. It hands premium to anyone
- * who calls it.
+ * Refunds and lapses arrive on `/storeNotify/*`, so access ends when the money
+ * does rather than when `renewsAt` happens to pass.
  */
+
 
 const PLANS = {
   monthly: { days: 30 },
@@ -57,24 +51,63 @@ interface Entitlement {
 }
 
 /**
- * Where store-receipt validation goes.
+ * What the STORE says this account has — never what the caller claims.
  *
- * Must return the plan and expiry the STORE says the account has — never what
- * the caller claims.
+ * The returned plan id is Play's or Apple's product id. They are the same
+ * strings as the local plan ids by construction (`monthly`, `annual`), and
+ * that is checked rather than assumed: a mismatch means the store sold
+ * something this server does not know about.
  */
 async function validateReceipt(
+  env: Env,
   uid: string,
   planId: PlanId,
   receipt: string | undefined,
   platform: string | undefined,
-): Promise<{ planId: PlanId; expiresAt: Date }> {
-  console.warn(
-    "subscription granted without receipt validation",
-    JSON.stringify({ uid, planId, platform, hasReceipt: Boolean(receipt) }),
-  );
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + PLANS[planId].days);
-  return { planId, expiresAt };
+): Promise<{ planId: PlanId; expiresAt: Date; storeId: string }> {
+  const configured =
+    (platform === "google" && playConfigured(env)) ||
+    (platform === "apple" && appleConfigured(env));
+
+  if (!configured) {
+    if (env.ALLOW_UNVERIFIED_PURCHASES !== "1") {
+      console.error("purchase refused: no store credentials", platform);
+      throw new HttpsError(
+        "failed-precondition",
+        "Purchases are not available yet. Please try again later.",
+      );
+    }
+    // Development only, and loud about it.
+    console.warn(
+      "ALLOW_UNVERIFIED_PURCHASES: granting without a store check",
+      JSON.stringify({ uid, planId, platform }),
+    );
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + PLANS[planId].days);
+    return { planId, expiresAt, storeId: receipt ?? uid };
+  }
+
+  if (!receipt) {
+    throw new HttpsError("invalid-argument", "That purchase is missing its receipt.");
+  }
+
+  const verified =
+    platform === "google"
+      ? await validatePlayPurchase(env, receipt)
+      : await validateAppleReceipt(env, receipt);
+
+  if (!isPlanId(verified.productId)) {
+    // The store sold a product this server has no term for. Granting the
+    // requested plan instead would let a cheap product buy an expensive one.
+    console.error("unknown product from store", verified.productId, platform);
+    throw new HttpsError("failed-precondition", "That plan is not available.");
+  }
+
+  return {
+    planId: verified.productId,
+    expiresAt: verified.expiresAt,
+    storeId: verified.storeId,
+  };
 }
 
 export async function activateSubscription(
@@ -87,7 +120,13 @@ export async function activateSubscription(
   }
 
   const db = new Firestore(env);
-  const validated = await validateReceipt(uid, data.planId, data.receipt, data.platform);
+  const validated = await validateReceipt(
+    env,
+    uid,
+    data.planId,
+    data.receipt,
+    data.platform,
+  );
   const now = new Date();
 
   const entitlement: Entitlement = {
@@ -105,6 +144,20 @@ export async function activateSubscription(
     updatedAt: serverTimestamp(),
     renewsAtTs: validated.expiresAt,
   });
+
+  // So a later refund or lapse can be traced back to this account. Without
+  // it a store notification arrives naming a purchase and there is no way to
+  // tell whose it is. Best effort: the purchase is already paid for and
+  // granted, and failing here would undo that over bookkeeping.
+  if (data.receipt && data.platform) {
+    await rememberPurchase(
+      env,
+      uid,
+      data.platform,
+      data.receipt,
+      validated.storeId,
+    ).catch((error) => console.error("purchase index failed", error));
+  }
 
   console.log("subscription activated", uid, validated.planId);
   return { subscription: entitlement };

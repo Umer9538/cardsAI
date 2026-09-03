@@ -319,14 +319,32 @@ drives the store sheet; `FirestoreSubscriptionRepository` reads entitlement;
 is the only thing that can take money, the server the only thing that can grant
 entitlement, and neither does the other's job.
 
-Two things are **not done** and are marked in the code:
+**Receipts are validated against the store that issued them.**
+`workers/src/play.ts` asks Play what a purchase token is worth
+(`purchases.subscriptionsv2.get`); `workers/src/appstore.ts` asks Apple what a
+receipt holds. The plan and the renewal date written to Firestore come from that
+answer, never from the request — a caller cannot name their own plan or their own
+expiry. `verifyReceipt` is the Apple endpoint on purpose: `in_app_purchase` is on
+StoreKit 1 here, and a StoreKit 1 app receipt is what that endpoint takes. Moving to
+the App Store Server API is a *client* change first.
 
-1. **`validateReceipt` does not validate.** It grants on request. The Play and Apple
-   API calls that replace it are named in `workers/src/subscription.ts`, and a
-   Worker *can* make them — the Spark plan could not.
-   **Do not ship as-is — it hands premium to anyone who calls it.**
-2. **No store server notifications.** A lapsed or refunded subscription stays active
-   until `renewsAt` passes. Needs an HTTP endpoint per store.
+**Refunds and lapses arrive on `/storeNotify/{google|apple}/{key}`.** The notification
+body is used **only to find out which purchase changed** — the entitlement then comes
+from re-asking the store over a call the Worker makes itself. That is what makes the
+endpoints safe without verifying Apple's JWS certificate chain or Pub/Sub's OIDC
+token: forging one buys an attacker a validation call against their own purchase, and
+the store's answer is the truth either way. `purchases/{sha256}` maps a store's id back
+to a uid, written at activation, because a notification names a purchase and nothing
+else. A store that is merely *unreachable* never revokes — only an explicit
+`permission-denied` from the store does, or an outage would cancel every subscriber.
+
+One thing is **not done**, and it is a switch rather than code:
+
+1. **`ALLOW_UNVERIFIED_PURCHASES = "1"`** in `workers/wrangler.toml`, because there are
+   no store products to validate against yet. With it on, `activateSubscription` grants
+   whatever is asked for; with it off — and it is off by default, absent means off —
+   it **refuses** until `PLAY_SERVICE_ACCOUNT` or `APPLE_SHARED_SECRET` is set.
+   **Flip it before the first paid release.**
 
 Prices must come from the store once products exist — `_merge()` already does this.
 Hardcoded "$4.99" shown to someone paying in another currency is a rejection.
@@ -1072,6 +1090,29 @@ JWKS verification of it, the service-account OAuth token, the Firestore REST cli
 the transactional quota reserve, a strict `json_schema` response, and the scan-log
 write.
 
+**Meal reminders** are local notifications, timed to the person's own diary.
+`ReminderSchedule` takes the **median** hour of each of breakfast, lunch and dinner
+over the last 28 days, needs at least 3 samples per slot, and adds 45 minutes of
+grace. Generic fixed-time prompts measured as no better than none at all in the
+published trials; prompts timed to the individual raised food-photo capture from 2.8
+to 4.6 images a day. So an empty or thin diary schedules **nothing** rather than
+guessing 7:15. Permission is asked for when the toggle is turned on, never at launch,
+and a refusal leaves the switch off rather than claiming reminders are on. Android
+needs core-library desugaring (`app/build.gradle.kts`) and both receivers declared in
+the manifest — the plugin ships neither, and without the boot receiver every reminder
+dies the first time the phone restarts.
+
+**Account deletion goes through the Worker** (`workers/src/account.ts`). It has to:
+the rules deny client writes to `scans`, `quota`, `subscription` and `private/**`, so
+a client-side purge deletes the diary and strands the rest under a uid nobody owns.
+The Worker enumerates subcollections with `listCollectionIds` rather than hardcoding
+them — a collection added later would otherwise survive every deletion silently — and
+removes the account through the Identity Toolkit admin API, which has no
+`requires-recent-login` rule. On the client that error catches almost everyone.
+Data first, account second: the reverse leaves documents unattributable. The client
+path remains as a fallback, and the UI now **waits and reports** — it used to fire and
+forget, so a failed deletion looked identical to a successful one.
+
 **Not yet real:**
 
 - **Meal photos are stored nowhere.** `/photos` returns "photo storage is not
@@ -1089,7 +1130,9 @@ write.
 - **No eval set yet.** The PRD wants ≥150 labelled photos with an accuracy bar before
   UI polish. Nothing has measured this prompt's accuracy.
 - **In-app purchases fail** until subscription products with ids `monthly` and
-  `annual` exist in Play Console and App Store Connect. Expected, not a bug.
+  `annual` exist in Play Console and App Store Connect. Expected, not a bug. The
+  server-side validation for them is written and deployed but inert until the
+  store credentials are set — see the monetisation section.
 - **Ads serve Google's test creatives** until real unit ids are supplied.
 - **Email verification is parked.** Sign-up goes straight into the app, and forgot
   password just confirms that Firebase's reset *link* was sent. `VerificationScreen`
