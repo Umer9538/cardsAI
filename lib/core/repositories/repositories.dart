@@ -104,6 +104,24 @@ abstract interface class DietRepository {
   Future<DietPlan> add(DietPlan plan);
 }
 
+/// The weight log.
+///
+/// Separate from the diary because the two answer different questions and are
+/// written at different rhythms — meals several times a day, weight once in the
+/// morning if at all.
+abstract interface class WeightRepository {
+  /// Oldest first, so a chart can plot it without sorting.
+  Stream<WeightHistory> watch();
+
+  /// Records a reading. **One per day**: a second entry on the same date
+  /// replaces the first, because two readings hours apart are the same
+  /// measurement taken twice and averaging them would quietly weight that day
+  /// double.
+  Future<void> log(double kg, {DateTime? at});
+
+  Future<void> remove(String id);
+}
+
 /// Writes a one-day eating plan for this user.
 ///
 /// The targets are **not** a parameter: the server reads them from the profile.

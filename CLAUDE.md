@@ -350,6 +350,28 @@ wrong unit and sending them to Settings then is how the screen loses them.
 `formatHeight` rounds to total inches *before* taking the feet, or 5 ft 11.6 in renders as
 `5′ 12″`. The test sweeps every height in the slider's range to prove it never does.
 
+### Weight, the outcome the app kept promising
+
+Calories are the input; weight is the outcome, and the outcome is the only thing that tells
+someone whether any of this is working. The quiz has always collected `goalWeightKg` and the
+plan screen has always rendered "On track for X kg by DATE" — **a falsifiable prediction with
+no way for anyone to falsify it.**
+
+`WeightCard` on Home leads with the **trend**, not the last reading. Body weight swings a kilo
+or more day to day on water alone, so the newest number is the worst estimate of where someone
+is, and it is the number that makes people abandon a plan that is working. `WeightHistory`
+holds that arithmetic — a seven-day mean, and a change figure that returns **null** until there
+is enough history to mean anything, because "you lost 1.4 kg" from two readings a day apart is
+noise presented as progress.
+
+**One reading per calendar day.** On Firestore the document id *is* the day, which makes that a
+property of the storage rather than a rule the client has to remember; the local store enforces
+the same. Two readings hours apart are one measurement taken twice, and keeping both would
+weight that day double in the trend.
+
+Neither direction is coloured. The app does not know whether someone is cutting or gaining, and
+a red number for going up is how a tracker starts scolding people.
+
 ### Nothing on Home, Analysis or Diets is invented
 
 Home and Analysis were already computed — Home off the diary, Analysis off real

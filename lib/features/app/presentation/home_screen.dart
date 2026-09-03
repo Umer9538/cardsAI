@@ -13,6 +13,7 @@ import 'widgets/bottom_nav.dart';
 import 'widgets/calorie_gauge.dart';
 import 'widgets/meal_card.dart';
 import 'widgets/meal_sheet.dart';
+import 'widgets/weight_card.dart';
 
 /// Home — Figma frame `23_Home` (2002:1388).
 ///
@@ -58,8 +59,16 @@ class HomeScreen extends ConsumerWidget {
   static const double _extrasTop = _macroCardsBottom + 6;
   static const double _extrasHeight = 22;
 
-  /// Everything below the macro cards moves down by the row's height.
-  static const double _extrasShift = _extrasHeight + 8;
+  /// Weight sits under the macro row: it is the outcome those inputs are for,
+  /// and the app was already promising a goal date without ever asking for it.
+  static const double _weightTop = _extrasTop + _extrasHeight + 14;
+
+  /// Room reserved for it. The card sizes to its own content — with or without
+  /// a sparkline — so this only books space on the canvas, which scrolls.
+  static const double _weightReserve = 168;
+
+  /// Everything below the macro cards moves down by both additions.
+  static const double _extrasShift = _extrasHeight + 8 + _weightReserve + 14;
 
   /// Where the artboard puts the Diet Plan heading, before the meals list is
   /// inserted above it.
@@ -156,6 +165,10 @@ class HomeScreen extends ConsumerWidget {
                   height: _extrasHeight,
                   consumed: log.consumed,
                   targets: log.targets,
+                ),
+                WeightCard(
+                  top: _weightTop,
+                  onLog: () => showWeightSheet(context, ref),
                 ),
                 _MealsSection(
                   top: _mealsTop,

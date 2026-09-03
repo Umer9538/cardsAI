@@ -28,6 +28,12 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
 
+      // The weight log. Client-writable like the diary: it is the user's own
+      // measurement of themselves, and nothing on the server depends on it.
+      match /weights/{day} {
+        allow read, write: if isOwner(userId);
+      }
+
       match /notifications/{notificationId} {
         allow read, write: if isOwner(userId);
       }

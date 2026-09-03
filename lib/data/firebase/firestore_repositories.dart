@@ -352,6 +352,45 @@ class FirestoreDietRepository with _UserScoped implements DietRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Weight
+// ---------------------------------------------------------------------------
+
+class FirestoreWeightRepository with _UserScoped implements WeightRepository {
+  FirestoreWeightRepository(this.firestore, this.auth);
+
+  @override
+  final FirebaseFirestore firestore;
+  @override
+  final fb.FirebaseAuth auth;
+
+  CollectionReference<Map<String, dynamic>> get _weights => collection('weights');
+
+  @override
+  Stream<WeightHistory> watch() => whenSignedIn(
+        () => _weights.orderBy('at').snapshots().map(
+              (snap) => WeightHistory([
+                for (final doc in snap.docs) WeightEntry.fromJson(doc.data()),
+              ]),
+            ),
+        WeightHistory.empty,
+      );
+
+  @override
+  Future<void> log(double kg, {DateTime? at}) async {
+    final when = at ?? DateTime.now();
+    // The document id *is* the day, which is what makes one reading per day a
+    // property of the storage rather than a rule the client has to remember.
+    final id = when.toIso8601String().substring(0, 10);
+    await _weights
+        .doc(id)
+        .set(WeightEntry(id: id, at: when, kg: kg).toJson());
+  }
+
+  @override
+  Future<void> remove(String id) => _weights.doc(id).delete();
+}
+
+// ---------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------
 

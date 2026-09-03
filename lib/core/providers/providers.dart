@@ -14,6 +14,7 @@ import '../../data/food/open_food_facts_repository.dart';
 import '../../data/local/json_store.dart';
 import '../../data/worker/worker_planner_repository.dart';
 import '../../data/local/local_planner_repository.dart';
+import '../../data/local/local_weight_repository.dart';
 import '../../data/local/local_auth_repository.dart';
 import '../../data/local/local_diary_repository.dart';
 import '../../data/local/local_diet_repository.dart';
@@ -138,6 +139,23 @@ final plannerRepositoryProvider = Provider<PlannerRepository>((ref) {
     () => ref.read(targetsProvider),
   );
 });
+
+final weightRepositoryProvider = Provider<WeightRepository>((ref) {
+  if (ref.watch(backendProvider) == AppBackend.firebase) {
+    return FirestoreWeightRepository(
+      ref.watch(firestoreProvider),
+      ref.watch(firebaseAuthProvider),
+    );
+  }
+  final repository = LocalWeightRepository(ref.watch(jsonStoreProvider));
+  ref.onDispose(repository.dispose);
+  return repository;
+});
+
+/// The weight log, oldest first.
+final weightHistoryProvider = StreamProvider<WeightHistory>(
+  (ref) => ref.watch(weightRepositoryProvider).watch(),
+);
 
 final dietRepositoryProvider = Provider<DietRepository>((ref) {
   if (ref.watch(backendProvider) == AppBackend.firebase) {

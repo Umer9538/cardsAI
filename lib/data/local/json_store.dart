@@ -91,6 +91,9 @@ abstract final class StoreKeys {
   /// every launch.
   static const String quizSeen = 'carbsai.quizSeen';
 
+  /// The weight log.
+  static const String weights = 'carbsai.weights';
+
   /// Plans the user generated, kept apart from the catalogue copy so the
   /// catalogue reconcile cannot delete them.
   static const String myPlans = 'carbsai.myPlans';
@@ -106,6 +109,7 @@ abstract final class StoreKeys {
   static const List<String> all = [
     profile,
     myPlans,
+    weights,
     meals,
     subscription,
     plans,
