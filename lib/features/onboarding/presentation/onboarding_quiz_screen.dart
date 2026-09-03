@@ -146,9 +146,21 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     setState(() => _saving = true);
     try {
       await ref.read(profileRepositoryProvider).save(_draft);
+
+      // Through the coordinator, not straight at the preference.
+      //
+      // Writing the flag directly is what it used to do, and it left Settings
+      // showing "Meal Reminders: on" while Android had never been asked for
+      // POST_NOTIFICATIONS — so every reminder was dropped by the OS and the
+      // switch said otherwise. Verified on a device: granted=false, toggle on.
+      //
+      // Asking here is also the right moment. The person has just answered
+      // "yes, remind me", which is exactly the context Android's own guidance
+      // says a permission prompt should arrive in — and a refusal now leaves
+      // the switch off rather than lying about it.
       await ref
-          .read(notificationSettingsRepositoryProvider)
-          .setEnabled('mealReminders', enabled: _answers.wantsReminders);
+          .read(mealRemindersProvider)
+          .setEnabled(enabled: _answers.wantsReminders);
     } catch (error) {
       debugPrint('could not save quiz answers: $error');
     }

@@ -5,6 +5,8 @@ import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import '../../data/local/json_store.dart';
+
 import 'ad_config.dart';
 
 /// What the app needs from an ad network.
@@ -24,7 +26,19 @@ abstract interface class AdsService {
   Future<bool> showRewarded();
 
   /// Shows the app-open ad, if one is loaded and enough time has passed.
-  Future<void> showAppOpenIfReady();
+  ///
+  /// [awayFor] is how long the app was actually in the background. A resume
+  /// that follows a two-second system dialog is not someone opening the app.
+  Future<void> showAppOpenIfReady({Duration? awayFor});
+
+  /// Declares that the app is about to leave the foreground on purpose — a
+  /// permission prompt, a photo picker, the store's purchase sheet, an ad.
+  ///
+  /// The resume that follows is the user coming *back to what they were doing*,
+  /// not opening the app, and an ad there is the single most complained-about
+  /// pattern in this category. It is also a policy problem: Google treats an
+  /// app-open ad that interrupts a task as an unexpected ad.
+  void suppressNextResume();
 
   void dispose();
 }
@@ -43,7 +57,10 @@ class NoAdsService implements AdsService {
   Future<bool> showRewarded() async => false;
 
   @override
-  Future<void> showAppOpenIfReady() async {}
+  Future<void> showAppOpenIfReady({Duration? awayFor}) async {}
+
+  @override
+  void suppressNextResume() {}
 
   @override
   void dispose() {}
@@ -56,7 +73,11 @@ class NoAdsService implements AdsService {
 /// works against the ten-second target the whole app is built around. Rewarded
 /// is asked for rather than inflicted, and pays the most.
 class AdMobService implements AdsService {
-  AdMobService();
+  AdMobService([this._store]);
+
+  /// Where the frequency caps are remembered between launches. Optional so a
+  /// test can construct the service without one.
+  final JsonStore? _store;
 
   RewardedAd? _rewarded;
   AppOpenAd? _appOpen;
@@ -72,6 +93,21 @@ class AdMobService implements AdsService {
   /// the camera and back should not be charged an ad for it.
   static const Duration _appOpenCooldown = Duration(minutes: 15);
 
+  /// How long the app must actually have been in the background before a
+  /// resume counts as *opening* the app.
+  ///
+  /// This is the backstop that makes the whole thing safe. A permission
+  /// dialog, the ATT prompt, the consent form, a share sheet — every one of
+  /// them pauses the app and resumes it seconds later, and without this an ad
+  /// lands in the middle of whatever the person was doing. That happened on a
+  /// device: granting the camera permission produced an ad on top of the
+  /// scan screen, which is exactly the "unexpected ad" Google's policy names.
+  ///
+  /// [suppressNextResume] handles the excursions that legitimately run longer
+  /// than this — a photo picker, a purchase, a rewarded ad. This catches
+  /// everything nobody remembered to mark.
+  static const Duration _minimumAway = Duration(seconds: 30);
+
   /// How many app-open ads one person may see in a day.
   ///
   /// A cooldown alone is not enough here, and the reason is specific to this
@@ -86,6 +122,19 @@ class AdMobService implements AdsService {
 
   int _appOpenShownToday = 0;
   DateTime? _appOpenDay;
+
+  /// Set when the app itself is about to send the user somewhere.
+  bool _suppressResume = false;
+
+  bool _capsLoaded = false;
+
+  /// Where the caps live between launches.
+  ///
+  /// In memory they were free to anyone who force-closed the app: both the
+  /// cooldown and the two-a-day budget reset on every cold start, so the whole
+  /// frequency policy came down to not quitting. A tracker is opened and closed
+  /// all day by design.
+  static const String _capsKey = 'carbsai.adCaps';
 
   @override
   Future<void> initialize() async {
@@ -257,7 +306,42 @@ class AdMobService implements AdsService {
   }
 
   @override
-  Future<void> showAppOpenIfReady() async {
+  void suppressNextResume() => _suppressResume = true;
+
+  void _loadCaps() {
+    if (_capsLoaded) return;
+    _capsLoaded = true;
+
+    final data = _store?.readMap(_capsKey);
+    if (data == null) return;
+    _appOpenShownAt = DateTime.tryParse(data['shownAt'] as String? ?? '');
+    _appOpenDay = DateTime.tryParse(data['day'] as String? ?? '');
+    _appOpenShownToday = (data['count'] as num?)?.toInt() ?? 0;
+  }
+
+  void _saveCaps() {
+    unawaited(
+      (_store?.writeMap(_capsKey, {
+            'shownAt': _appOpenShownAt?.toIso8601String(),
+            'day': _appOpenDay?.toIso8601String(),
+            'count': _appOpenShownToday,
+          }) ??
+          Future<void>.value()),
+    );
+  }
+
+  @override
+  Future<void> showAppOpenIfReady({Duration? awayFor}) async {
+    // Consumed whether or not an ad would have shown, so a suppressed
+    // excursion cannot leave the flag set for the next genuine open.
+    final suppressed = _suppressResume;
+    _suppressResume = false;
+    if (suppressed) return;
+
+    if (awayFor != null && awayFor < _minimumAway) return;
+
+    _loadCaps();
+
     final ad = _appOpen;
     if (ad == null || _showing) return;
 
@@ -293,6 +377,7 @@ class AdMobService implements AdsService {
     _appOpen = null;
     _showing = true;
     _appOpenShownAt = now;
+    _saveCaps();
 
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {

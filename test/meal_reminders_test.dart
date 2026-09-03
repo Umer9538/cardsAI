@@ -1,5 +1,7 @@
 import 'package:carbsai/core/models/models.dart';
 import 'package:carbsai/core/notifications/meal_reminders.dart';
+import 'package:carbsai/core/ads/ads_providers.dart';
+import 'package:carbsai/core/ads/ads_service.dart';
 import 'package:carbsai/core/providers/providers.dart';
 import 'package:carbsai/core/repositories/repositories.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -82,12 +84,16 @@ List<Meal> _regularDiary() {
   List<Meal>? meals,
   Map<String, bool>? settings,
   bool granted = true,
+  bool? permitted,
 }) {
-  final service = FakeReminderService(granted: granted);
+  final service = FakeReminderService(granted: granted, permitted: permitted);
   final prefs = _StubSettings(settings);
   final container = ProviderContainer(
     overrides: [
       reminderServiceProvider.overrideWithValue(service),
+      // The coordinator tells the ad service not to treat the permission
+      // sheet's resume as an app open. Nothing here is testing ads.
+      adsServiceProvider.overrideWithValue(const NoAdsService()),
       diaryRepositoryProvider.overrideWithValue(_StubDiary(meals ?? const [])),
       notificationSettingsRepositoryProvider.overrideWithValue(prefs),
     ],
@@ -160,6 +166,22 @@ void main() {
 
     expect(h.service.syncs, 1);
     expect(h.service.scheduled, hasLength(3));
+  });
+
+  test('permission revoked in system settings turns the toggle off', () async {
+    final h = _harness(
+      meals: _regularDiary(),
+      settings: {MealReminders.key: true},
+      // Granted once, then taken away in the OS. Nothing tells the app.
+      permitted: false,
+    );
+
+    await h.container.read(mealRemindersProvider).refresh();
+
+    // The switch must stop claiming reminders are on while Android drops
+    // every one of them.
+    expect(h.prefs.values[MealReminders.key], isFalse);
+    expect(h.service.scheduled, isEmpty);
   });
 
   test('an empty diary schedules nothing', () async {

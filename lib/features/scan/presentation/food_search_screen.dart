@@ -167,7 +167,8 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
   double get _contentHeight {
     if (_rows.isEmpty) return DesignCanvas.designHeight;
     final listBottom = _listTop + _rows.length * _rowPitch - 12;
-    final bottom = listBottom + _ctaClearance;
+    // Only owed while the band is actually there.
+    final bottom = listBottom + (_picked.isEmpty ? 20 : _ctaClearance);
     return bottom < DesignCanvas.designHeight
         ? DesignCanvas.designHeight
         : bottom;
@@ -241,9 +242,13 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                   _showingRecent && _recent.isNotEmpty
                       ? 'Foods you log often. Tap to add one again, or search '
                           'for something else.'
-                      : 'Results come from Open Food Facts, a community '
-                          'database of packaged foods. Loose produce may not '
-                          'be listed.',
+                      // Named the wrong database. Search reads the USDA
+                      // FoodData Central mirror first and only falls through to
+                      // Open Food Facts when that has nothing — so the line
+                      // credited the last resort and explained the wrong gaps.
+                      : 'Results come from USDA FoodData Central, the '
+                          'lab-analysed reference database. Packaged products '
+                          'are easier to find by barcode.',
                   style: AppTypography.meta(color: AppColors.muted),
                 ),
               ),
@@ -301,14 +306,18 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
           // a fixed y in a container that grows with the results, so once a
           // search returned more than a screenful the button scrolled up into
           // the middle of the list and drew across the rows.
-          PinnedCta(
-            child: PrimaryButton(
-              label: _picked.isEmpty
-                  ? 'Add to My Diet'
-                  : 'Add ${_picked.length} to My Diet',
-              onPressed: _picked.isEmpty ? null : _done,
+          //
+          // Shown only once something is picked. With the keyboard up the
+          // viewport is barely half a screen, and a permanently-disabled
+          // 138-unit band across the bottom of it left about one and a half
+          // results visible — covering the exact thing the screen is for.
+          if (_picked.isNotEmpty)
+            PinnedCta(
+              child: PrimaryButton(
+                label: 'Add ${_picked.length} to My Diet',
+                onPressed: _done,
+              ),
             ),
-          ),
         ],
       ),
     );

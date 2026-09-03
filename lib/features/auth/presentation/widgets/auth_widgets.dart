@@ -142,9 +142,11 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onPressed != null && !busy;
+
     return Semantics(
       button: true,
-      enabled: onPressed != null && !busy,
+      enabled: enabled,
       // Spoken instead of the child, so a spinner is announced as "working"
       // rather than as nothing at all.
       label: busy ? '$label, working' : label,
@@ -152,7 +154,17 @@ class PrimaryButton extends StatelessWidget {
       child: SizedBox(
         height: 50,
         child: Material(
-          color: AppColors.primary,
+          // A disabled button has to look disabled. This drew at full strength
+          // whatever `onPressed` was, so "Add to My Diet" over an empty result
+          // — a photo with no food in it, a search with nothing picked — read
+          // as a live control that did nothing when tapped, which is
+          // indistinguishable from the app being broken.
+          //
+          // Opacity rather than a second colour: the fill is an exact Figma
+          // value and dimming it keeps one source of truth for the hue.
+          color: enabled
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.38),
           borderRadius: BorderRadius.circular(12),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -171,7 +183,11 @@ class PrimaryButton extends StatelessWidget {
                     )
                   : Text(
                       label,
-                      style: AppTypography.buttonLabel(),
+                      style: AppTypography.buttonLabel(
+                        color: enabled
+                            ? AppColors.white
+                            : AppColors.white.withValues(alpha: 0.6),
+                      ),
                       textAlign: TextAlign.center,
                     ),
             ),

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/ads/ads_providers.dart';
 import '../../../core/design/design_canvas.dart';
 import '../../../core/repositories/repositories.dart';
 import '../../../core/theme/app_colors.dart';
@@ -265,6 +266,10 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
     setState(() => _busy = true);
 
     ref.invalidate(cameraSessionProvider);
+    // Browsing a photo library can easily take longer than the away-time
+    // backstop, and coming back with a photo is the middle of a task rather
+    // than opening the app.
+    ref.read(adsServiceProvider).suppressNextResume();
     try {
       final capture = ref.read(imageCaptureProvider);
       final path = switch (source) {

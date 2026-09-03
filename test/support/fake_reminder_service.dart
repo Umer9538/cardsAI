@@ -8,10 +8,15 @@ import 'package:carbsai/core/notifications/reminder_service.dart';
 /// `flutter test`. It degrades quietly, which is right on a device and merely
 /// noisy here — and it also means a test could never see what was scheduled.
 class FakeReminderService implements ReminderService {
-  FakeReminderService({this.granted = true});
+  FakeReminderService({this.granted = true, bool? permitted})
+      : permitted = permitted ?? granted;
 
   /// What the permission prompt answers.
   bool granted;
+
+  /// What the OS currently allows, independently of whether we ever asked —
+  /// permission can be withdrawn in system settings after being given.
+  bool permitted;
 
   /// The last schedule handed to [sync], or empty after a [cancelAll].
   List<MealReminder> scheduled = const [];
@@ -21,8 +26,12 @@ class FakeReminderService implements ReminderService {
   int permissionRequests = 0;
 
   @override
+  Future<bool> hasPermission() async => permitted;
+
+  @override
   Future<bool> requestPermission() async {
     permissionRequests++;
+    permitted = granted;
     return granted;
   }
 

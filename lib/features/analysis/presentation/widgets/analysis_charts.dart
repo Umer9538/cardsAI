@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/models/nutrition_format.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../analysis_controller.dart';
@@ -75,22 +76,22 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final unit = summary.period == AnalysisPeriod.daily ? 'days' : 'periods';
+    final noun = summary.period == AnalysisPeriod.daily ? 'day' : 'period';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: _LegendItem(
             colour: AppColors.accentOrange,
-            text: '${summary.daysUnderGoal} $unit under goal',
+            text: '${Plural.of(summary.daysUnderGoal, noun)} under goal',
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _LegendItem(
             colour: AppColors.ink,
-            text: '${summary.daysOverBudget} $unit over by more than '
-                '${AnalysisSummary.overBudgetThreshold.round()} kcal',
+            text: '${Plural.of(summary.daysOverBudget, noun)} over by more '
+                'than ${AnalysisSummary.overBudgetThreshold.round()} kcal',
           ),
         ),
       ],

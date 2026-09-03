@@ -77,6 +77,19 @@ class HomeScreen extends ConsumerWidget {
   /// Top of the meals section, immediately below the two macro cards.
   static const double _mealsTop = 771 + _extrasShift;
 
+  /// Exposed so a test can assert the plan card clears the diary. Two
+  /// `Positioned` children overlapping throws nothing and renders plausibly,
+  /// so it has to be checked by arithmetic rather than by rendering.
+  @visibleForTesting
+  static double get mealsTop => _mealsTop;
+
+  @visibleForTesting
+  static double mealsHeight(int count) => _mealsHeight(count);
+
+  @visibleForTesting
+  static double dietCardTop(int mealCount) =>
+      _dietPlanTop + _mealsHeight(mealCount) + 24 + 56;
+
   static const double _mealGap = 12;
   static const double _sectionTitleHeight = 48;
 
@@ -181,7 +194,14 @@ class HomeScreen extends ConsumerWidget {
                 if (plan != null)
                   _DietCard(
                     plan: plan,
-                    top: 827 + shift,
+                    // 56 below its own heading, which is where the artboard
+                    // puts it (771 -> 827). Both shifts have to be on both, and
+                    // for a while only the heading carried `_extrasShift`: the
+                    // card was then drawn 212 units too high, directly over the
+                    // meals section, and a logged meal simply vanished under
+                    // the plan photo. Derived from the heading now so the two
+                    // cannot drift apart again.
+                    top: _dietPlanTop + shift + 56,
                     onTap: onPlanTap == null ? null : () => onPlanTap!(plan),
                   ),
               ],
