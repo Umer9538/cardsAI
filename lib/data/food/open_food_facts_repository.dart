@@ -165,7 +165,27 @@ class OpenFoodFactsRepository implements FoodDatabaseRepository {
       // A label is a measured value, not an estimate — but the *portion* still
       // is, so this is not "high".
       confidence: FoodConfidence.medium,
+      imageUrl: _imageUrl(product),
     );
+  }
+
+  /// The product photograph, preferring the front of the pack.
+  ///
+  /// Open Food Facts exposes several sizes and angles under different keys and
+  /// not every product has every one, so this walks them in order of how
+  /// recognisable the result is. `_front_small` is last on purpose: it is only
+  /// 200px and this fills a 428pt hero, but a soft picture of the right jar
+  /// beats a stock photo of someone else's dinner.
+  static String? _imageUrl(Map<String, dynamic> product) {
+    for (final key in const [
+      'image_front_url',
+      'image_url',
+      'image_front_small_url',
+    ]) {
+      final value = (product[key] as String?)?.trim();
+      if (value != null && value.startsWith('http')) return value;
+    }
+    return null;
   }
 
   static double? _number(Object? value) => switch (value) {

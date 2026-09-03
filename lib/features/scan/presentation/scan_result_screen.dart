@@ -339,9 +339,45 @@ class _CaptureImage extends StatelessWidget {
 
   final String? path;
 
+  /// The artboard's own photograph, used wherever there is nothing better.
+  static Widget _standIn() => Image.asset(
+        'assets/images/app/scan_food.png',
+        width: 428,
+        height: 351,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.high,
+      );
+
   @override
   Widget build(BuildContext context) {
-    final isAsset = path == null || path!.startsWith('assets/');
+    final source = path;
+
+    // A barcode scan has no photograph of its own — but Open Food Facts has
+    // one of the packaging, which is a far better answer than a stock plate of
+    // someone else's dinner sitting above a jar of Nutella.
+    if (source != null && source.startsWith('http')) {
+      return Positioned(
+        left: 0,
+        top: 0,
+        width: 428,
+        height: 351,
+        child: Image.network(
+          source,
+          width: 428,
+          height: 351,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, _, _) => _standIn(),
+          // No spinner: this lands in well under a second on any usable
+          // connection, and a flash of progress indicator over the hero is
+          // more distracting than a beat of the fallback.
+          frameBuilder: (_, child, frame, wasSync) =>
+              frame == null && !wasSync ? _standIn() : child,
+        ),
+      );
+    }
+
+    final isAsset = source == null || source.startsWith('assets/');
     return Positioned(
       left: 0,
       top: 0,

@@ -13,6 +13,8 @@ import '../../../core/theme/app_typography.dart';
 import '../../auth/presentation/widgets/auth_widgets.dart';
 import 'barcode_scanner_view.dart';
 import 'camera_session.dart';
+import 'widgets/barcode_entry_sheet.dart';
+import 'widgets/item_edit_sheet.dart';
 
 /// Capture modes offered above the shutter.
 enum ScanMode {
@@ -258,12 +260,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
 
   /// Types a barcode instead of reading one.
   Future<void> _enterCode() async {
-    final code = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const _BarcodeEntrySheet(),
-    );
+    final code = await showBarcodeEntrySheet(context);
     if (!mounted || code == null || code.trim().isEmpty) return;
     widget.onBarcode?.call(code.trim());
   }
@@ -436,9 +433,9 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             if (_mode == ScanMode.barcode)
               Positioned(
                 left: 40,
-                top: 782,
+                top: 770,
                 width: 348,
-                height: 68,
+                height: 88,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -451,14 +448,23 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
-                    // Barcode has no shutter — detection is continuous, so
-                    // there is nothing for a button to trigger. That left the
-                    // mode with no control at all, and no way forward at all
-                    // when a code will not read: a scuffed label, a curved tin,
-                    // a barcode behind shrink wrap. Typing the digits always
-                    // works, and the number is printed right there.
-                    _TextAction(label: 'Enter it by hand', onTap: _enterCode),
+                    const SizedBox(height: 10),
+                    // A button, not a text link. Barcode has no shutter —
+                    // detection is continuous, so there is nothing for one to
+                    // trigger — which left this mode as the only one with no
+                    // control at all, and no way forward when a code will not
+                    // read: a scuffed label, a curved tin, a barcode behind
+                    // shrink wrap, a camera that cannot focus that close.
+                    // Typing the digits always works, and they are printed
+                    // directly under the bars for exactly this reason.
+                    SizedBox(
+                      height: 44,
+                      width: 220,
+                      child: GhostButton(
+                        label: 'Type the number',
+                        onPressed: _enterCode,
+                      ),
+                    ),
                   ],
                 ),
               )
@@ -1103,119 +1109,6 @@ class _NoteSheetState extends State<_NoteSheet> {
                   label: 'Done',
                   onPressed: () =>
                       Navigator.of(context).pop(_controller.text),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Types a barcode when the reader cannot get one.
-///
-/// Every barcode on a food package is printed as digits directly under the
-/// bars, precisely so it can be read when the scan fails — a scuffed label, a
-/// curved tin, shrink wrap, or a phone whose camera cannot focus that close.
-/// Without this, barcode mode had no way forward at all when detection did not
-/// fire.
-class _BarcodeEntrySheet extends StatefulWidget {
-  const _BarcodeEntrySheet();
-
-  @override
-  State<_BarcodeEntrySheet> createState() => _BarcodeEntrySheetState();
-}
-
-class _BarcodeEntrySheetState extends State<_BarcodeEntrySheet> {
-  final _controller = TextEditingController();
-
-  /// EAN-8 through EAN-13/UPC-A. Shorter than 8 is not a product code, and
-  /// sending it would spend a lookup to be told so.
-  bool get _valid {
-    final digits = _controller.text.trim();
-    return digits.length >= 8 &&
-        digits.length <= 14 &&
-        int.tryParse(digits) != null;
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.inkMuted,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border(top: BorderSide(color: AppColors.outline)),
-        ),
-        padding: const EdgeInsets.fromLTRB(19, 12, 19, 24),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.muted,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text('Enter the barcode', style: AppTypography.cardHeading()),
-              const SizedBox(height: 4),
-              Text(
-                'The digits printed under the bars.',
-                style: AppTypography.meta(color: AppColors.placeholder),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.outline),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                alignment: Alignment.centerLeft,
-                child: TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  style: AppTypography.body(),
-                  cursorColor: AppColors.primary,
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (v) {
-                    if (_valid) Navigator.of(context).pop(v);
-                  },
-                  decoration: InputDecoration.collapsed(
-                    hintText: '5000112637922',
-                    hintStyle: AppTypography.body(color: AppColors.muted),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 50,
-                width: double.infinity,
-                child: PrimaryButton(
-                  label: 'Look it up',
-                  onPressed: _valid
-                      ? () => Navigator.of(context).pop(_controller.text.trim())
-                      : null,
                 ),
               ),
             ],

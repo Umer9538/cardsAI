@@ -140,6 +140,10 @@ class ScanController extends AsyncNotifier<ScanResult?> {
         items: [item],
         input: ScanInput.barcode,
         confidence: FoodConfidence.medium,
+        // The packaging shot, so the result screen and the diary thumbnail
+        // both show the product instead of the artboard's stock plate. It
+        // flows on into `Meal.photoPath`, which already renders a URL.
+        photoPath: item.imageUrl,
       );
     });
     _asAnalysed = state.value?.items ?? const [];

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -55,7 +57,10 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     if (value == null) return;
 
     _handled = true;
-    _controller.stop();
+    // Best effort. If the platform side has already gone away, stopping is
+    // moot — and letting it throw here would surface as an unhandled async
+    // error on top of a scan that actually succeeded.
+    unawaited(_controller.stop().catchError((_) {}));
     widget.onDetected(value);
   }
 

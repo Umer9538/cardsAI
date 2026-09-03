@@ -662,8 +662,16 @@ cancelled in `dispose`, or it outlives the screen and fails every test that touc
 
 Barcode has no shutter — detection is continuous, so there is nothing for a button to trigger
 — which left the mode with no control at all and no way forward when a code will not read.
-**"Enter it by hand"** takes the digits printed under the bars, which is the path that always
-works on a scuffed label, a curved tin, or through shrink wrap.
+**"Type the number"** takes the digits printed under the bars, which is the path that always
+works on a scuffed label, a curved tin, or through shrink wrap. It lives in
+`widgets/barcode_entry_sheet.dart` so it can be tested without the scanner plugin, which has no
+platform side in a widget test.
+
+**A barcode scan shows the product, not a stock plate.** Open Food Facts photographs packaging,
+so `FoodItem.imageUrl` carries `image_front_url` through to `ScanResult.photoPath` and on into
+`Meal.photoPath` — which already rendered a URL. The result screen's hero and the diary
+thumbnail both show the jar the person is holding. Null for anything the model estimated:
+there the user's own photo *is* the picture.
 
 Still missing: nothing from this list — but the streak is the only History surface, so
 there is no calendar or per-day detail beyond swiping the week strip.

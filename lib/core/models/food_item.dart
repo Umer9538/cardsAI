@@ -21,6 +21,7 @@ class FoodItem {
     this.source = FoodSource.ai,
     this.confidence = FoodConfidence.unknown,
     this.userEdited = false,
+    this.imageUrl,
   });
 
   final String id;
@@ -37,6 +38,14 @@ class FoodItem {
 
   final FoodSource source;
   final FoodConfidence confidence;
+
+  /// A picture of the product itself, when the database has one.
+  ///
+  /// Open Food Facts photographs packaging, so a barcode scan can show the jar
+  /// the person is holding rather than the stock plate of food the artboard
+  /// ships. Null for anything the model estimated — there the user's own photo
+  /// is the picture.
+  final String? imageUrl;
 
   /// Set once someone changes a value, so an edit is never silently overwritten
   /// by a re-analysis, and so the edit rate can be measured.
@@ -62,6 +71,7 @@ class FoodItem {
     FoodSource? source,
     FoodConfidence? confidence,
     bool? userEdited,
+    String? imageUrl,
   }) =>
       FoodItem(
         id: id ?? this.id,
@@ -72,6 +82,7 @@ class FoodItem {
         source: source ?? this.source,
         confidence: confidence ?? this.confidence,
         userEdited: userEdited ?? this.userEdited,
+        imageUrl: imageUrl ?? this.imageUrl,
       );
 
   Map<String, dynamic> toJson() => {
@@ -83,6 +94,7 @@ class FoodItem {
         'source': source.name,
         'confidence': confidence.name,
         'userEdited': userEdited,
+        'imageUrl': imageUrl,
       };
 
   factory FoodItem.fromJson(Map<String, dynamic> json) => FoodItem(
@@ -100,6 +112,7 @@ class FoodItem {
           FoodConfidence.unknown,
         ),
         userEdited: json['userEdited'] as bool? ?? false,
+        imageUrl: json['imageUrl'] as String?,
       );
 
   /// Unknown names fall back to [fallback] rather than throwing, so a value
