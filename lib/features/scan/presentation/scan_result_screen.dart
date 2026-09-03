@@ -361,18 +361,33 @@ class _CaptureImage extends StatelessWidget {
         top: 0,
         width: 428,
         height: 351,
-        child: Image.network(
-          source,
-          width: 428,
-          height: 351,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, _, _) => _standIn(),
-          // No spinner: this lands in well under a second on any usable
-          // connection, and a flash of progress indicator over the hero is
-          // more distracting than a beat of the fallback.
-          frameBuilder: (_, child, frame, wasSync) =>
-              frame == null && !wasSync ? _standIn() : child,
+        // `contain`, not `cover`, and on the app's own ground.
+        //
+        // This is a packshot — a jar photographed against white — not a scene.
+        // Cover would crop the top and bottom off the jar to fill a 428x351
+        // letterbox, and Open Food Facts only serves 400px, so it would be an
+        // upscaled crop of the thing you wanted to see whole. Contained on a
+        // dark ground it reads as a product shot, which is what it is.
+        child: ColoredBox(
+          color: AppColors.background,
+          // Inset below the header. A packshot is usually a label on white,
+          // and the back button, the title and the favourite heart are white
+          // too — drawn edge to edge, "Scan" vanished into the Nutella label.
+          // The photo does not need the full 351 to read.
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 118, 24, 10),
+            child: Image.network(
+              source,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, _, _) => _standIn(),
+              // No spinner: this lands in well under a second on any usable
+              // connection, and a flash of progress indicator over the hero is
+              // more distracting than a beat of the fallback.
+              frameBuilder: (_, child, frame, wasSync) =>
+                  frame == null && !wasSync ? _standIn() : child,
+            ),
+          ),
         ),
       );
     }

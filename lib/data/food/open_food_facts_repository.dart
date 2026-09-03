@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
@@ -30,7 +31,16 @@ class OpenFoodFactsRepository implements FoodDatabaseRepository {
   /// full product document runs to hundreds of fields and megabytes per page.
   static const String _fields =
       'code,product_name,brands,serving_quantity,serving_size,'
-      'nutriments,quantity';
+      'nutriments,quantity,'
+      // The packshot. Easy to forget: `fields` is an allow-list, so a key that
+      // is not named here is simply absent from the response — the parser was
+      // reading `image_front_url` out of a document that never contained it.
+      'image_front_url,image_url,image_front_small_url';
+
+  /// The field allow-list, exposed so a test can assert the photograph is in
+  /// it. Adding a reader without adding its key here is a silent no-op.
+  @visibleForTesting
+  static const String debugFields = _fields;
 
   /// Open Food Facts asks every client to identify itself, and rate-limits
   /// anonymous traffic harder.

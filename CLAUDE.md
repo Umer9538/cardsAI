@@ -673,8 +673,20 @@ works on a scuffed label, a curved tin, or through shrink wrap. It lives in
 `widgets/barcode_entry_sheet.dart` so it can be tested without the scanner plugin, which has no
 platform side in a widget test.
 
+**The app is portrait-locked**, in `main()` and in both platform manifests. Not a preference:
+the artboard is a fixed 428 × 926, so in landscape the canvas scales to the short edge and
+scrolls, which lays the floating tab bar across the middle of the content. Framing a plate and
+logging one-handed are both portrait actions.
+
 **A barcode scan shows the product, not a stock plate.** Open Food Facts photographs packaging,
-so `FoodItem.imageUrl` carries `image_front_url` through to `ScanResult.photoPath` and on into
+so `FoodItem.imageUrl` carries `image_front_url` through to `ScanResult.photoPath`.
+**`fields` on that API is an allow-list** — a key not named in `_fields` is simply absent from
+the response, which is how the parser spent a release reading `image_front_url` out of a
+document that never contained it. `debugFields` is exposed so a test asserts it. The packshot
+is drawn `contain` on the app's ground and inset below the header: it is a label on white, the
+header glyphs are white, and edge-to-edge "Scan" vanished into the Nutella label. Open Food
+Facts serves 400px at most, so cropping it to fill would be an upscaled crop of the one thing
+you wanted to see whole and on into
 `Meal.photoPath` — which already rendered a URL. The result screen's hero and the diary
 thumbnail both show the jar the person is holding. Null for anything the model estimated:
 there the user's own photo *is* the picture.

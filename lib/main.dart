@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/main_shell.dart';
@@ -20,6 +21,17 @@ import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Portrait only, and it is a design constraint rather than a preference.
+  //
+  // Every screen is a fixed 428 x 926 artboard. In landscape the canvas scales
+  // to the short edge and scrolls, which puts the floating tab bar across the
+  // middle of the content — and the two things this app is for, framing a plate
+  // and logging one-handed, are both portrait actions.
+  await SystemChrome.setPreferredOrientations(const [
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   // Opening the store is the one piece of async setup the whole app needs, so
   // it happens before the first frame and is injected rather than awaited
