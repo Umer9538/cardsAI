@@ -1,3 +1,4 @@
+import { deleteAccount } from "./account.js";
 import { requireAuth } from "./auth.js";
 import { timingSafeEqual, utf8 } from "./bytes.js";
 import { syncCatalogue } from "./catalogue.js";
@@ -44,6 +45,7 @@ const CALLABLES: Record<string, Callable> = {
   grantBonusScans: (env, uid) => grantBonusScans(env, uid),
   generatePlan: (env, uid, data) =>
     generatePlan(env, uid, data as GeneratePlanRequest),
+  deleteAccount: (env, uid) => deleteAccount(env, uid),
 };
 
 const CORS: Record<string, string> = {

@@ -28,14 +28,20 @@ class FirebaseAuthRepository implements AuthRepository {
   final FirebaseFunctions _functions;
   final ProfileRepository _profiles;
 
-  /// Subcollections under `users/{uid}` that a delete has to clear.
+  /// Subcollections under `users/{uid}` the client is allowed to clear.
   ///
   /// Deleting a document in Firestore does *not* delete its subcollections —
   /// they survive as orphans, invisible in the console but still billed and
   /// still returned by a collection-group query. They must be enumerated.
+  ///
+  /// This is the fallback path only. It is deliberately incomplete: the rules
+  /// deny client writes to `scans`, `quota`, `subscription` and `private/**`,
+  /// so no client can finish the job. [deleteAccount] asks the Worker first,
+  /// which has the service-account authority to delete all of it.
   static const List<String> _subcollections = [
     'meals',
     'plans',
+    'weights',
     'notifications',
     'prefs',
   ];
@@ -226,11 +232,39 @@ class FirebaseAuthRepository implements AuthRepository {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    // Order matters: the security rules key on request.auth.uid, so deleting
+    // The Worker does the real deletion. It holds the service-account token,
+    // so it reaches the four subcollections the rules keep from every client
+    // — `scans`, `quota`, `subscription`, `private/**` — and it removes the
+    // account through the Identity Toolkit admin API, which has no
+    // `requires-recent-login` rule. On the client that error catches almost
+    // everyone: it fires for any session older than about five minutes.
+    try {
+      await _functions.workerCallable('deleteAccount').call<void>();
+      await _auth.signOut();
+      _current = null;
+      return;
+    } on FirebaseFunctionsException catch (e) {
+      // `unauthenticated` means the token was rejected, and retrying on the
+      // client will not help.
+      if (e.code == 'unauthenticated') {
+        throw RepositoryException(
+          'Please sign in again, then delete your account.',
+          code: e.code,
+        );
+      }
+      // Anything else — the Worker unreachable, an unset WORKER_URL — falls
+      // through to the client path below, which deletes what it can. Better a
+      // partial deletion the user can see than a button that does nothing.
+    } catch (_) {
+      // Same intent, for a StateError from a missing WORKER_URL.
+    }
+
+    // Fallback. Order matters: the rules key on request.auth.uid, so deleting
     // the auth user first would revoke permission to delete their own data and
     // strand it.
     await _purge(user.uid);
     await _guard(user.delete);
+    _current = null;
   }
 
   /// Removes everything under `users/{uid}`.
