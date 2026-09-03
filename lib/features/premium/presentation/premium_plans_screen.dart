@@ -7,7 +7,7 @@ import '../../../core/design/design_canvas.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/hero_card.dart';
 import 'widgets/premium_widgets.dart';
 
 /// Plan chooser — Figma frame `17_Premium` (2002:1695).
@@ -39,27 +39,11 @@ class PremiumPlansScreen extends ConsumerWidget {
               top: 147,
               width: 388,
               height: 128,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.lilac,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Take Nutrition to the Next Level',
-                      style: AppTypography.sectionTitle(color: AppColors.ink),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Smarter tracking. Deeper insights. Real results.',
-                      style: AppTypography.body(color: AppColors.ink),
-                    ),
-                  ],
-                ),
+              child: const HeroCard(
+                colour: AppColors.lilac,
+                ink: AppColors.ink,
+                title: 'Take Nutrition to the Next Level',
+                body: 'Smarter tracking. Deeper insights. Real results.',
               ),
             ),
 

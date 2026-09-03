@@ -736,6 +736,35 @@ goal is 328 consumed, which cannot also be 140g carbs + 60g protein = 800 kcal).
 now computes from the diary, **so a render diff against that artboard differs in the
 numbers, and should.**
 
+## Accessibility, and what the artboard costs
+
+**Text scaling is clamped, and that is a limitation rather than a design.** Every child of a
+`DesignCanvas` is a `Positioned` at a fixed y with a fixed height, so text that grows overlaps
+the next element instead of pushing it down. `DesignCanvas.maxTextScale` (1.15) is the ceiling
+the layout provably survives — `responsive_overflow_test` now renders every screen at that
+ceiling *and* at 3.0 (which clamps to it), so the number is tested rather than assumed. Fixing
+it properly means letting screens reflow, which means giving up the artboard convention on
+each one. **Do not raise it without re-running the overflow suite.**
+
+Finding that ceiling turned up four places where the artboard's own numbers fitted *exactly*,
+leaving zero slack for any font-metric variation:
+
+- The week-strip day cells: fixed gaps replaced with `spaceBetween`.
+- Three copies of the same 388 × 128 intro card — Analysis, Diets, Premium Plans — now one
+  `HeroCard` where the body takes what the heading leaves and ellipsises.
+- `PlanRow`'s title had a fixed 30pt box, which is its natural height and therefore its
+  ceiling. It sizes itself now, and the review-summary card — the one place with no room at
+  all — wraps it in `FittedBox(scaleDown)`. That is a deliberate, contained compromise on one
+  card; capping the whole app to protect it would have been the wrong trade.
+
+**Icon-only controls must carry a `Semantics` label.** The app had 39 tappable widgets and
+zero. A bare glyph with no text near it is not merely unlabelled to a screen reader — the
+control does not exist. `AppTab` carries a spoken `label`, `PrimaryButton` announces itself as
+a button and says "working" while busy, and the back / crown / bell glyphs are labelled;
+`_OutlineIconButton` takes `label` as **required** so the next one cannot ship silent.
+`accessibility_test.dart` guards it. This matters more here than for a general app, because
+the launch plan markets into diabetes communities, which skew older.
+
 ## Theme
 
 - `AppColors` values are **exact sRGB conversions of Figma fills**. Do not adjust them.

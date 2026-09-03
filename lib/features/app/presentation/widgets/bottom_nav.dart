@@ -5,14 +5,19 @@ import '../../../../core/theme/app_colors.dart';
 
 /// The five destinations in the floating tab bar.
 enum AppTab {
-  home('assets/images/app/nav_home.png'),
-  analysis('assets/images/app/nav_analysis.png'),
-  scan('assets/images/app/nav_scan.png'),
-  diets('assets/images/app/nav_diets.png'),
-  settings('assets/images/app/nav_settings.png');
+  home('assets/images/app/nav_home.png', 'Home'),
+  analysis('assets/images/app/nav_analysis.png', 'Analysis'),
+  scan('assets/images/app/nav_scan.png', 'Scan a meal'),
+  diets('assets/images/app/nav_diets.png', 'Diet plans'),
+  settings('assets/images/app/nav_settings.png', 'Settings');
 
-  const AppTab(this.icon);
+  const AppTab(this.icon, this.label);
   final String icon;
+
+  /// What a screen reader says. The tabs are icon-only by design, which means
+  /// this is the *only* thing announcing them — without it the whole bottom bar
+  /// is five unlabelled buttons.
+  final String label;
 }
 
 /// Floating tab bar — Figma `Master bottom Menu`.
@@ -46,8 +51,7 @@ class AppBottomNav extends StatelessWidget {
   ///
   /// The extra 20 is that breathing room, so the last row clears the bar rather
   /// than touching it.
-  static const double clearance =
-      DesignCanvas.designHeight - top + 20;
+  static const double clearance = DesignCanvas.designHeight - top + 20;
 
   @override
   Widget build(BuildContext context) {
@@ -57,9 +61,7 @@ class AppBottomNav extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.outline,
         borderRadius: BorderRadius.circular(100),
-        boxShadow: const [
-          BoxShadow(color: Color(0x3D000000), blurRadius: 14),
-        ],
+        boxShadow: const [BoxShadow(color: Color(0x3D000000), blurRadius: 14)],
       ),
       padding: const EdgeInsets.all(6),
       child: Row(
@@ -86,22 +88,29 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 54,
-        height: 54,
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.muted,
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: Image.asset(
-          tab.icon,
-          width: 24,
-          height: 24,
-          filterQuality: FilterQuality.high,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: tab.label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : AppColors.muted,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: ExcludeSemantics(
+            child: Image.asset(
+              tab.icon,
+              width: 24,
+              height: 24,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
         ),
       ),
     );

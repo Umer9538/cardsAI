@@ -142,30 +142,39 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 50,
-      child: Material(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: busy ? null : onPressed,
-          child: Center(
-            child: busy
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(AppColors.white),
+    return Semantics(
+      button: true,
+      enabled: onPressed != null && !busy,
+      // Spoken instead of the child, so a spinner is announced as "working"
+      // rather than as nothing at all.
+      label: busy ? '$label, working' : label,
+      excludeSemantics: true,
+      child: SizedBox(
+        height: 50,
+        child: Material(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: busy ? null : onPressed,
+            child: Center(
+              child: busy
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.white,
+                        ),
+                      ),
+                    )
+                  : Text(
+                      label,
+                      style: AppTypography.buttonLabel(),
+                      textAlign: TextAlign.center,
                     ),
-                  )
-                : Text(
-                    label,
-                    style: AppTypography.buttonLabel(),
-                    textAlign: TextAlign.center,
-                  ),
+            ),
           ),
         ),
       ),
@@ -200,7 +209,12 @@ class SocialButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(icon, width: 24, height: 24, filterQuality: FilterQuality.high),
+              Image.asset(
+                icon,
+                width: 24,
+                height: 24,
+                filterQuality: FilterQuality.high,
+              ),
               const SizedBox(width: 12),
               Text(label, style: AppTypography.socialLabel()),
             ],
@@ -287,14 +301,21 @@ class BackCircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Image.asset(
-        'assets/images/auth/back_button.png',
-        width: 40,
-        height: 40,
-        filterQuality: FilterQuality.high,
+    // The glyph is an exported image with no text anywhere near it, so without
+    // this a screen reader announces nothing at all — the control simply does
+    // not exist for anyone not looking at it.
+    return Semantics(
+      button: true,
+      label: 'Back',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Image.asset(
+          'assets/images/auth/back_button.png',
+          width: 40,
+          height: 40,
+          filterQuality: FilterQuality.high,
+        ),
       ),
     );
   }

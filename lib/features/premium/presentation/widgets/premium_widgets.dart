@@ -135,20 +135,40 @@ class PlanRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  height: 30,
-                  child: Text(
+            // The title had a fixed 30pt box around it, which is exactly its
+            // natural height at the artboard's own text size — and therefore
+            // its ceiling too, so one notch of OS text scaling overflowed it.
+            // Letting the text size itself costs nothing at 1.0 and simply
+            // grows the row past it.
+            // scaleDown, and only here.
+            //
+            // The review-summary card gives this row 82pt inside a 130pt box
+            // that the artboard fills exactly, so there is no slack at all —
+            // one notch of OS text scaling and the column is 13pt over. The
+            // rest of the app absorbs scaling up to
+            // [DesignCanvas.maxTextScale]; this one card cannot, and capping
+            // the whole app to protect it would be the wrong trade. scaleDown
+            // is a no-op at the artboard's own size and shrinks the block
+            // uniformly above it, so the row stays legible and stays inside its
+            // card. If this card is ever redrawn with room to breathe, delete
+            // the FittedBox.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
                     title,
                     style: AppTypography.sectionTitle(color: AppColors.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                SizedBox(height: gap),
-                PlanPrice(amount: amount, period: period),
-              ],
+                  SizedBox(height: gap),
+                  PlanPrice(amount: amount, period: period),
+                ],
+              ),
             ),
           ),
           // Chevron only. The visually similar onboarding arrow is a

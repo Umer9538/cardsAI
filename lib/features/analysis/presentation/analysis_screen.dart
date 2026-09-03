@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/design_canvas.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/hero_card.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/providers/providers.dart';
 import '../../app/presentation/widgets/bottom_nav.dart';
@@ -67,29 +68,15 @@ class AnalysisScreen extends ConsumerWidget {
                   top: 143,
                   width: 388,
                   height: 128,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.accentGreen,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Your Nutrition Analysis',
-                            style: AppTypography.sectionTitle()),
-                        const SizedBox(height: 12),
-                        Text(
-                          summary.isEmpty
-                              ? 'Track trends. Spot patterns. Crush your goals.'
-                              : '${summary.averageCalories.round()} kcal a day '
-                                  'across ${summary.loggedDays} logged '
-                                  '${summary.loggedDays == 1 ? "day" : "days"}.',
-                          style: AppTypography.body(),
-                        ),
-                      ],
-                    ),
+                  child: HeroCard(
+                    colour: AppColors.accentGreen,
+                    ink: AppColors.white,
+                    title: 'Your Nutrition Analysis',
+                    body: summary.isEmpty
+                        ? 'Track trends. Spot patterns. Crush your goals.'
+                        : '${summary.averageCalories.round()} kcal a day '
+                            'across ${summary.loggedDays} logged '
+                            '${summary.loggedDays == 1 ? "day" : "days"}.',
                   ),
                 ),
                 Positioned(

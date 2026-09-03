@@ -57,14 +57,35 @@ class DesignCanvas extends StatelessWidget {
   final double height;
   final double maxScale;
 
+  /// The largest OS text scale this artboard can absorb without breaking.
+  ///
+  /// Every child here is a `Positioned` at a fixed y with a fixed height, so
+  /// text that grows does not push the next element down — it overlaps it, or
+  /// overflows its own box. That is a property of drawing a design file
+  /// literally, and it is the honest cost of the fidelity this canvas buys.
+  ///
+  /// The scale is therefore clamped rather than ignored: everything up to this
+  /// ceiling is honoured exactly, and past it the app stops growing instead of
+  /// coming apart. `responsive_overflow_test` renders every screen *at* this
+  /// ceiling, so the number is a tested guarantee rather than a hope.
+  ///
+  /// **This is a limitation, not a feature.** Someone who has asked their phone
+  /// for 200% text gets 115%. Fixing it properly means letting the screens
+  /// reflow, which means giving up the artboard convention on each one. Until
+  /// then, do not raise this without re-running the overflow suite.
+  static const double maxTextScale = 1.15;
+
   @override
   Widget build(BuildContext context) {
-    final canvas = SizedBox(
-      width: width,
-      height: height,
-      child: ColoredBox(
-        color: background,
-        child: Stack(clipBehavior: Clip.hardEdge, children: children),
+    final canvas = MediaQuery.withClampedTextScaling(
+      maxScaleFactor: maxTextScale,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: ColoredBox(
+          color: background,
+          child: Stack(clipBehavior: Clip.hardEdge, children: children),
+        ),
       ),
     );
 

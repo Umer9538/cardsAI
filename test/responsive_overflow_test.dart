@@ -17,6 +17,7 @@ import 'package:carbsai/features/premium/presentation/premium_plans_screen.dart'
 import 'package:carbsai/features/premium/presentation/review_summary_screen.dart';
 import 'package:carbsai/features/splash/presentation/splash_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:carbsai/core/design/design_canvas.dart';
 import 'package:carbsai/core/models/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -81,6 +82,51 @@ List<(String, Widget)> _screens() => [
 
 void main() {
   setUpAll(loadDesignFonts);
+
+  // The suite tested ten viewports and zero text scales, on a canvas whose
+  // children are all `Positioned` at fixed coordinates. Text that grows there
+  // does not push the next element down, it overlaps it — so dynamic type was
+  // structurally guaranteed to break the layout and nothing would have caught
+  // it. [DesignCanvas.maxTextScale] is the ceiling the artboard can absorb;
+  // this renders every screen at it, which is what makes that number a
+  // guarantee rather than an assumption.
+  //
+  // 3.0 stands in for the largest accessibility sizes iOS and Android offer.
+  // The assertion is not that the app honours 3.0 — it clamps — but that
+  // asking for it cannot produce a broken screen.
+  for (final requested in const [DesignCanvas.maxTextScale, 3.0]) {
+    testWidgets('no overflow at ${requested}x text on the artboard',
+        (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(428, 926);
+      addTearDown(tester.view.reset);
+
+      final scope = await designScopeBuilder();
+
+      for (final (screenName, screen) in _screens()) {
+        await tester.pumpWidget(
+          scope(
+            MaterialApp(
+              debugShowCheckedModeBanner: false,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(requested)),
+                child: child!,
+              ),
+              home: screen,
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: '$screenName overflowed at ${requested}x text',
+        );
+      }
+    });
+  }
 
   for (final (deviceName, size) in _devices) {
     testWidgets('no overflow on $deviceName (${size.width.toInt()}x'

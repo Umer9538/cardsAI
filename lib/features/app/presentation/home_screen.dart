@@ -265,11 +265,13 @@ class _Header extends StatelessWidget {
         _OutlineIconButton(
           left: 316,
           icon: 'assets/images/app/icon_crown.png',
+          label: 'Go Premium',
           onTap: onPremium,
         ),
         _OutlineIconButton(
           left: 368,
           icon: 'assets/images/app/icon_bell.png',
+          label: 'Notifications',
           onTap: onNotifications,
         ),
       ],
@@ -300,11 +302,17 @@ class _OutlineIconButton extends StatelessWidget {
   const _OutlineIconButton({
     required this.left,
     required this.icon,
+    required this.label,
     this.onTap,
   });
 
   final double left;
   final String icon;
+
+  /// Required, not optional: these are bare glyphs with no text near them, so
+  /// the label is the only thing that announces them.
+  final String label;
+
   final VoidCallback? onTap;
 
   @override
@@ -314,20 +322,24 @@ class _OutlineIconButton extends StatelessWidget {
       top: 71,
       width: 40,
       height: 40,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.inkMuted),
-          ),
-          alignment: Alignment.center,
-          child: Image.asset(
-            icon,
-            width: 20,
-            height: 20,
-            filterQuality: FilterQuality.high,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.inkMuted),
+            ),
+            alignment: Alignment.center,
+            child: Image.asset(
+              icon,
+              width: 20,
+              height: 20,
+              filterQuality: FilterQuality.high,
+            ),
           ),
         ),
       ),
@@ -497,7 +509,13 @@ class _DayColumn extends StatelessWidget {
               // overflowed the pill. Children are centred anyway, so dropping
               // the horizontal inset changes nothing else.
               padding: const EdgeInsets.symmetric(vertical: 8),
+              // spaceBetween rather than a fixed 13pt gap. The artboard's
+              // numbers fill this box exactly, so at any OS text scale above
+              // 1.0 the fixed gap put the column over its own pill. Spacing is
+              // what yields here — the label and the date circle have no slack
+              // to give, and the gap has nothing else to do.
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     day,
@@ -505,7 +523,6 @@ class _DayColumn extends StatelessWidget {
                     maxLines: 1,
                     softWrap: false,
                   ),
-                  const SizedBox(height: 13),
                   Container(
                     width: 28,
                     height: 28,
@@ -523,10 +540,19 @@ class _DayColumn extends StatelessWidget {
               width: 44,
               height: 60,
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(day, style: AppTypography.label(color: colour)),
-                  const SizedBox(height: 16),
-                  Text(date, style: AppTypography.label(color: colour)),
+                  Text(
+                    day,
+                    style: AppTypography.label(color: colour),
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                  Text(
+                    date,
+                    style: AppTypography.label(color: colour),
+                    maxLines: 1,
+                  ),
                 ],
               ),
             ),

@@ -6,6 +6,7 @@ import '../../../core/design/design_canvas.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/hero_card.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../app/presentation/home_screen.dart' show NutritionRow;
 import '../../app/presentation/widgets/bottom_nav.dart';
@@ -165,23 +166,11 @@ class _HeaderCard extends StatelessWidget {
       top: 216,
       width: 388,
       height: 128,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.lilac,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Explore Diet Plans',
-                style: AppTypography.sectionTitle(color: AppColors.ink)),
-            const SizedBox(height: 12),
-            Text('Personalized plans to match your goals and lifestyle.',
-                style: AppTypography.body(color: AppColors.ink)),
-          ],
-        ),
+      child: const HeroCard(
+        colour: AppColors.lilac,
+        ink: AppColors.ink,
+        title: 'Explore Diet Plans',
+        body: 'Personalized plans to match your goals and lifestyle.',
       ),
     );
   }
