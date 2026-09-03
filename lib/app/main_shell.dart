@@ -10,6 +10,7 @@ import '../features/app/presentation/widgets/bottom_nav.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/diets/presentation/diet_detail_screen.dart';
 import '../features/diets/presentation/diets_screen.dart';
+import '../features/diets/presentation/plan_builder_screen.dart';
 import '../features/favorites/presentation/favorites_screen.dart';
 import '../features/premium/presentation/plan_detail_screen.dart';
 import '../features/premium/presentation/premium_offer_screen.dart';
@@ -315,6 +316,27 @@ class _MainShellState extends ConsumerState<MainShell> {
         DietsScreen(
           tab: _dietsTab,
           onTabChanged: (t) => setState(() => _dietsTab = t),
+          onBuildPlan: () => _push(
+            Builder(
+              builder: (c) => PlanBuilderScreen(
+                onBack: () => Navigator.of(c).pop(),
+                onCreated: (plan) {
+                  // Replace rather than stack: going back from a plan you just
+                  // built should land on My Diets, not on the form that built
+                  // it.
+                  Navigator.of(c).pushReplacement(
+                    MaterialPageRoute<void>(
+                      builder: (c2) => DietDetailScreen(
+                        plan: plan,
+                        onBack: () => Navigator.of(c2).pop(),
+                        onAdd: () => Navigator.of(c2).pop(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
           onNavSelected: _selectTab,
           onPlanTap: (plan) => _push(
             Builder(

@@ -67,7 +67,7 @@ const DEFAULTS = {
   imageDetail: "high",
 };
 
-type ScanConfig = typeof DEFAULTS;
+export type ScanConfig = typeof DEFAULTS;
 
 /**
  * Reads `config/scan`, falling back per-field to [DEFAULTS].
@@ -75,7 +75,7 @@ type ScanConfig = typeof DEFAULTS;
  * The model must be switchable without an app release; this is that seam. A
  * missing document, or a missing field within it, is normal.
  */
-async function loadConfig(db: Firestore): Promise<ScanConfig> {
+export async function loadConfig(db: Firestore): Promise<ScanConfig> {
   try {
     const doc = await db.get("config/scan");
     return { ...DEFAULTS, ...(doc ?? {}) } as ScanConfig;
@@ -389,11 +389,11 @@ export async function analyzeMeal(
  * key, which is a trap worth naming: set `OPENROUTER_API_KEY` instead and it
  * takes precedence, so the secret's name can match its contents.
  */
-function modelApiKey(env: Env): string {
+export function modelApiKey(env: Env): string {
   return env.OPENROUTER_API_KEY || env.OPENAI_API_KEY;
 }
 
-class UpstreamError extends Error {
+export class UpstreamError extends Error {
   constructor(readonly status: number, body: string) {
     super(`openai ${status}: ${body.slice(0, 500)}`);
   }

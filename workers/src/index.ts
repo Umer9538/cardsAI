@@ -6,6 +6,7 @@ import type { Env } from "./env.js";
 import { sendEmailOtp, verifyEmailOtp } from "./otp.js";
 import { searchFoods } from "./foods.js";
 import { deletePhoto, uploadPhoto } from "./photos.js";
+import { generatePlan, type GeneratePlanRequest } from "./planner.js";
 import { grantBonusScans } from "./rewards.js";
 import { analyzeMeal, type ScanRequest } from "./scan.js";
 import { activateSubscription, cancelSubscription } from "./subscription.js";
@@ -41,6 +42,8 @@ const CALLABLES: Record<string, Callable> = {
   searchFoods: (env, uid, data) =>
     searchFoods(env, uid, data as { query?: string; limit?: number }),
   grantBonusScans: (env, uid) => grantBonusScans(env, uid),
+  generatePlan: (env, uid, data) =>
+    generatePlan(env, uid, data as GeneratePlanRequest),
 };
 
 const CORS: Record<string, string> = {

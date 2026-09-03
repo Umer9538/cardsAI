@@ -99,6 +99,20 @@ abstract interface class DietRepository {
 
   Future<DietPlan> setFavorite(String id, {required bool favorite});
   Future<DietPlan> setMine(String id, {required bool mine});
+
+  /// Saves a plan the user created, and marks it theirs.
+  Future<DietPlan> add(DietPlan plan);
+}
+
+/// Writes a one-day eating plan for this user.
+///
+/// The targets are **not** a parameter: the server reads them from the profile.
+/// They are `TargetCalculator`'s output, which is where the deficit cap and the
+/// calorie floors are applied, so letting a client send its own would let the
+/// one feature that most needs those guards bypass them.
+abstract interface class PlannerRepository {
+  /// [notes] is the user's own free text — cuisine, allergies, dislikes.
+  Future<DietPlan> generate({String? notes});
 }
 
 /// Turns a capture into nutrition figures.

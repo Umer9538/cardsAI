@@ -260,6 +260,17 @@ class FirestoreDietRepository with _UserScoped implements DietRepository {
   @override
   Stream<List<DietPlan>> watchFavorites() => _watch((plan) => plan.isFavorite);
 
+  /// A generated plan, written into the user's own plan collection.
+  ///
+  /// `syncCatalogue` leaves it alone: that walks [SeedData] and only touches
+  /// documents whose ids are in it.
+  @override
+  Future<DietPlan> add(DietPlan plan) async {
+    final saved = plan.copyWith(isMine: true);
+    await _plans.doc(saved.id).set(saved.toJson());
+    return saved;
+  }
+
   @override
   Future<DietPlan> setFavorite(String id, {required bool favorite}) =>
       _update(id, {'isFavorite': favorite});

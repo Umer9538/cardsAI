@@ -12,6 +12,8 @@ import '../../data/firebase/functions_scan_repository.dart';
 import '../../data/firebase/storage_photo_repository.dart';
 import '../../data/food/open_food_facts_repository.dart';
 import '../../data/local/json_store.dart';
+import '../../data/worker/worker_planner_repository.dart';
+import '../../data/local/local_planner_repository.dart';
 import '../../data/local/local_auth_repository.dart';
 import '../../data/local/local_diary_repository.dart';
 import '../../data/local/local_diet_repository.dart';
@@ -120,6 +122,21 @@ final diaryRepositoryProvider = Provider<DiaryRepository>((ref) {
   final repository = LocalDiaryRepository(ref.watch(jsonStoreProvider));
   ref.onDispose(repository.dispose);
   return repository;
+});
+
+/// Writes a one-day plan from the user's own targets.
+///
+/// On Firebase it goes to the Worker and the same model the scan pipeline
+/// uses; on local it composes one from the catalogue, so the flow stays
+/// walkable with no network.
+final plannerRepositoryProvider = Provider<PlannerRepository>((ref) {
+  if (ref.watch(backendProvider) == AppBackend.firebase) {
+    return WorkerPlannerRepository(ref.watch(functionsProvider));
+  }
+  return LocalPlannerRepository(
+    ref.watch(dietRepositoryProvider),
+    () => ref.read(targetsProvider),
+  );
 });
 
 final dietRepositoryProvider = Provider<DietRepository>((ref) {

@@ -91,6 +91,10 @@ abstract final class StoreKeys {
   /// every launch.
   static const String quizSeen = 'carbsai.quizSeen';
 
+  /// Plans the user generated, kept apart from the catalogue copy so the
+  /// catalogue reconcile cannot delete them.
+  static const String myPlans = 'carbsai.myPlans';
+
   /// Which revision of the plan catalogue the stored copy was written from.
   /// See `LocalDietRepository._load`.
   static const String plansVersion = 'carbsai.plansVersion';
@@ -101,6 +105,7 @@ abstract final class StoreKeys {
 
   static const List<String> all = [
     profile,
+    myPlans,
     meals,
     subscription,
     plans,

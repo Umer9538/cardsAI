@@ -19,6 +19,10 @@ class LocalDietRepository implements DietRepository {
   final _controller = StreamController<List<DietPlan>>.broadcast();
 
   List<DietPlan> _plans = const [];
+
+  /// Plans the user generated. Held apart from the catalogue because `_load`
+  /// rebuilds that from [SeedData] and would otherwise delete them.
+  List<DietPlan> _mine = const [];
   bool _loaded = false;
 
   /// Bumped when the catalogue changes in a way that must reach an install
@@ -53,7 +57,13 @@ class LocalDietRepository implements DietRepository {
       }
     }
 
+    _mine = [
+      for (final json in _store.readList(StoreKeys.myPlans) ?? const [])
+        DietPlan.fromJson(json),
+    ];
+
     _plans = [
+      ..._mine,
       for (final plan in SeedData.dietPlans)
         plan.copyWith(
           isMine: flags[plan.id]?.mine ?? false,
@@ -68,6 +78,11 @@ class LocalDietRepository implements DietRepository {
     _loaded = true;
     _controller.add(_plans);
   }
+
+  Future<void> _persistMine() => _store.writeList(
+        StoreKeys.myPlans,
+        _mine.map((p) => p.toJson()).toList(),
+      );
 
   Future<void> _persist() =>
       _store.writeList(StoreKeys.plans, _plans.map((p) => p.toJson()).toList());
@@ -93,6 +108,23 @@ class LocalDietRepository implements DietRepository {
 
   @override
   Stream<List<DietPlan>> watchFavorites() => _watch((plan) => plan.isFavorite);
+
+  /// A generated plan, kept alongside the catalogue.
+  ///
+  /// It survives `_load`'s reconcile because that walks [SeedData] and would
+  /// drop anything not in it — so user plans are held separately and merged
+  /// back in.
+  @override
+  Future<DietPlan> add(DietPlan plan) async {
+    await _ready();
+    final saved = plan.copyWith(isMine: true);
+    _plans = [saved, ..._plans.where((p) => p.id != saved.id)];
+    _mine = [saved, ..._mine.where((p) => p.id != saved.id)];
+    await _persistMine();
+    await _persist();
+    _controller.add(_plans);
+    return saved;
+  }
 
   @override
   Future<DietPlan> setFavorite(String id, {required bool favorite}) =>

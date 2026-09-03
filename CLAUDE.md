@@ -59,6 +59,35 @@ functions/                    SUPERSEDED by workers/. Kept for reference only �
                               nothing builds or deploys from it.
 ```
 
+### The AI diet planner
+
+`generatePlan` — same Worker, same OpenRouter model, same strict `json_schema` discipline as
+the scan. It writes a one-day plan of real food that adds up to the user's own targets.
+
+**The targets are read from Firestore, never taken from the request.** They are
+`TargetCalculator`'s output, which is where the 25% deficit cap and the 1200/1500 kcal floors
+are applied — so a client that could send its own numbers would let the one feature that most
+needs those guards bypass them. The only thing the client sends is the person's free text.
+
+`planPrompt.ts` is separate from `prompt.ts` because the two jobs pull opposite ways: the scan
+prompt is an *estimator* told to push back on portions and flag its own uncertainty, this one
+is a *planner* handed an exact target whose whole job is to hit it. It is told to write the
+portion into every food name — "Roti, 2 medium" — because a name without one is not a plan,
+and told never to give medical advice or suggest a calorie target of its own.
+
+Capped at **3 a day** with a 20s cooldown on `users/{uid}/private/planner`, the same
+server-only path the rewarded-ad counter uses. Reserved *before* the call and **not refunded**
+on failure: unlike a scan there is nothing to give back, because a failed generation still
+burned its tokens. Measured live at 14.5s and $0.0019.
+
+On `BACKEND=local` `LocalPlannerRepository` composes one from the catalogue — the plan whose
+macro *split* is closest to the user's, rescaled to their calories. Not what the model does,
+but honest, and it keeps the flow walkable with no network.
+
+Generated plans are stored apart from the catalogue (`StoreKeys.myPlans`, or their own
+Firestore documents) because the catalogue reconcile rebuilds from `SeedData` and would
+otherwise delete them.
+
 ### The scan pipeline
 
 `app → analyzeMeal (Cloudflare Worker) → OpenAI → strict JSON → app`

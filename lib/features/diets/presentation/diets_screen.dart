@@ -27,6 +27,7 @@ class DietsScreen extends ConsumerWidget {
     this.tab = DietsTab.all,
     this.allPlans,
     this.myPlans,
+    this.onBuildPlan,
     this.onTabChanged,
     this.onNavSelected,
     this.onPlanTap,
@@ -39,6 +40,9 @@ class DietsScreen extends ConsumerWidget {
   final List<DietPlan>? allPlans;
   final List<DietPlan>? myPlans;
 
+  /// Opens the planner.
+  final VoidCallback? onBuildPlan;
+
   final ValueChanged<DietsTab>? onTabChanged;
   final ValueChanged<AppTab>? onNavSelected;
   final ValueChanged<DietPlan>? onPlanTap;
@@ -48,7 +52,7 @@ class DietsScreen extends ConsumerWidget {
 
   /// "All Diets" starts its list at y=420 under the header card; "My Diets"
   /// starts at y=212 with neither header nor section title.
-  double get _listTop => tab == DietsTab.all ? 420 : 212;
+  double get _listTop => tab == DietsTab.all ? 420 : 290;
 
   double _contentHeight(List<DietPlan> plans) {
     if (plans.isEmpty) return DesignCanvas.designHeight;
@@ -118,6 +122,20 @@ class DietsScreen extends ConsumerWidget {
                     child: Text('Diets', style: AppTypography.topBarTitle()),
                   ),
                 ],
+
+                // Only on My Diets. On the catalogue tab it would compete
+                // with eight plans someone has not looked at yet; here it is
+                // the answer to an empty list, and to "none of these are me".
+                if (tab == DietsTab.mine)
+                  // No height: two lines of text in a fixed box is how the
+                  // hero cards, the analytics cards and the plan detail each
+                  // went over their own edges at a raised text scale.
+                  Positioned(
+                    left: 20,
+                    top: 212,
+                    width: 388,
+                    child: _BuildPlanCard(onTap: onBuildPlan),
+                  ),
 
                 if (isEmpty)
                   const _EmptyState()
@@ -305,6 +323,60 @@ class DietCard extends StatelessWidget {
           const SizedBox(height: 4),
           SizedBox(height: 19, child: NutritionRow(nutrition: plan.nutrition)),
         ],
+      ),
+    );
+  }
+}
+
+
+/// The way into the planner.
+///
+/// Deliberately a row rather than another photo card: it is not a plan, and
+/// dressing it as one would put it in competition with the eight real ones.
+class _BuildPlanCard extends StatelessWidget {
+  const _BuildPlanCard({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+        decoration: BoxDecoration(
+          color: AppColors.inkMuted,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.primary),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.auto_awesome, size: 20, color: AppColors.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Build my own plan', style: AppTypography.cardTitle()),
+                  const SizedBox(height: 2),
+                  Text(
+                    'From your targets, in your food',
+                    style: AppTypography.meta(color: AppColors.placeholder),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: AppColors.placeholder,
+            ),
+          ],
+        ),
       ),
     );
   }
