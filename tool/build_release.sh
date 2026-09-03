@@ -74,6 +74,15 @@ if grep -q "$TEST_PUBLISHER" ios/Runner/Info.plist; then
   fail "Info.plist still holds the test AdMob application id (GADApplicationIdentifier)."
 fi
 
+# A release signed with the debug key installs and runs. Both stores reject it,
+# but only at upload — after the build. Catch it here instead.
+case "$TARGET" in
+  appbundle|apk)
+    [[ -f android/key.properties ]] ||
+      fail "android/key.properties is missing, so this would be signed with the DEBUG key. See android/README-signing.md."
+    ;;
+esac
+
 echo "→ flutter build $TARGET --release"
 exec flutter build "$TARGET" --release \
   --dart-define="WORKER_URL=$WORKER_URL" \

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 and above (android:dataExtractionRules). Replaces
+  fullBackupContent, and splits the two cases that used to be one.
+
+  cloud-backup  — Google Drive. Same exclusions and the same reason: a restored
+                  Firebase Auth session signs a new device in without a
+                  password.
+  device-transfer — phone-to-phone. Excluded identically. It is a smaller risk,
+                  since both devices are in the owner's hands, but a stale auth
+                  token restored onto a second device is still a session nobody
+                  deliberately created.
+-->
+<data-extraction-rules>
+  <cloud-backup>
+    <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store.xml" />
+    <exclude domain="sharedpref" path="com.google.android.gms.appid.xml" />
+    <exclude domain="database" path="." />
+    <exclude domain="file" path="." />
+  </cloud-backup>
+  <device-transfer>
+    <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store.xml" />
+    <exclude domain="sharedpref" path="com.google.android.gms.appid.xml" />
+    <exclude domain="database" path="." />
+    <exclude domain="file" path="." />
+  </device-transfer>
+</data-extraction-rules>

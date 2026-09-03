@@ -1,5 +1,16 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The camera plugin declares RECORD_AUDIO because it can record video.
+         This app never does — CameraController is built with enableAudio:false
+         — so the permission was merged in, listed on the Play page as
+         "Microphone", and had to be answered for in Data Safety. A nutrition
+         app asking for a microphone is a reasonable thing to be suspicious of.
+
+         Removed at merge rather than left unrequested: an unused permission is
+         still a permission the store shows. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"
+        tools:node="remove" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+. Requested when the reminder toggle is turned on, not at
          launch: a permission prompt before anyone has seen the feature is the
@@ -14,7 +25,10 @@
     <application
         android:label="Carbsai"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:screenOrientation="portrait"

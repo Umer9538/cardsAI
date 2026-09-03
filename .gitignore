@@ -59,3 +59,10 @@ node_modules/
 
 # Real ad unit ids and the worker URL for release builds.
 tool/release.env
+
+# Release signing. Losing these means never being able to publish an update to
+# an app already on Play under this key — back them up off this machine.
+android/key.properties
+android/*.jks
+android/*.p12
+android/*.keystore

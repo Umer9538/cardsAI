@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -7,6 +9,20 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing.
+//
+// `android/key.properties` and the keystore beside it are gitignored: they are
+// the app's identity on Play and losing them means never being able to publish
+// an update. Absent, the release build falls back to the debug key — which
+// installs and runs, so the mistake is invisible until an upload is rejected.
+// `tool/build_release.sh` refuses to build in that state for exactly that
+// reason; this file only has to make the fallback obvious rather than silent.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.carbsai.app"
@@ -27,21 +43,45 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.carbsai.app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                // Loud, not silent: a debug-signed release cannot be uploaded,
+                // and finding that out at the upload step wastes a build.
+                logger.warn("WARNING: no android/key.properties — signing the release with the DEBUG key.")
+                signingConfigs.getByName("debug")
+            }
+
+            // R8 in full mode. Off by default in a Flutter project, which
+            // leaves every unused class from Firebase, AdMob, Play Billing and
+            // the scanner in the APK — worth several megabytes on a download
+            // size that decides whether people install at all.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
