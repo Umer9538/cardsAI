@@ -36,6 +36,11 @@ class JsonStore {
     }
   }
 
+  String? readString(String key) => _prefs.getString(key);
+
+  Future<void> writeString(String key, String value) =>
+      _prefs.setString(key, value);
+
   Future<void> writeList(String key, List<Map<String, dynamic>> value) =>
       _prefs.setString(key, jsonEncode(value));
 
@@ -85,6 +90,10 @@ abstract final class StoreKeys {
   /// answer: without this flag, anyone who skipped would be asked again on
   /// every launch.
   static const String quizSeen = 'carbsai.quizSeen';
+
+  /// Metric or imperial, for display only. Deliberately NOT in [all]: deleting
+  /// an account should not put an American back on centimetres.
+  static const String units = 'carbsai.units';
 
   static const List<String> all = [
     profile,

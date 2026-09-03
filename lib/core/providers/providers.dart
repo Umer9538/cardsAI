@@ -259,6 +259,27 @@ final profileProvider = StreamProvider<UserProfile?>((ref) async* {
 
 /// Daily goals, with a sensible default before a profile exists — no screen
 /// should have to handle "targets unknown".
+/// Metric or imperial, defaulting from the device locale.
+///
+/// Display only — see [UnitSystem]. Everything stored and every calculation
+/// stays metric.
+class UnitSystemController extends Notifier<UnitSystem> {
+  @override
+  UnitSystem build() => UnitSystem.fromName(
+        ref.watch(jsonStoreProvider).readString(StoreKeys.units),
+      );
+
+  void set(UnitSystem system) {
+    state = system;
+    ref.read(jsonStoreProvider).writeString(StoreKeys.units, system.name);
+  }
+
+  void toggle() => set(state.isMetric ? UnitSystem.imperial : UnitSystem.metric);
+}
+
+final unitSystemProvider =
+    NotifierProvider<UnitSystemController, UnitSystem>(UnitSystemController.new);
+
 final targetsProvider = Provider<Nutrition>((ref) {
   final stored =
       ref.watch(profileProvider).value?.targets ?? UserProfile.defaultTargets;

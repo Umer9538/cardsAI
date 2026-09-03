@@ -323,7 +323,14 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
         _Step.plan => 'From your height, weight, age and how much you move.',
       };
 
-  Widget _body() => switch (_step) {
+  /// Flipping units mid-quiz is deliberate: the height and weight steps are
+  /// exactly where someone realises the app is asking in the wrong unit, and
+  /// making them hunt for a setting at that moment is how you lose them.
+  void _toggleUnits() => ref.read(unitSystemProvider.notifier).toggle();
+
+  Widget _body() {
+    final units = ref.watch(unitSystemProvider);
+    return switch (_step) {
         _Step.motivation => QuizOptions<Motivation>(
             accent: _accent,
             value: _answers.motivation,
@@ -352,15 +359,20 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             format: (v) => v.round().toString(),
             onChanged: (v) => _set(_answers.copyWith(age: v.round())),
           ),
+        // The slider stays metric on both sides — its range, its divisions and
+        // the value it hands back. Only the caption changes, so nothing
+        // downstream has to know which units were on screen.
         _Step.height => QuizNumberSlider(
             accent: _accent,
             value: _answers.heightCm,
             min: 120,
             max: 220,
             divisions: 100,
-            unit: 'cm',
-            format: (v) => v.round().toString(),
+            unit: units.heightUnit,
+            format: units.formatHeight,
             onChanged: (v) => _set(_answers.copyWith(heightCm: v)),
+            onToggleUnits: _toggleUnits,
+            unitsLabel: units.isMetric ? 'Use feet & pounds' : 'Use cm & kg',
           ),
         _Step.weight => QuizNumberSlider(
             accent: _accent,
@@ -368,9 +380,11 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             min: 35,
             max: 200,
             divisions: 330,
-            unit: 'kg',
-            format: (v) => v.toStringAsFixed(1),
+            unit: units.weightUnit,
+            format: units.formatWeight,
             onChanged: (v) => _set(_answers.copyWith(weightKg: v)),
+            onToggleUnits: _toggleUnits,
+            unitsLabel: units.isMetric ? 'Use feet & pounds' : 'Use cm & kg',
           ),
         _Step.activity => QuizOptions<ActivityLevel>(
             accent: _accent,
@@ -444,7 +458,8 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
             onDone: _advance,
           ),
         _Step.plan => _Plan(profile: _draft, answers: _answers, accent: _accent),
-      };
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------

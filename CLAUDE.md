@@ -283,6 +283,25 @@ Two things are **not done** and are marked in the code:
 Prices must come from the store once products exist — `_merge()` already does this.
 Hardcoded "$4.99" shown to someone paying in another currency is a rejection.
 
+### Metric and imperial
+
+`'cm'` and `'kg'` were hardcoded inside the quiz — the app's highest drop-off surface — and
+roughly half the paying audience for a calorie tracker measures in pounds. Being asked your
+weight in a unit you do not think in is a reason to close the app.
+
+**Storage is always metric.** `UserProfile.heightCm`, `weightKg` and everything
+`TargetCalculator` does stay in metric; `UnitSystem` only decides how a number is *shown*.
+Storing whatever the user preferred would put a unit on every arithmetic site in the app and
+guarantee one of them eventually forgets to convert. The sliders keep their metric range,
+divisions and value too — only the caption changes.
+
+It **defaults from the device locale** (US, LR, MM) rather than asking, and the switch lives
+on the height and weight steps themselves, because that is the moment someone notices the
+wrong unit and sending them to Settings then is how the screen loses them.
+
+`formatHeight` rounds to total inches *before* taking the feet, or 5 ft 11.6 in renders as
+`5′ 12″`. The test sweeps every height in the slider's range to prove it never does.
+
 ### Nothing on Home, Analysis or Diets is invented
 
 Home and Analysis were already computed — Home off the diary, Analysis off real

@@ -443,6 +443,8 @@ class QuizNumberSlider extends StatelessWidget {
     required this.accent,
     required this.format,
     required this.onChanged,
+    this.onToggleUnits,
+    this.unitsLabel,
   });
 
   final double value;
@@ -453,6 +455,15 @@ class QuizNumberSlider extends StatelessWidget {
   final Color accent;
   final String Function(double) format;
   final ValueChanged<double> onChanged;
+
+  /// Swaps metric and imperial from here.
+  ///
+  /// It belongs on this control rather than in Settings: this is the exact
+  /// moment someone notices the app is asking in a unit they do not think in,
+  /// and sending them hunting for a preference at that moment is how the
+  /// highest drop-off screen in the app loses them.
+  final VoidCallback? onToggleUnits;
+  final String? unitsLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -494,7 +505,24 @@ class QuizNumberSlider extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 26),
+        if (onToggleUnits != null && unitsLabel != null) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onToggleUnits,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              child: Text(
+                unitsLabel!,
+                style: AppTypography.meta(color: QuizPalette.ink).copyWith(
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ] else
+          const SizedBox(height: 26),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 10,
