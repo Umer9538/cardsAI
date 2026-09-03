@@ -660,6 +660,12 @@ a beat during which **neither** camera is on screen, in both directions. That is
 modes takes a beat": deliberate, not latency to optimise away. The timer is cancellable and
 cancelled in `dispose`, or it outlives the screen and fails every test that touches it.
 
+The reader is drawn **full-bleed, under the blur**, exactly where `_Preview` goes — not inside
+the window. `_WindowCutout` knocks the window out of the blur, so one texture gives a blurred
+surround and a sharp window. Drawing it above the blur instead left the whole screen black
+around the window, because the blur had nothing to blur. This is still one texture; it is not
+the two-previews mistake that comment warns about.
+
 Barcode has no shutter — detection is continuous, so there is nothing for a button to trigger
 — which left the mode with no control at all and no way forward when a code will not read.
 **"Type the number"** takes the digits printed under the bars, which is the path that always

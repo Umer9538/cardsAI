@@ -317,6 +317,23 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             if (_mode != ScanMode.barcode && !_switching)
               const Positioned.fill(child: _Preview()),
 
+            // The barcode reader fills the frame exactly as the photo preview
+            // does, rather than sitting only inside the window.
+            //
+            // It has to be *under* the blur layer for that: the cut-out below
+            // knocks the window out of the blur, so one full-bleed texture
+            // gives a blurred surround and a sharp window. Drawing the scanner
+            // above the blur instead — which is where it used to be — left the
+            // rest of the screen pure black, because the blur had nothing to
+            // blur. Still one texture either way; this is not the two-previews
+            // mistake the [_WindowCutout] comment warns about.
+            if (_mode == ScanMode.barcode && !_switching)
+              Positioned.fill(
+                child: BarcodeScannerView(
+                  onDetected: (code) => widget.onBarcode?.call(code),
+                ),
+              ),
+
             // Black at 50% over the scrim blur, then the same preview redrawn
             // sharp inside the window so it reads as a cut-out rather than an
             // overlay.
@@ -348,16 +365,6 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             ),
             // Barcode is a different camera package, so it does get its own
             // view inside the window — ours is released before this appears.
-            if (_mode == ScanMode.barcode && !_switching)
-              Positioned.fromRect(
-                rect: _window,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(_windowRadius),
-                  child: BarcodeScannerView(
-                    onDetected: (code) => widget.onBarcode?.call(code),
-                  ),
-                ),
-              ),
             Positioned.fromRect(rect: _window, child: const _Viewfinder()),
 
             // Sits in the 59pt gap the artboard leaves between the viewfinder
