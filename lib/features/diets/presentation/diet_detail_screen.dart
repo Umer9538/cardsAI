@@ -18,13 +18,11 @@ class DietDetailScreen extends ConsumerWidget {
   const DietDetailScreen({
     super.key,
     required this.plan,
-    this.goal = 'Heart Health, Weight Maintenance',
     this.onBack,
     this.onAdd,
   });
 
   final DietPlan plan;
-  final String goal;
   final VoidCallback? onBack;
   final VoidCallback? onAdd;
 
@@ -153,11 +151,19 @@ class DietDetailScreen extends ConsumerWidget {
             top: 786,
             width: 292,
             height: 25,
-            child: Text(goal, style: AppTypography.body()),
+            child: Text(
+              plan.goal,
+              style: AppTypography.body(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
+          // Below the goal card, not across it. The artboard puts the CTA at
+          // y=810 and the goal card spans 728-835, so the button was drawn over
+          // the bottom quarter of the card.
           Positioned(
             left: 20,
-            top: 810,
+            top: 855,
             width: 388,
             height: 50,
             child: PrimaryButton(

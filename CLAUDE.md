@@ -316,6 +316,14 @@ never appeared, and a corrected description never propagated. Content now comes 
 are the user's and the catalogue has no opinion about them. `catalogueVersion` gates a
 one-time reset of those flags for accounts seeded under v1.
 
+**A plan's goal lives on the plan.** `DietDetailScreen` carried it as a *constructor default*,
+so every plan in the catalogue was described as "Heart Health, Weight Maintenance" — including
+the ketogenic one, which is neither. It is a `DietPlan` field now, and the test asserts the
+goals are non-empty and not all the same, since one goal shared by every plan is the bug
+rather than the fix. The detail CTA also moved from y=810 to 855: the artboard puts it inside
+the goal card's 728–835 box, so the button was drawn across the bottom of the card it belongs
+under.
+
 **Do not gate a Firestore repair on `!snap.metadata.isFromCache`.** That is what the old
 seeding waited for, and it is why the repair above appeared not to work: Firestore's offline
 cache serves reads and accepts writes with **no server at all**, so an app whose database is

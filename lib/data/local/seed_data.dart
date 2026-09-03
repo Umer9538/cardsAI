@@ -70,6 +70,7 @@ abstract final class SeedData {
   static List<DietPlan> get dietPlans => const [
         DietPlan(
           id: 'plan-mediterranean',
+          goal: 'Heart health, long-term maintenance',
           name: 'Mediterranean Lifestyle',
           image: 'assets/images/app/diet_mediterranean.png',
           nutrition:
@@ -79,6 +80,7 @@ abstract final class SeedData {
         ),
         DietPlan(
           id: 'plan-keto',
+          goal: 'Fat loss, appetite control',
           name: 'Keto Kickstart',
           image: 'assets/images/app/diet_keto.png',
           nutrition:
@@ -89,6 +91,7 @@ abstract final class SeedData {
         ),
         DietPlan(
           id: 'plan-lowcarb',
+          goal: 'Fat loss, steadier energy',
           name: 'Low-Carb Fat Burner',
           image: 'assets/images/app/diet_lowcarb.png',
           nutrition:
@@ -97,6 +100,7 @@ abstract final class SeedData {
         ),
         DietPlan(
           id: 'plan-vegan',
+          goal: 'Plant-based eating, cholesterol',
           name: 'Vegan Vitality',
           image: 'assets/images/app/diet_vegan.png',
           nutrition:
@@ -106,6 +110,7 @@ abstract final class SeedData {
         ),
         DietPlan(
           id: 'plan-detox',
+          goal: 'A reset week, more vegetables',
           name: 'Detox Cleanse Plan',
           image: 'assets/images/app/diet_detox.png',
           nutrition:
@@ -115,6 +120,7 @@ abstract final class SeedData {
         ),
         DietPlan(
           id: 'plan-paleo',
+          goal: 'Whole foods, fewer processed carbs',
           name: 'Paleo Power Plan',
           image: 'assets/images/app/fav_paleo.png',
           nutrition:
@@ -124,6 +130,7 @@ abstract final class SeedData {
         ),
         DietPlan(
           id: 'plan-indian-veg',
+          goal: 'Weight loss on a desi diet',
           name: 'Indian Vegetarian Weight Loss',
           image: 'assets/images/app/fav_indian.png',
           nutrition:
@@ -132,6 +139,7 @@ abstract final class SeedData {
         ),
         DietPlan(
           id: 'plan-mediterranean-fav',
+          goal: 'Heart health, long-term maintenance',
           name: 'Mediterranean Lifestyle',
           image: 'assets/images/app/fav_medi.png',
           nutrition:

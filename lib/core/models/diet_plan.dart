@@ -11,6 +11,7 @@ class DietPlan {
     required this.image,
     required this.nutrition,
     this.description = '',
+    this.goal = '',
     this.isFavorite = false,
     this.isMine = false,
     this.imageHeight = cardImageHeight,
@@ -27,6 +28,14 @@ class DietPlan {
 
   final Nutrition nutrition;
   final String description;
+
+  /// What following this plan is *for*.
+  ///
+  /// On the plan itself, because it is a property of the plan. The detail
+  /// screen used to carry it as a constructor default, so every plan in the
+  /// catalogue was described as "Heart Health, Weight Maintenance" — including
+  /// the ketogenic one, which is neither.
+  final String goal;
 
   /// Saved to Favorites.
   final bool isFavorite;
@@ -84,6 +93,7 @@ class DietPlan {
     String? image,
     Nutrition? nutrition,
     String? description,
+    String? goal,
     bool? isFavorite,
     bool? isMine,
     double? imageHeight,
@@ -94,6 +104,7 @@ class DietPlan {
         image: image ?? this.image,
         nutrition: nutrition ?? this.nutrition,
         description: description ?? this.description,
+        goal: goal ?? this.goal,
         isFavorite: isFavorite ?? this.isFavorite,
         isMine: isMine ?? this.isMine,
         imageHeight: imageHeight ?? this.imageHeight,
@@ -105,6 +116,7 @@ class DietPlan {
         'image': image,
         'nutrition': nutrition.toJson(),
         'description': description,
+        'goal': goal,
         'isFavorite': isFavorite,
         'isMine': isMine,
         'imageHeight': imageHeight,
@@ -118,6 +130,7 @@ class DietPlan {
           (json['nutrition'] as Map?)?.cast<String, dynamic>() ?? const {},
         ),
         description: json['description'] as String? ?? '',
+        goal: json['goal'] as String? ?? '',
         isFavorite: json['isFavorite'] as bool? ?? false,
         isMine: json['isMine'] as bool? ?? false,
         imageHeight:

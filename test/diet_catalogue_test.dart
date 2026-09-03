@@ -52,4 +52,23 @@ void main() {
     final favourites = await again.watchFavorites().first;
     expect(favourites.map((p) => p.id), ['plan-keto']);
   });
+
+  test('every plan says what it is for', () {
+    // The detail screen used to carry the goal as a constructor default, so
+    // every plan in the catalogue read "Heart Health, Weight Maintenance" --
+    // including the ketogenic one, which is neither.
+    for (final plan in SeedData.dietPlans) {
+      expect(plan.goal, isNotEmpty, reason: '${plan.id} has no goal');
+    }
+
+    final goals = SeedData.dietPlans.map((p) => p.goal).toSet();
+    expect(
+      goals.length,
+      greaterThan(1),
+      reason: 'one goal shared by every plan is the bug, not the fix',
+    );
+
+    final keto = SeedData.dietPlans.firstWhere((p) => p.id == 'plan-keto');
+    expect(keto.goal.toLowerCase(), isNot(contains('heart health')));
+  });
 }
