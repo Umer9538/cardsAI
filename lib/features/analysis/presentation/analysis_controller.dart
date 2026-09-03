@@ -47,6 +47,10 @@ class AnalysisSummary {
     required this.loggedDays,
     required this.daysUnderGoal,
     required this.daysOverBudget,
+    this.windowDays = 0,
+    this.daysLoggedTwice = 0,
+    this.bySlot = const {},
+    this.bySource = const {},
   });
 
   final AnalysisPeriod period;
@@ -66,6 +70,30 @@ class AnalysisSummary {
 
   static const double overBudgetThreshold = 200;
 
+  /// Calendar days the window covers, logged or not. The denominator for
+  /// consistency — [loggedDays] alone cannot say what was missed.
+  final int windowDays;
+
+  /// Days with **at least two eating occasions** logged.
+  ///
+  /// This specific definition is the app's north star, not an arbitrary one.
+  /// Turner-McGrievy's pooled RCTs found it the best adherence predictor of
+  /// six-month weight loss, beating every alternative tested — and "Log Often,
+  /// Lose More" found successful losers spent no more time logging, they simply
+  /// logged more often. Frequency beats richness, so this is the number the
+  /// screen should show and the one the product should optimise.
+  final int daysLoggedTwice;
+
+  /// Energy by meal, so "where does my day actually go" has an answer.
+  final Map<MealSlot, double> bySlot;
+
+  /// How each food got into the diary.
+  ///
+  /// Also the wedge test: text logging is meant to be the habit the app is
+  /// built around, and if it is a small share of entries then the describe path
+  /// is not landing in the UI, whatever its merits.
+  final Map<FoodSource, int> bySource;
+
   static AnalysisSummary empty(AnalysisPeriod period, Nutrition targets) =>
       AnalysisSummary(
         period: period,
@@ -78,6 +106,62 @@ class AnalysisSummary {
       );
 
   bool get isEmpty => loggedDays == 0;
+
+  /// Share of the window's days that carried two or more eating occasions.
+  double get consistency =>
+      windowDays == 0 ? 0 : daysLoggedTwice / windowDays;
+
+  /// The plain read on consistency. Descriptive, never scolding — this is the
+  /// number most likely to be low, and a tracker that tells people off for
+  /// missing days is the tracker they delete.
+  String get consistencyInsight {
+    if (windowDays == 0) return '';
+    if (daysLoggedTwice == 0) return 'No days with a full picture yet.';
+    if (consistency >= 0.75) {
+      return 'Most days have a full picture. That is what makes the numbers '
+          'worth reading.';
+    }
+    if (consistency >= 0.4) return 'A good half of the window is covered.';
+    return 'Most days are missing meals, so the averages above run low.';
+  }
+
+  /// Energy split across meals, largest first, ignoring empty slots.
+  List<({MealSlot slot, double calories, double share})> get slotBreakdown {
+    final energy = bySlot.values.fold(0.0, (a, b) => a + b);
+    if (energy <= 0) return const [];
+    final rows = [
+      for (final entry in bySlot.entries)
+        if (entry.value > 0)
+          (
+            slot: entry.key,
+            calories: entry.value,
+            share: entry.value / energy,
+          ),
+    ]..sort((a, b) => b.calories.compareTo(a.calories));
+    return rows;
+  }
+
+  /// How foods were logged, most used first.
+  List<({FoodSource source, int count, double share})> get methodBreakdown {
+    final total = bySource.values.fold(0, (a, b) => a + b);
+    if (total == 0) return const [];
+    final rows = [
+      for (final entry in bySource.entries)
+        if (entry.value > 0)
+          (
+            source: entry.key,
+            count: entry.value,
+            share: entry.value / total,
+          ),
+    ]..sort((a, b) => b.count.compareTo(a.count));
+    return rows;
+  }
+
+  /// Fibre against its goal, or null when there is no goal to compare to.
+  double? get fibreShare {
+    if (targets.fiber <= 0 || loggedDays == 0) return null;
+    return (total.fiber / loggedDays) / targets.fiber;
+  }
 
   /// Mean calories across days that were actually logged. Averaging over the
   /// whole window instead would read as a collapse whenever someone skips a day.
@@ -239,6 +323,25 @@ final analysisSummaryProvider = FutureProvider<AnalysisSummary>((ref) async {
     loggedDays += bucketDays;
   }
 
+  // Consistency, meal split and logging method are computed from the meals
+  // themselves rather than from the day totals, because all three ask about
+  // *occasions* and a day total has already thrown those away.
+  final occasions = <DateTime, int>{};
+  final bySlot = <MealSlot, double>{};
+  final bySource = <FoodSource, int>{};
+
+  for (final meal in meals) {
+    occasions.update(meal.day, (n) => n + 1, ifAbsent: () => 1);
+    bySlot.update(
+      meal.slot,
+      (v) => v + meal.nutrition.calories,
+      ifAbsent: () => meal.nutrition.calories,
+    );
+    for (final item in meal.items) {
+      bySource.update(item.source, (n) => n + 1, ifAbsent: () => 1);
+    }
+  }
+
   return AnalysisSummary(
     period: period,
     points: points,
@@ -247,5 +350,10 @@ final analysisSummaryProvider = FutureProvider<AnalysisSummary>((ref) async {
     loggedDays: loggedDays,
     daysUnderGoal: under,
     daysOverBudget: over,
+    windowDays: buckets.last.end.difference(buckets.first.start).inDays,
+    daysLoggedTwice:
+        occasions.values.where((count) => count >= 2).length,
+    bySlot: bySlot,
+    bySource: bySource,
   );
 });

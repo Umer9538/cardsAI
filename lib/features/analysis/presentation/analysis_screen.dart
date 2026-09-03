@@ -11,6 +11,7 @@ import '../../app/presentation/widgets/bottom_nav.dart';
 import '../../app/presentation/widgets/segmented_tabs.dart';
 import 'analysis_controller.dart';
 import 'widgets/analysis_charts.dart';
+import 'widgets/analysis_extras.dart';
 
 /// Analysis — Figma frame `26_Analysis` (2002:1262).
 ///
@@ -30,8 +31,16 @@ class AnalysisScreen extends ConsumerWidget {
   /// obvious the moment it holds figures someone needs to read. Giving the
   /// canvas room to scroll lets the card clear the bar, which is the same
   /// treatment Home already uses for its Diet Plan section.
+  static const double _gap = 20;
+
+  /// The two cards the artboard has no room for, below the ones it does.
+  static const double _consistencyTop =
+      _macroCardTop + MacroDistributionCard.height + _gap;
+  static const double _habitsTop =
+      _consistencyTop + ConsistencyCard.reserve + _gap;
+
   static const double contentHeight =
-      _macroCardTop + MacroDistributionCard.height + AppBottomNav.clearance;
+      _habitsTop + HabitsCard.reserve + AppBottomNav.clearance;
 
   /// Where the Macro Distribution card starts — the lowest thing on the screen.
   static const double _macroCardTop = 665;
@@ -107,6 +116,22 @@ class AnalysisScreen extends ConsumerWidget {
                   width: MacroDistributionCard.width,
                   height: MacroDistributionCard.height,
                   child: MacroDistributionCard(summary: summary),
+                ),
+
+                // Not on the artboard. The design has three cards and no way
+                // to answer "is any of this a full picture" or "where does my
+                // day actually go" — both of which the diary already knew.
+                Positioned(
+                  left: 20,
+                  top: _consistencyTop,
+                  width: ConsistencyCard.width,
+                  child: ConsistencyCard(summary: summary),
+                ),
+                Positioned(
+                  left: 20,
+                  top: _habitsTop,
+                  width: HabitsCard.width,
+                  child: HabitsCard(summary: summary),
                 ),
               ],
             ),

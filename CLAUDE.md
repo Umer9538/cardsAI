@@ -324,6 +324,31 @@ persisted on the profile, so every account created before the fibre goal existed
 `fiber: 0` and showed "Fibre 0g" on Home with no goal beside it, permanently. A figure the app
 knows how to compute should not be absent because of when the account was made.
 
+**Analysis carries two cards the artboard has no room for**, both from data the diary already
+held:
+
+- **Days With a Full Picture** — days in the window with **at least two eating occasions**.
+  That exact definition is the app's north star, not an arbitrary one: Turner-McGrievy's pooled
+  RCTs found it the best adherence predictor of six-month weight loss, beating every
+  alternative tested. It also governs every other figure on the screen, since the averages are
+  computed over logged days only — three logged days out of seven produce confident-looking
+  numbers from very little, and this says so.
+- **Where It Comes From** — energy by meal, and how each food got into the diary. The meal
+  split is the one people act on ("dinner is half my day" is a decision). The method mix is the
+  product's own test: text logging is meant to be the habit this app is built around, so a small
+  text share means the describe path is not landing in the UI whatever its merits.
+
+Both cards **size to their content**; their `reserve` constants only book scroll room. Fixed
+heights are what put them over their own boxes on the first try.
+
+**A box with no child, given loose constraints, collapses to zero — this codebase has now
+shipped that three times.** Twice inside a `Stack` (scan-result macro bars, quiz progress bar)
+and once inside a `Row`: both new bars are `DecoratedBox`/`ColoredBox` with no child, and a
+`Row` centres its children, which hands them loose vertical constraints. They drew nothing and
+the cards just had gaps. `CrossAxisAlignment.stretch` fixes it, and
+`analysis_extras_test.dart` **asserts the rendered height**, which is the only thing that
+catches it — nothing throws and the screen looks plausible.
+
 **The trend chart's y-axis is 52 wide, not 40.** A four-digit calorie caption did not fit the
 32pt that left, and `TextPainter` answers that by *wrapping* — so "4000" drew as "400" above
 "0" and the axis became a stack of half-numbers that read as extra gridlines. `_label` pins
