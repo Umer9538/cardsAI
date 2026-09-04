@@ -724,7 +724,7 @@ class _Preview extends ConsumerWidget {
 
     if (controller == null || !controller.value.isInitialized) {
       return Image.asset(
-        'assets/images/app/camera_feed.png',
+        'assets/images/app/camera_feed.webp',
         width: DesignCanvas.designWidth,
         height: DesignCanvas.designHeight,
         fit: BoxFit.cover,

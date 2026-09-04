@@ -91,7 +91,7 @@ void main() {
   // counts" is the most corrosive complaint in this category, because people
   // find it by accident. The same file must never disagree with itself.
   test('re-analysing the same photo returns the same numbers', () async {
-    const path = 'assets/images/app/scan_food.png';
+    const path = 'assets/images/app/scan_food.webp';
     await controller().analyzePhoto(path);
     final first = container.read(scanControllerProvider).value!;
 
@@ -106,7 +106,7 @@ void main() {
   });
 
   test('changing the note asks again rather than reusing the answer', () async {
-    const path = 'assets/images/app/scan_food.png';
+    const path = 'assets/images/app/scan_food.webp';
     await controller().analyzePhoto(path);
     final first = container.read(scanControllerProvider).value!;
 

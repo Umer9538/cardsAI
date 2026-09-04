@@ -207,7 +207,7 @@ abstract final class SeedData {
       ],
       goal: 'Heart health, long-term maintenance',
       name: 'Mediterranean Lifestyle',
-      image: 'assets/images/app/diet_mediterranean.png',
+      image: 'assets/images/app/diet_mediterranean.webp',
       nutrition: Nutrition(calories: 1248, protein: 80, carbs: 114, fat: 56),
       description:
           'Olive oil, fish, vegetables and whole grains — the '
@@ -359,7 +359,7 @@ abstract final class SeedData {
       ],
       goal: 'Fat loss, appetite control',
       name: 'Keto Kickstart',
-      image: 'assets/images/app/diet_keto.png',
+      image: 'assets/images/app/diet_keto.webp',
       nutrition: Nutrition(calories: 1656, protein: 113, carbs: 22, fat: 125),
       description:
           'Very low carb, high fat. Built to get you into ketosis '
@@ -487,7 +487,7 @@ abstract final class SeedData {
       ],
       goal: 'Fat loss, steadier energy',
       name: 'Low-Carb Fat Burner',
-      image: 'assets/images/app/diet_lowcarb.png',
+      image: 'assets/images/app/diet_lowcarb.webp',
       nutrition: Nutrition(calories: 1119, protein: 137, carbs: 31, fat: 48),
       description: 'Moderate protein, low carb, calorie-controlled.',
     ),
@@ -624,7 +624,7 @@ abstract final class SeedData {
       ],
       goal: 'Plant-based eating, cholesterol',
       name: 'Vegan Vitality',
-      image: 'assets/images/app/diet_vegan.png',
+      image: 'assets/images/app/diet_vegan.webp',
       nutrition: Nutrition(calories: 1475, protein: 81, carbs: 179, fat: 53),
       description:
           'Entirely plant-based, with the protein actually '
@@ -738,7 +738,7 @@ abstract final class SeedData {
       ],
       goal: 'A reset week, more vegetables',
       name: 'Detox Cleanse Plan',
-      image: 'assets/images/app/diet_detox.png',
+      image: 'assets/images/app/diet_detox.webp',
       nutrition: Nutrition(calories: 1022, protein: 76, carbs: 142, fat: 17),
       description: 'A short, light reset built around whole foods.',
       imageHeight: 110,
@@ -873,7 +873,7 @@ abstract final class SeedData {
       ],
       goal: 'Whole foods, fewer processed carbs',
       name: 'Paleo Power Plan',
-      image: 'assets/images/app/fav_paleo.png',
+      image: 'assets/images/app/fav_paleo.webp',
       nutrition: Nutrition(calories: 1455, protein: 129, carbs: 93, fat: 63),
       description:
           'Meat, fish, eggs, vegetables, nuts. No grains, no '
@@ -1002,7 +1002,7 @@ abstract final class SeedData {
       ],
       goal: 'Weight loss on a desi diet',
       name: 'Indian Vegetarian Weight Loss',
-      image: 'assets/images/app/fav_indian.png',
+      image: 'assets/images/app/fav_indian.webp',
       nutrition: Nutrition(calories: 1378, protein: 58, carbs: 195, fat: 42),
       description: 'Dal, paneer and vegetables, portioned for a deficit.',
     ),
@@ -1145,7 +1145,7 @@ abstract final class SeedData {
       ],
       goal: 'Heart health, long-term maintenance',
       name: 'Mediterranean Lifestyle',
-      image: 'assets/images/app/fav_medi.png',
+      image: 'assets/images/app/fav_medi.webp',
       nutrition: Nutrition(calories: 1248, protein: 80, carbs: 114, fat: 56),
       description: 'Olive oil, fish, vegetables and whole grains.',
       imageHeight: 175,
@@ -1187,7 +1187,7 @@ abstract final class SeedData {
         id: 'seed-meal-today',
         eatenAt: today.add(const Duration(hours: 13)),
         items: scannedFoods,
-        photoPath: 'assets/images/app/scan_food.png',
+        photoPath: 'assets/images/app/scan_food.webp',
       ),
     ];
 

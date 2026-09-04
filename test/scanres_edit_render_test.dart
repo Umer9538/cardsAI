@@ -16,7 +16,7 @@ void main() {
           id: 'preview',
           capturedAt: DateTime(2026, 8, 27, 13),
           items: SeedData.scannedFoods,
-          photoPath: 'assets/images/app/scan_food.png',
+          photoPath: 'assets/images/app/scan_food.webp',
           confidence: FoodConfidence.high,
         ),
       ),
