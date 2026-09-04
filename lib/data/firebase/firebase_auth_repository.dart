@@ -239,10 +239,48 @@ class FirebaseAuthRepository implements AuthRepository {
     // `requires-recent-login` rule. On the client that error catches almost
     // everyone: it fires for any session older than about five minutes.
     try {
-      await _functions.workerCallable('deleteAccount').call<void>();
+      // In passes. A Worker invocation may make 50 outbound subrequests and
+      // every Firestore call is one, so a diary of any size cannot be deleted
+      // in a single call — the first version died half-way with
+      // "Too many subrequests" on a week-old account. The Worker deletes what
+      // it can and says whether it finished.
+      //
+      // Capped so a server that never reports `done` cannot spin here for
+      // ever. Twenty passes clears roughly six thousand documents, which is
+      // years of diary; anything beyond that falls through to the client path
+      // and then to a support request, which is the right place for it.
+      var done = false;
+      for (var pass = 0; pass < 20 && !done; pass++) {
+        final result = await _functions.workerCallable('deleteAccount').call();
+        // The SDK hands back Map<Object?, Object?> for a JSON object. Reading
+        // the key rather than casting the map: a hard cast to
+        // Map<String, dynamic> throws a TypeError, which is not a
+        // FirebaseFunctionsException and would fall out of this block into the
+        // fallback path — deleting the data and leaving the account.
+        final data = result.data;
+        done = data is Map && data['done'] == true;
+      }
+
+      // The account is only deleted when the server says it finished. This
+      // must not fall through to the client fallback: that path deletes the
+      // diary and then fails on `requires-recent-login`, which leaves a
+      // signed-in account with no data — and the auth stream immediately
+      // writes a fresh profile from the surviving user, so the app looks like
+      // a brand-new account rather than a failed deletion. Seen on a device.
+      if (!done) {
+        throw const RepositoryException(
+          'Your account could not be fully deleted. Nothing has been removed '
+          'from your account. Please try again.',
+          code: 'deletion-incomplete',
+        );
+      }
+
       await _auth.signOut();
       _current = null;
       return;
+    } on RepositoryException {
+      // Ours, and already a sentence the user can act on.
+      rethrow;
     } on FirebaseFunctionsException catch (e) {
       // `unauthenticated` means the token was rejected, and retrying on the
       // client will not help.
@@ -255,8 +293,8 @@ class FirebaseAuthRepository implements AuthRepository {
       // Anything else — the Worker unreachable, an unset WORKER_URL — falls
       // through to the client path below, which deletes what it can. Better a
       // partial deletion the user can see than a button that does nothing.
-    } catch (_) {
-      // Same intent, for a StateError from a missing WORKER_URL.
+    } on StateError {
+      // A missing WORKER_URL. Same intent: try the client path.
     }
 
     // Fallback. Order matters: the rules key on request.auth.uid, so deleting
