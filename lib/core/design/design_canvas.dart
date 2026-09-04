@@ -151,18 +151,38 @@ class DesignCanvas extends StatelessWidget {
           child: FittedBox(fit: BoxFit.fill, child: canvas),
         );
 
-        // Taller than the viewport (short phones, and tablets once the scale
-        // cap bites): scroll instead of hiding the bottom of the screen.
-        if (scaledHeight > availableHeight) {
-          return ColoredBox(
-            color: background,
-            child: SingleChildScrollView(
+        // One shape, whether it scrolls or not.
+        //
+        // This used to return `Center(child: scaled)` when the canvas fitted
+        // and `SingleChildScrollView(child: Center(child: scaled))` when it did
+        // not — two different widget types in the same slot. Opening the
+        // keyboard shrinks the viewport, which flips a screen from the first
+        // shape to the second, and Flutter cannot reuse an element whose
+        // widget type has changed: it unmounts everything below and builds it
+        // again. The `TextField`'s `EditableTextState` goes with it, focus is
+        // lost, and the keyboard closes in the same breath it opened.
+        //
+        // Reported on a Pixel 8 and reproduced there: 926 artboard units scale
+        // to 890dp against a 914dp viewport, so the canvas fits with the
+        // keyboard down and does not with it up. A Pixel 4a lands on the other
+        // side of that boundary by about a point, which is why this looked
+        // device-specific rather than structural — it is one `if` away on every
+        // device, and every screen with a text field is exposed to it.
+        //
+        // The scroll view is always there now. `minHeight` keeps the canvas
+        // centred when it fits, which is what the non-scrolling branch did;
+        // when it does not fit there is nothing to centre and the extra
+        // constraint costs nothing. A scroll view with no overflow has zero
+        // scroll extent, so nothing moves and no overscroll glow appears.
+        return ColoredBox(
+          color: background,
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: availableHeight),
               child: Center(child: scaled),
             ),
-          );
-        }
-
-        return ColoredBox(color: background, child: Center(child: scaled));
+          ),
+        );
       },
     );
   }
