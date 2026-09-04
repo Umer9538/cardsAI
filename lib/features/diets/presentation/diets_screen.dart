@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/design_canvas.dart';
+import '../../../core/widgets/favourite_button.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -301,17 +302,15 @@ class DietCard extends StatelessWidget {
                     top: 20,
                     width: 24,
                     height: 24,
-                    child: GestureDetector(
-                      onTap: onFavourite,
-                      behavior: HitTestBehavior.opaque,
-                      child: Opacity(
-                        // The artboard only draws the saved state. Un-saved
-                        // dims the same glyph rather than needing a second one.
-                        opacity: plan.isFavorite ? 1 : 0.4,
-                        child: Image.asset(
-                          'assets/images/app/fav_button.png',
-                          filterQuality: FilterQuality.high,
-                        ),
+                    child: Opacity(
+                      // The artboard only draws the saved state. Un-saved dims
+                      // the same glyph rather than needing a second one.
+                      opacity: plan.isFavorite ? 1 : 0.55,
+                      child: FavouriteButton(
+                        saved: plan.isFavorite,
+                        onTap: onFavourite,
+                        size: 24,
+                        outlined: false,
                       ),
                     ),
                   ),

@@ -1,4 +1,5 @@
 import { deleteAccount } from "./account.js";
+import { requireAppCheck } from "./appcheck.js";
 import { requireAuth } from "./auth.js";
 import { timingSafeEqual, utf8 } from "./bytes.js";
 import { syncCatalogue } from "./catalogue.js";
@@ -51,7 +52,8 @@ const CALLABLES: Record<string, Callable> = {
 
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, content-type, x-meal-id",
+  "access-control-allow-headers":
+    "authorization, content-type, x-meal-id, x-firebase-appcheck",
   "access-control-allow-methods": "POST, DELETE, OPTIONS",
   "access-control-max-age": "86400",
 };
@@ -135,6 +137,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
 
     if (path === "photos") {
+      await requireAppCheck(request, env);
       const uid = await requireAuth(request, env);
       if (request.method === "POST") return await uploadPhoto(env, uid, request);
       if (request.method === "DELETE") return await deletePhoto(env, uid, request);
@@ -146,6 +149,9 @@ async function route(request: Request, env: Env): Promise<Response> {
       throw new HttpsError("not-found", "No such route.");
     }
 
+    // Attestation first, then identity. Both are cheap; doing attestation
+    // first means an unattested flood never reaches the JWKS fetch.
+    await requireAppCheck(request, env);
     const uid = await requireAuth(request, env);
     const data = await callableData<unknown>(request);
     return json({ result: await handler(env, uid, data) });
