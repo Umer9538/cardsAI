@@ -87,7 +87,7 @@ class WorkerPlannerRepository implements PlannerRepository {
     return DietPlan(
       id: 'plan-mine-${_uuid.v4()}',
       name: data['name'] as String? ?? 'My Plan',
-      image: 'assets/images/app/diet_mediterranean.png',
+      image: 'assets/images/app/diet_mediterranean.webp',
       description: data['description'] as String? ?? '',
       goal: data['goal'] as String? ?? '',
       eat: [for (final v in (data['eat'] as List? ?? const [])) v as String],

@@ -131,7 +131,7 @@ class _MainShellState extends ConsumerState<MainShell>
 
     // No path means no usable camera — a simulator, or a refused permission.
     // Analysing the design's own photograph keeps the flow walkable there.
-    final path = imagePath ?? 'assets/images/app/scan_food.png';
+    final path = imagePath ?? 'assets/images/app/scan_food.webp';
 
     switch (mode) {
       case ScanMode.camera:
