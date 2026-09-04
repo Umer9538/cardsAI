@@ -1,3 +1,4 @@
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -84,6 +85,7 @@ Future<AppBackend> _startBackend() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await _startAppCheck();
     return AppBackend.firebase;
   } catch (error, stack) {
     debugPrint('Firebase failed to start; falling back to local. $error');
@@ -93,6 +95,50 @@ Future<AppBackend> _startBackend() async {
       );
     }
     return AppBackend.local;
+  }
+}
+
+/// Attests that requests are coming from this app, on a real device.
+///
+/// The Firebase API key ships in every binary and is meant to — it identifies
+/// the project, it is not a secret. What that means without App Check is that
+/// anyone who unzips the APK can create accounts against this project and call
+/// the Worker, and every one of those accounts gets its own scan quota against
+/// a real model bill. `spend.ts` caps the day's total, so the damage is bounded
+/// rather than unbounded, but a bounded bill someone else chose to spend is
+/// still not a good place to be.
+///
+/// **Non-fatal by design, in both directions.** A device that cannot attest —
+/// no Play Services, a rooted phone, an emulator — must still be able to use
+/// the app; refusing would turn an anti-abuse measure into a support queue. So
+/// this never throws, and enforcement is a switch in the Firebase console
+/// rather than a property of the client:
+///
+///   1. Firebase console -> App Check -> register the Android app with Play
+///      Integrity and the iOS app with App Attest.
+///   2. Watch the metrics until the "verified" share settles.
+///   3. Only then turn enforcement on, per API.
+///
+/// Turning it on before step 2 locks out whatever share of real devices cannot
+/// attest, and that number is only knowable by measuring it.
+Future<void> _startAppCheck() async {
+  try {
+    await FirebaseAppCheck.instance.activate(
+      // Debug providers, in debug builds only. They print a token to the log
+      // that has to be pasted into the console — without them nothing attests
+      // on an emulator and every call would fail once enforcement is on.
+      providerAndroid: kDebugMode
+          ? const AndroidDebugProvider()
+          : const AndroidPlayIntegrityProvider(),
+      // App Attest needs iOS 14; the deployment target is 15, so the fallback
+      // is only reached if Apple ever cannot attest, and Device Check is the
+      // right answer there rather than nothing.
+      providerApple: kDebugMode
+          ? const AppleDebugProvider()
+          : const AppleAppAttestWithDeviceCheckFallbackProvider(),
+    );
+  } catch (error) {
+    debugPrint('App Check unavailable: $error');
   }
 }
 
@@ -157,6 +203,37 @@ class CarbsaiApp extends StatelessWidget {
           seedColor: AppColors.accentGreen,
           brightness: Brightness.dark,
           surface: AppColors.background,
+        ),
+
+        // Every message the app shows — a meal logged, a favourite saved, a
+        // deletion that failed — went through Material's default snack bar:
+        // light grey with dark text, floating over a black app in a typeface
+        // nothing else uses. It read as a system message rather than as this
+        // app talking.
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.inkMuted,
+          contentTextStyle: AppTypography.socialLabel(color: AppColors.white),
+          actionTextColor: AppColors.primary,
+          insetPadding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: AppColors.outline),
+          ),
+          elevation: 0,
+        ),
+
+        // Dialogs and sheets take the app's own surface for the same reason.
+        dialogTheme: DialogThemeData(
+          backgroundColor: AppColors.inkMuted,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: AppColors.inkMuted,
+          surfaceTintColor: Colors.transparent,
         ),
       ),
       home: const AppRoot(),

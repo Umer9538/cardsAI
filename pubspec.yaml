@@ -68,6 +68,7 @@ dependencies:
   timezone: ^0.10.1
   http: ^1.6.0
   mobile_scanner: ^7.4.0
+  firebase_app_check: ^0.4.7
 
 dev_dependencies:
   flutter_test:

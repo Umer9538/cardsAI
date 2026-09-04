@@ -60,6 +60,16 @@ export interface Env {
    */
   ALLOW_UNVERIFIED_PURCHASES?: string;
   /**
+   * Set to "1" to refuse requests that do not carry a valid App Check token.
+   *
+   * **Leave unset until the App Check metrics in the Firebase console show what
+   * share of real devices attest successfully.** Some genuinely cannot — no
+   * Play Services, a rooted phone, a beta OS — and turning this on before
+   * measuring locks those people out with no way to tell it happened. See
+   * `appcheck.ts`.
+   */
+  APP_CHECK_ENFORCED?: string;
+  /**
    * Shared secret in the store notification URLs, so only the stores can post
    * to them. Play's Pub/Sub push and Apple's notification endpoint both accept
    * an arbitrary URL, so the secret rides in the path.

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ads/ad_config.dart';
 import '../../../core/ads/ads_providers.dart';
 import '../../../core/design/design_canvas.dart';
+import '../../../core/widgets/favourite_button.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -224,16 +225,7 @@ class ScanResultScreen extends ConsumerWidget {
                   top: 71,
                   width: 40,
                   height: 40,
-                  child: GestureDetector(
-                    onTap: onFavourite,
-                    behavior: HitTestBehavior.opaque,
-                    child: Image.asset(
-                      'assets/images/app/fav_button.png',
-                      width: 40,
-                      height: 40,
-                      filterQuality: FilterQuality.high,
-                    ),
-                  ),
+                  child: FavouriteButton(saved: false, onTap: onFavourite),
                 ),
 
                 // 2x2 macro grid: 184pt columns 20pt apart, 100pt rows 12 apart.
