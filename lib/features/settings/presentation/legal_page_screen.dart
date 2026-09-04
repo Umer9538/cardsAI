@@ -65,37 +65,105 @@ class LegalPageScreen extends StatelessWidget {
   @visibleForTesting
   double get reservedHeight => _contentHeight;
 
+  /// Artboard height of the pinned band: the bar sits at y=71 and is 40 tall.
+  static const double _barBand = 130;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: DesignCanvas(
-        background: AppColors.background,
-        height: _contentHeight,
-        children: [
-          PremiumTopBar(title: title, onBack: onBack),
-          Positioned(
-            left: 20,
-            top: 147,
-            width: 388,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final (i, block) in blocks.indexed) ...[
-                  if (i > 0) SizedBox(height: block.isHeading ? 12 : 8),
-                  Text(
-                    block.text,
-                    style: block.isHeading
-                        ? AppTypography.body(color: AppColors.placeholder)
-                        : AppTypography.socialLabel(
-                            color: AppColors.placeholder),
+      // The scale has to be known here so the pinned bar can be given a real
+      // height. A full-bleed overlay would swallow every scroll gesture on the
+      // page underneath — which it did, on the first attempt at this.
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final scale = (constraints.maxWidth / DesignCanvas.designWidth)
+              .clamp(0.0, DesignCanvas.defaultMaxScale);
+          final band = _barBand * scale;
+
+          return Stack(
+            children: [
+              DesignCanvas(
+                background: AppColors.background,
+                height: _contentHeight,
+                children: [
+                  Positioned(
+                    left: 20,
+                    // Below the pinned bar, where the artboard's own bar used
+                    // to be drawn as the canvas's first child.
+                    top: 147,
+                    width: 388,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final (i, block) in blocks.indexed) ...[
+                          if (i > 0)
+                            SizedBox(height: block.isHeading ? 12 : 8),
+                          Text(
+                            block.text,
+                            style: block.isHeading
+                                ? AppTypography.body(
+                                    color: AppColors.placeholder,
+                                  )
+                                : AppTypography.socialLabel(
+                                    color: AppColors.placeholder,
+                                  ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
-              ],
-            ),
-          ),
-        ],
+              ),
+
+              // Pinned to the viewport, not carried by the canvas.
+              //
+              // These documents run to several screens, and the bar scrolled
+              // away with everything else — so the only way back was the
+              // system gesture, or scrolling all the way up again. The privacy
+              // policy is exactly the screen someone opens, reads a paragraph
+              // of, and wants to leave. Same debt the floating tab bar charges,
+              // at the other end of the screen.
+              //
+              // On a fading band so the text passes behind it rather than
+              // through the glyph.
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: band,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.background,
+                          AppColors.background,
+                          AppColors.background.withValues(alpha: 0),
+                        ],
+                        stops: const [0, 0.66, 1],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: band,
+                child: DesignCanvas(
+                  background: Colors.transparent,
+                  height: _barBand,
+                  children: [PremiumTopBar(title: title, onBack: onBack)],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
