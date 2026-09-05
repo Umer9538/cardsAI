@@ -27,6 +27,18 @@ class AuthController extends AsyncNotifier<void> {
         : 'Something went wrong. Please try again.';
   }
 
+  /// The repository's code for the current failure, so a screen can put the
+  /// message under the field it is about.
+  ///
+  /// Null for anything that is not a [RepositoryException], for the same
+  /// reason [errorMessage] has a fallback: a cast here would throw a
+  /// `TypeError` on exactly the failures nobody translated, which is the
+  /// worst possible moment to add a second one.
+  String? get errorCode {
+    final error = state.error;
+    return error is RepositoryException ? error.code : null;
+  }
+
   Future<bool> signIn({required String email, required String password}) =>
       _run(() => ref
           .read(authRepositoryProvider)

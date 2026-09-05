@@ -18,3 +18,20 @@ extension WorkerCallable on FirebaseFunctions {
   HttpsCallable workerCallable(String name, {HttpsCallableOptions? options}) =>
       httpsCallableFromUri(AppConfig.workerUri(name), options: options);
 }
+
+/// True when a [FirebaseFunctionsException]'s message is the transport's own
+/// status name rather than a sentence someone wrote for a person to read.
+///
+/// `cloud_functions` fills `message` with the gRPC status — "UNAVAILABLE",
+/// "DEADLINE_EXCEEDED" — whenever the call never reached the Worker, so it is
+/// non-null and non-empty exactly when there is nothing worth showing. A
+/// repository that prefers `e.message` over its own table therefore shows the
+/// user a shouted status code on every network failure, which is the one case
+/// the table was written for.
+///
+/// Seen on a device: a scan whose entire error message was "UNAVAILABLE".
+bool looksLikeAStatusCode(String? message) {
+  if (message == null) return true;
+  final trimmed = message.trim();
+  return trimmed.isEmpty || RegExp(r'^[A-Z][A-Z_]*$').hasMatch(trimmed);
+}

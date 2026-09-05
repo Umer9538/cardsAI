@@ -177,10 +177,9 @@ class FirebaseAuthRepository implements AuthRepository {
 
   static String _describe(FirebaseFunctionsException e) {
     final message = e.message;
-    final looksLikeAStatusCode =
-        message == null || RegExp(r'^[A-Z_]+$').hasMatch(message.trim());
-
-    if (!looksLikeAStatusCode && _ourCodes.contains(e.code)) return message;
+    if (!looksLikeAStatusCode(message) && _ourCodes.contains(e.code)) {
+      return message!;
+    }
 
     return switch (e.code) {
       'unauthenticated' => 'Sign in and try again.',

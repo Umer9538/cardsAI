@@ -5,7 +5,6 @@ import '../../../core/design/design_canvas.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/presentation/widgets/auth_widgets.dart';
 import '../../premium/presentation/widgets/premium_widgets.dart';
-import '../../../core/repositories/repositories.dart';
 import '../../auth/presentation/auth_controller.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -70,9 +69,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
       setState(() => _success = true);
     } else {
       setState(() {
-        final code =
-            (ref.read(authControllerProvider).error as RepositoryException?)
-                ?.code;
+        final code = controller.errorCode;
         final message = controller.errorMessage;
         // A rejected re-authentication belongs under the current-password
         // field; anything else is about the new one.

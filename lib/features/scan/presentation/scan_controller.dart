@@ -31,7 +31,23 @@ class ScanController extends AsyncNotifier<ScanResult?> {
   /// The repository's code for the current failure, so the UI can offer the
   /// right way out — running out of scans wants an upgrade or a rewarded ad,
   /// not a "try again".
-  String? get errorCode => (state.error as RepositoryException?)?.code;
+  ///
+  /// Tested with `is`, never cast, and this is not a style preference.
+  /// [outOfScans] reads it from `ScanResultScreen.build`, so a cast turns
+  /// every failure the pipeline did not translate into a `TypeError` raised
+  /// *during build* — and a build that throws is replaced by an `ErrorWidget`,
+  /// which in a release build is a plain grey rectangle with no text on it.
+  /// The error handler was the only thing that crashed, and it crashed exactly
+  /// when there was an error to show, so the screen the user got was a grey
+  /// box instead of the message explaining what went wrong.
+  ///
+  /// Reproduced with an APK built without `--dart-define=WORKER_URL`:
+  /// [AppConfig.workerUri] throws a bare `StateError`, which is not a
+  /// [RepositoryException], and the scan result screen went grey.
+  String? get errorCode {
+    final error = state.error;
+    return error is RepositoryException ? error.code : null;
+  }
 
   bool get outOfScans => errorCode == 'resource-exhausted';
 

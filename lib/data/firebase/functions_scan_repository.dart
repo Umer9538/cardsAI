@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
@@ -201,13 +202,22 @@ class FunctionsScanRepository implements ScanRepository {
 
   /// The function's own `HttpsError` codes, as sentences.
   ///
-  /// `e.message` is already user-facing for the errors the function raises
+  /// `e.message` is already user-facing for the errors the Worker raises
   /// itself — it writes them for this purpose — so it is preferred where
   /// present. The fallbacks cover transport failures, which have no message
   /// worth showing.
+  ///
+  /// "Where present" has to mean *where it is a sentence*, not merely where it
+  /// is non-empty: on a transport failure `cloud_functions` sets the message to
+  /// the status name, so this returned the string "UNAVAILABLE" and the scan
+  /// result screen showed that as the whole explanation. See
+  /// [looksLikeAStatusCode].
+  @visibleForTesting
+  static String describeFailure(FirebaseFunctionsException e) => _translate(e);
+
   static String _translate(FirebaseFunctionsException e) {
     final message = e.message;
-    if (message != null && message.isNotEmpty) return message;
+    if (!looksLikeAStatusCode(message)) return message!;
 
     return switch (e.code) {
       'unauthenticated' => 'Sign in to scan a meal.',
