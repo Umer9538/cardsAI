@@ -21,6 +21,7 @@
 #   tool/build_release.sh appbundle
 #   tool/build_release.sh ipa
 #   tool/build_release.sh apk --dev      # for your own phone, before the store
+#   tool/build_release.sh apk --dev --split   # one APK per CPU, ~35 MB not ~79
 #
 # --dev exists because the store gates below are correct and currently refuse:
 # there are no real ad units yet and LegalOperator is still placeholders. That
@@ -36,10 +37,12 @@ cd "$(dirname "$0")/.."
 
 TARGET="${1:-appbundle}"
 DEV=0
+SPLIT=0
 for arg in "$@"; do
   [[ "$arg" == "--dev" ]] && DEV=1
+  [[ "$arg" == "--split" ]] && SPLIT=1
 done
-[[ "$TARGET" == "--dev" ]] && TARGET=appbundle
+case "$TARGET" in --dev|--split) TARGET=appbundle ;; esac
 ENV_FILE="${ENV_FILE:-tool/release.env}"
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -120,11 +123,30 @@ if (( DEV )); then
   printf '  store rejection. WORKER_URL and signing were still enforced.\n\n'
 fi
 
-echo "→ flutter build $TARGET --release"
+# One APK per CPU architecture instead of one carrying all three.
+#
+# A universal APK is 79 MB, and 64 MB of that is native code — two thirds of it
+# copies for CPUs the phone it lands on does not have. arm64-v8a alone is 35 MB,
+# and every Android phone since roughly 2017 is arm64. That matters for a build
+# handed round over WhatsApp, where the download is the thing people give up on.
+#
+# Play does this itself from an appbundle, so this is for direct sharing only —
+# and it is opt-in because the universal APK is the one that installs anywhere
+# without anyone having to know what a CPU architecture is.
+SPLIT_FLAG=()
+if (( SPLIT )); then
+  case "$TARGET" in
+    apk) SPLIT_FLAG=(--split-per-abi) ;;
+    *) fail "--split only applies to the apk target; an appbundle is already split by Play." ;;
+  esac
+fi
+
+echo "→ flutter build $TARGET --release${SPLIT_FLAG[*]:+ ${SPLIT_FLAG[*]}}"
 # Obfuscated, with the symbols kept where they can be uploaded to the store's
 # crash reporting. Without --split-debug-info the symbol file is discarded and
 # a stack trace from a real device is unreadable.
 exec flutter build "$TARGET" --release \
+  ${SPLIT_FLAG[@]+"${SPLIT_FLAG[@]}"} \
   --obfuscate \
   --split-debug-info=build/symbols \
   --dart-define="WORKER_URL=$WORKER_URL" \
