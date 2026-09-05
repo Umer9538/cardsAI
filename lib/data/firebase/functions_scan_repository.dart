@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/app_config.dart';
 import '../../core/models/models.dart';
 import '../../core/repositories/repositories.dart';
 import '../worker/worker_endpoints.dart';
@@ -145,6 +146,23 @@ class FunctionsScanRepository implements ScanRepository {
       );
     } on FirebaseFunctionsException catch (e) {
       throw RepositoryException(_translate(e), code: e.code);
+    } on StateError catch (error, stack) {
+      // Only [AppConfig.workerUri]'s own refusal means an unconfigured build.
+      //
+      // This used to catch every StateError and report all of them as a
+      // missing WORKER_URL, which sent the reader to the build flags for a
+      // failure that had nothing to do with them — a worse lie than the
+      // generic message it replaced, because it was specific and wrong. A
+      // catch clause may only claim a cause it has actually checked.
+      if (AppConfig.workerBaseUrl.isEmpty) {
+        throw const RepositoryException(
+          'This build has no server address, so it cannot analyse a meal. Run '
+          'it with --dart-define=WORKER_URL=…',
+          code: 'not-configured',
+        );
+      }
+      debugPrint('scan failed: $error\n$stack');
+      rethrow;
     }
   }
 
