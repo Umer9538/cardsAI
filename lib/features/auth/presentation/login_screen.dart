@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 
 import '../../../core/design/design_canvas.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/repositories/repositories.dart';
 import '../../../core/theme/app_typography.dart';
 import 'auth_controller.dart';
 import 'widgets/auth_widgets.dart';
@@ -80,10 +79,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         final message = controller.errorMessage;
         // 'weak-password' is the only failure that belongs under the password
         // field; everything else reads as an address problem.
-        final aboutPassword =
-            (ref.read(authControllerProvider).error as RepositoryException?)
-                    ?.code ==
-                'weak-password';
+        final aboutPassword = controller.errorCode == 'weak-password';
         _emailError = aboutPassword ? null : message;
         _passwordError = aboutPassword ? message : null;
       });

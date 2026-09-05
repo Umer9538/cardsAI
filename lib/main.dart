@@ -47,7 +47,25 @@ Future<void> main() async {
   if (kReleaseMode &&
       backend == AppBackend.local &&
       AppConfig.backend == AppBackend.firebase) {
-    runApp(const _MisconfiguredApp());
+    runApp(const _MisconfiguredApp(reason: _noFirebase));
+    return;
+  }
+
+  // The same judgement, one build flag along. Every server-side thing this app
+  // does — analysing a photo, writing a plan, validating a receipt, deleting an
+  // account properly — goes through the Worker, and without `WORKER_URL` the
+  // very first of them throws a bare `StateError` deep inside a screen.
+  //
+  // `tool/build_release.sh` refuses to build without the define, so the only
+  // way to reach here is a `flutter build apk --release` typed by hand. That
+  // has happened, and the symptom was a grey rectangle on the scan result with
+  // nothing to read: the failure surfaced five screens in, in the one place
+  // that looks like the AI is broken rather than the build. Naming it at launch
+  // costs one screen and saves that hunt.
+  if (kReleaseMode &&
+      backend == AppBackend.firebase &&
+      AppConfig.workerBaseUrl.isEmpty) {
+    runApp(const _MisconfiguredApp(reason: _noWorkerUrl));
     return;
   }
 
@@ -147,8 +165,21 @@ Future<void> _startAppCheck() async {
 /// Deliberately not a crash: a crash tells the user nothing and tells you only
 /// that it crashed. This names the cause, which is always a build or config
 /// problem rather than anything the person holding the phone did.
+const String _noFirebase =
+    'This build is missing its Firebase configuration, so it has no way to '
+    'reach your account or analyse a meal. Reinstalling from the store should '
+    'fix it.';
+
+const String _noWorkerUrl =
+    'This build was made without its server address, so it cannot analyse a '
+    'meal or build a plan. Reinstalling from the store should fix it.';
+
 class _MisconfiguredApp extends StatelessWidget {
-  const _MisconfiguredApp();
+  const _MisconfiguredApp({required this.reason});
+
+  /// Which piece is missing, in words the person holding the phone can act on.
+  /// Both causes are build mistakes; neither is anything they did.
+  final String reason;
 
   @override
   Widget build(BuildContext context) {
@@ -169,9 +200,7 @@ class _MisconfiguredApp extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'This build is missing its Firebase configuration, so it '
-                  'has no way to reach your account or analyse a meal. '
-                  'Reinstalling from the store should fix it.',
+                  reason,
                   style: AppTypography.body(color: AppColors.placeholder),
                   textAlign: TextAlign.center,
                 ),
