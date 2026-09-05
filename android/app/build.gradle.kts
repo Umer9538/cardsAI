@@ -1,3 +1,7 @@
+// `java.util` does not resolve inside a Gradle block, where `java` is the
+// Java plugin extension. Imported here instead.
+import java.util.Base64
+
 import java.util.Properties
 
 plugins {
@@ -83,6 +87,46 @@ android {
                 "proguard-rules.pro",
             )
         }
+    }
+}
+
+// A release APK without WORKER_URL builds, installs, and cannot reach the
+// backend at all — no scan, no plan, no receipt check, no account deletion.
+// Nothing in `flutter analyze` or the test suite sees it, and the binary looks
+// perfectly normal, so it has now been shipped to a phone three times: once
+// surfacing as a blank grey scan result, once as "The plan could not be built",
+// and once caught only by the start-up guard in `main()`.
+//
+// `tool/build_release.sh` passes the define, but a bare
+// `flutter build apk --release` and Android Studio's Build > Build APK do not,
+// and either will happily overwrite a good build with a broken one of the same
+// name. Refusing here is the only place that covers all three, because Gradle
+// is what every one of them ends up calling.
+//
+// Flutter hands its --dart-define values to Gradle as `dart-defines`: a
+// comma-separated list of base64-encoded KEY=VALUE strings.
+gradle.taskGraph.whenReady {
+    val buildingRelease = allTasks.any { it.name.contains("Release") }
+    if (!buildingRelease) return@whenReady
+
+    val defines = (project.findProperty("dart-defines") as String? ?: "")
+        .split(",")
+        .filter { it.isNotBlank() }
+        .mapNotNull {
+            runCatching { String(Base64.getDecoder().decode(it)) }.getOrNull()
+        }
+    val workerUrl = defines
+        .firstOrNull { it.startsWith("WORKER_URL=") }
+        ?.removePrefix("WORKER_URL=")
+        ?.trim()
+
+    if (workerUrl.isNullOrEmpty()) {
+        throw GradleException(
+            "\n\n  This release build has no WORKER_URL, so the app it produces " +
+                "cannot\n  reach the backend: no scan, no plan, no purchases.\n\n" +
+                "  Build it with:  tool/build_release.sh apk --dev\n" +
+                "  (or pass --dart-define=WORKER_URL=... yourself)\n"
+        )
     }
 }
 
