@@ -32,13 +32,13 @@
 /// reply within a month.
 abstract final class LegalOperator {
   /// The legal entity that operates the app — a company or a named individual.
-  static const String name = 'REPLACE-WITH-YOUR-LEGAL-NAME';
+  static const String name = 'Lumy Labs';
 
   /// A monitored inbox for privacy and support requests.
-  static const String email = 'REPLACE-WITH-YOUR-SUPPORT-EMAIL';
+  static const String email = 'lumylabsco@gmail.com';
 
   /// Whose law governs, e.g. "England and Wales", "Pakistan".
-  static const String jurisdiction = 'REPLACE-WITH-YOUR-JURISDICTION';
+  static const String jurisdiction = 'Pakistan';
 
   /// Shown at the top of both documents. Update whenever the copy changes —
   /// a policy whose date predates the practices it describes reads as stale.

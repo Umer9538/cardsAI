@@ -6,25 +6,27 @@ from what the app is supposed to do.
 
 Source: `com.carbsai.app` at commit `d8937cc`.
 
-**7 ready to paste · 3 your call · 1 blocked**
+**8 ready to paste · 3 your call · 0 blocked**
 
 ---
 
-## One thing blocks three tasks
+## Operator — settled
 
-`LegalOperator` in `lib/features/settings/presentation/legal_content.dart` still
-holds placeholders. Until they are filled, the privacy policy will not serve, the
-contact email is unknown, and `tool/build_release.sh` refuses to build for the
-store.
+`LegalOperator` is filled: **Lumy Labs**, `lumylabsco@gmail.com`, governed by
+**Pakistan** law. The documents are live.
 
-1. Fill `name`, `email` and `jurisdiction` — a real legal entity, a monitored
-   inbox, and whose law governs.
-2. Run `dart run tool/emit_legal.dart`
-3. `npx wrangler pages deploy site --project-name=carbsai`
+To change any of it: edit `legal_content.dart`, then
+
+```
+dart run tool/emit_legal.dart
+cd site && npx wrangler pages deploy . --project-name=carbsai
+```
+
+The script exits non-zero if a placeholder ever comes back.
 
 ---
 
-## Set privacy policy — **BLOCKED**
+## Set privacy policy — **LIVE**
 
 The pages are built and rendered from the app's own `legal_content.dart`, so the
 words on the web and the words under Settings cannot disagree. Hosted on
@@ -37,10 +39,8 @@ https://carbsai.pages.dev/privacy
 
 Terms are at `/terms`, account deletion at `/delete-account`, on the same host.
 
-> **`dart run tool/emit_legal.dart` refuses to green-light a deploy right now,
-> on purpose.** A public legal document naming a company that does not exist,
-> linked from a store listing, is worse than no page. Fill `LegalOperator`,
-> re-run, deploy — then it is live.
+All three return 200. The Worker's old `/privacy`, `/terms` and `/delete-account`
+redirect here, so anything already pointing at it still resolves.
 
 ---
 

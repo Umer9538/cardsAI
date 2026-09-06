@@ -1,7 +1,13 @@
 // Renders the legal documents as a static site, from the app's own copy.
 //
-//   dart run tool/emit_legal.dart          # writes site/
-//   npx wrangler pages deploy site --project-name=carbsai
+//   dart run tool/emit_legal.dart                                  # writes site/
+//   cd site && npx wrangler pages deploy . --project-name=carbsai
+//
+// Deployed from inside `site/`, not from the repository root. Pages looks for a
+// `functions/` directory beside the one it is given and builds it as Pages
+// Functions — and this repository still has the superseded Cloud Functions
+// folder at its root. From the root the deploy fails while compiling code that
+// nothing ships.
 //
 // Play needs a privacy policy and an account-deletion page at public URLs
 // before it will accept a listing, and both must describe the app the binary
