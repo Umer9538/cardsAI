@@ -9,6 +9,7 @@ import { sendEmailOtp, verifyEmailOtp } from "./otp.js";
 import { searchFoods } from "./foods.js";
 import { deletePhoto, uploadPhoto } from "./photos.js";
 import { generatePlan, type GeneratePlanRequest } from "./planner.js";
+import { legalKind, legalResponse } from "./legalPage.js";
 import { grantBonusScans } from "./rewards.js";
 import { analyzeMeal, type ScanRequest } from "./scan.js";
 import { handleStoreNotification } from "./storeNotify.js";
@@ -91,6 +92,13 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   try {
     if (path === "health") return json({ ok: true });
+
+    // The privacy policy and terms, as pages. Public and unauthenticated on
+    // purpose: a store reviewer, a regulator and a person who has not installed
+    // the app all have to be able to read them, and Play will not accept a
+    // listing without a policy URL it can fetch.
+    const legal = legalKind(path);
+    if (legal) return legalResponse(legal);
 
     // Rewrites the food catalogue. Gated by a shared key rather than a user
     // session: this is an operator action, and a signed-in user triggering tens
