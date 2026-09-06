@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carbsai — Privacy Policy</title>
+<meta name="description" content="Carbsai — Privacy Policy">
+<style>
+  :root {
+    color-scheme: light dark;
+    --ink: #16130f; --muted: #55504a; --bg: #fffaf3; --rule: #e4dccf; --link: #d1440d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #f2ede6; --muted: #a9a29a; --bg: #14120f; --rule: #2c2822; --link: #ff8b5c; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 42rem; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  .brand { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .75rem; color: var(--muted); margin: 0 0 .75rem; }
+  h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 .35rem; letter-spacing: -0.01em; }
+  .updated { color: var(--muted); font-size: .875rem; margin: 0; }
+  h2 { font-size: 1.0625rem; margin: 2.25rem 0 .5rem; }
+  p { margin: 0 0 .9rem; overflow-wrap: break-word; }
+  a { color: var(--link); }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .875rem; }
+  footer p { margin: 0 0 .4rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="brand">Carbsai</p>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated 3 September 2026</p>
+  </header>
+  <p>Last updated: 3 September 2026</p>
+  <p>Carbsai is operated by REPLACE-WITH-YOUR-LEGAL-NAME. This policy explains what the app collects, where it goes, and what you can do about it. It describes what the app actually does — if something here is not true of the app you are using, tell us at REPLACE-WITH-YOUR-SUPPORT-EMAIL.</p>
+  <h2>1. What we collect</h2>
+  <p>• Account: your email address and display name. Your password is handled by Firebase Authentication and is never visible to us.</p>
+  <p>• About you: age, sex, height, weight, activity level, goal and what brought you to the app, from the questions asked when you sign up. They are used to calculate your calorie target, and — if you build a meal plan — your targets, goal and diet preference are sent with that request to our AI provider so the plan fits them. Every question is skippable.</p>
+  <p>• Your taste, if you use the plan builder: which dishes you tapped, the this-or-that answers, the foods you asked to leave out, how much time you have to cook, and anything you typed in the notes box. These are sent to our AI provider to write the plan. Foods you exclude are a health-adjacent choice, so we keep them under your account, never share them with advertisers, and never use them for ad targeting.</p>
+  <p>• Your diary: the meals you log, the foods and portions in them, when you ate, and any photograph you take.</p>
+  <p>• Your weight, if you record it.</p>
+  <p>• Scan records: for each AI scan, which model ran, how many tokens it used, what it cost, what the model said, and the note or description you typed with it. This is how we keep the service affordable and improve accuracy. It is stored under your account and is not readable by the app.</p>
+  <p>• Plan records: for each meal plan, which model ran, what it cost, and a summary of the answers as counts and categories — how many dishes you tapped, which exclusions you chose, which cook time. What you typed in the notes box is never written to this record.</p>
+  <p>• Adverts: if you are not a Premium subscriber, Google AdMob may collect your device’s advertising identifier and technical information to show and cap adverts. On iOS you are asked first, and on Android and in the EEA and UK a consent form runs before any advert is requested. Premium accounts never initialise the advertising SDK at all.</p>
+  <p>We do not use a third-party analytics or crash-reporting SDK, and we do not collect your location or your contacts.</p>
+  <h2>2. Where your data goes</h2>
+  <p>• Google Firebase (Authentication and Cloud Firestore) stores your account and everything in it.</p>
+  <p>• Cloudflare Workers runs our server: every AI request passes through it, and it holds the daily cost counters. Meal photographs are kept on your phone; they are not uploaded to us.</p>
+  <p>• Our AI provider (currently OpenRouter, routing to OpenAI) receives the photograph or written description of your meal and any note you add, in order to estimate its nutrition; and, when you build a meal plan, your calorie and macro targets, your goal, your diet preference and your answers in the plan builder. It does not receive your name, your email or your account identifier. This is the most significant thing the app does with your data, and it happens only when you scan a meal, describe one, or build a plan.</p>
+  <p>• The USDA FoodData Central database and Open Food Facts receive your search terms and scanned barcodes — the words or numbers only, with nothing that identifies you.</p>
+  <p>• Google AdMob, for adverts, as described above.</p>
+  <p>These providers process data on our behalf, or independently in the case of advertising. This means your data may be processed outside your country, including in the United States. We do not sell your personal data, and we do not use it to train AI models.</p>
+  <h2>3. Why we are allowed to</h2>
+  <p>Where the UK or EU GDPR applies: we process your account and diary to perform our contract with you; we use adverts and store scan records on the basis of our legitimate interest in running a sustainable free tier and improving accuracy; and personalised advertising runs only with your consent, which you can withdraw.</p>
+  <h2>4. How long we keep it</h2>
+  <p>Your data is kept while your account exists. Delete your account and it goes with it — the diary, the photographs, the scan records, the plan records, the subscription record and the account itself. Deletion runs immediately and is not reversible. Some records we are legally required to keep, such as proof of a transaction, are kept for as long as the law requires.</p>
+  <h2>5. Your rights</h2>
+  <p>You can ask for a copy of your data, ask us to correct or delete it, object to how we use it, or ask us to restrict it. Write to REPLACE-WITH-YOUR-SUPPORT-EMAIL and we will reply within one month. You can also complain to your data protection regulator.</p>
+  <p>You can delete everything yourself, at any time, from Settings → More → Delete Account. You do not have to ask us.</p>
+  <h2>6. Security</h2>
+  <p>Data is encrypted in transit. Our servers reach your data with per-account rules that prevent one account from reading another’s. No system is perfectly secure, but we do not hold payment card details at any point — the stores handle payment.</p>
+  <h2>7. Children</h2>
+  <p>Carbsai is not for children under 13. If you believe a child has given us personal data, write to REPLACE-WITH-YOUR-SUPPORT-EMAIL and we will delete it.</p>
+  <h2>8. Changes</h2>
+  <p>If we change this policy we will update the date above and, for a material change, tell you in the app before it takes effect.</p>
+  <h2>9. Contact</h2>
+  <p>REPLACE-WITH-YOUR-SUPPORT-EMAIL</p>
+  <footer>
+    <p>The same words are in the app, under Settings.</p>
+    <p><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/delete-account">Delete your account</a></p>
+  </footer>
+</main>
+</body>
+</html>

@@ -20,24 +20,27 @@ store.
 1. Fill `name`, `email` and `jurisdiction` — a real legal entity, a monitored
    inbox, and whose law governs.
 2. Run `dart run tool/emit_legal.dart`
-3. Deploy the Worker so `/privacy` goes live.
+3. `npx wrangler pages deploy site --project-name=carbsai`
 
 ---
 
 ## Set privacy policy — **BLOCKED**
 
-The page is built and the route is wired. It serves the same words the app shows
-under Settings, generated from one source so the two cannot disagree.
+The pages are built and rendered from the app's own `legal_content.dart`, so the
+words on the web and the words under Settings cannot disagree. Hosted on
+Cloudflare Pages rather than the Worker, because the Worker's address carries
+another product's name and that URL is printed on your listing.
 
 ```
-https://carbsai-api.quranai.workers.dev/privacy
+https://carbsai.pages.dev/privacy
 ```
 
-Terms are at `/terms` on the same host.
+Terms are at `/terms`, account deletion at `/delete-account`, on the same host.
 
-> **It returns 503 right now, on purpose.** A public legal document naming a
-> company that does not exist, linked from a store listing, is worse than no
-> page. Fill `LegalOperator`, regenerate, deploy — then it serves.
+> **`dart run tool/emit_legal.dart` refuses to green-light a deploy right now,
+> on purpose.** A public legal document naming a company that does not exist,
+> linked from a store listing, is worse than no page. Fill `LegalOperator`,
+> re-run, deploy — then it is live.
 
 ---
 
@@ -178,10 +181,11 @@ processing on your behalf — which is arguably what OpenRouter is.
 | Independent security review | No |
 | Committed to Families policy | Not applicable at 18+ |
 
-> **Play also wants a deletion URL** — a web address where someone can request
-> deletion without reinstalling. You do not have one yet. A page saying "delete
-> in Settings, or email us" satisfies it; the Worker is the obvious place to host
-> it.
+**Delete account URL** (asked for under Data safety):
+
+```
+https://carbsai.pages.dev/delete-account
+```
 
 ---
 
@@ -222,7 +226,7 @@ own copy is already careful to say so.
 | Category | Health & Fitness |
 | Tags (up to 5) | Calorie Counting · Nutrition · Weight Management · Food & Diet · Meal Planning |
 | Contact email | The `LegalOperator.email` you fill in — must match the one in the privacy policy, or the two documents disagree |
-| Website | Optional. `https://carbsai-api.quranai.workers.dev/privacy` works until you have a landing page |
+| Website | Optional. `https://carbsai.pages.dev/privacy` works until you have a landing page |
 
 ---
 

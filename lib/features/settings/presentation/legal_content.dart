@@ -137,10 +137,13 @@ const List<LegalBlock> termsAndConditions = [
 
   LegalBlock('6. Free scans, ads and rewards', isHeading: true),
   LegalBlock(
-    'Free accounts get a monthly allowance of AI scans. You can earn extra '
-    'scans by watching a rewarded advert, up to a daily limit. Searching the '
-    'food database, scanning a barcode and entering food by hand are '
-    'unlimited and always free. Premium accounts see no adverts at all.',
+    'Free accounts get a fixed allowance of AI scans — three at the time of '
+    'writing — which does not renew, and up to three AI meal plans a day. You '
+    'can earn extra scans by watching a rewarded advert, up to a daily limit. '
+    'Searching the food database, scanning a barcode, describing a meal in '
+    'words and entering food by hand are unlimited and always free. Premium '
+    'accounts get a monthly scan allowance and see no adverts at all. We may '
+    'change these allowances; the app always shows what you have left.',
   ),
 
   LegalBlock('7. Acceptable use', isHeading: true),
@@ -207,9 +210,19 @@ const List<LegalBlock> privacyPolicy = [
     'by Firebase Authentication and is never visible to us.',
   ),
   LegalBlock(
-    '• About you: age, sex, height, weight, activity level and goal, from the '
-    'questions asked when you sign up. These are used to calculate your '
-    'calorie target and nothing else. Every question is skippable.',
+    '• About you: age, sex, height, weight, activity level, goal and what '
+    'brought you to the app, from the questions asked when you sign up. They '
+    'are used to calculate your calorie target, and — if you build a meal '
+    'plan — your targets, goal and diet preference are sent with that request '
+    'to our AI provider so the plan fits them. Every question is skippable.',
+  ),
+  LegalBlock(
+    '• Your taste, if you use the plan builder: which dishes you tapped, the '
+    'this-or-that answers, the foods you asked to leave out, how much time '
+    'you have to cook, and anything you typed in the notes box. These are '
+    'sent to our AI provider to write the plan. Foods you exclude are a '
+    'health-adjacent choice, so we keep them under your account, never share '
+    'them with advertisers, and never use them for ad targeting.',
   ),
   LegalBlock(
     '• Your diary: the meals you log, the foods and portions in them, when you '
@@ -218,8 +231,15 @@ const List<LegalBlock> privacyPolicy = [
   LegalBlock('• Your weight, if you record it.'),
   LegalBlock(
     '• Scan records: for each AI scan, which model ran, how many tokens it '
-    'used, what it cost and what the model said. This is how we keep the '
-    'service affordable and improve accuracy. It is stored under your account.',
+    'used, what it cost, what the model said, and the note or description you '
+    'typed with it. This is how we keep the service affordable and improve '
+    'accuracy. It is stored under your account and is not readable by the app.',
+  ),
+  LegalBlock(
+    '• Plan records: for each meal plan, which model ran, what it cost, and a '
+    'summary of the answers as counts and categories — how many dishes you '
+    'tapped, which exclusions you chose, which cook time. What you typed in '
+    'the notes box is never written to this record.',
   ),
   LegalBlock(
     '• Adverts: if you are not a Premium subscriber, Google AdMob may collect '
@@ -239,16 +259,19 @@ const List<LegalBlock> privacyPolicy = [
     'account and everything in it.',
   ),
   LegalBlock(
-    '• Cloudflare Workers runs our server, and Cloudflare R2 stores meal '
-    'photographs.',
+    '• Cloudflare Workers runs our server: every AI request passes through it, '
+    'and it holds the daily cost counters. Meal photographs are kept on your '
+    'phone; they are not uploaded to us.',
   ),
   LegalBlock(
     '• Our AI provider (currently OpenRouter, routing to OpenAI) receives the '
-    'photograph or written description of your meal, and any note you add, in '
-    'order to estimate its nutrition. It does not receive your name, your '
-    'email or your account identifier. This is the most significant thing the '
-    'app does with your data, and it only happens when you scan or describe a '
-    'meal.',
+    'photograph or written description of your meal and any note you add, in '
+    'order to estimate its nutrition; and, when you build a meal plan, your '
+    'calorie and macro targets, your goal, your diet preference and your '
+    'answers in the plan builder. It does not receive your name, your email '
+    'or your account identifier. This is the most significant thing the app '
+    'does with your data, and it happens only when you scan a meal, describe '
+    'one, or build a plan.',
   ),
   LegalBlock(
     '• The USDA FoodData Central database and Open Food Facts receive your '
@@ -277,10 +300,11 @@ const List<LegalBlock> privacyPolicy = [
   LegalBlock('4. How long we keep it', isHeading: true),
   LegalBlock(
     'Your data is kept while your account exists. Delete your account and it '
-    'goes with it — the diary, the photographs, the scan records, the '
-    'subscription record and the account itself. Backups roll off within 30 '
-    'days. Some records we are legally required to keep, such as proof of a '
-    'transaction, are kept for as long as the law requires.',
+    'goes with it — the diary, the photographs, the scan records, the plan '
+    'records, the subscription record and the account itself. Deletion runs '
+    'immediately and is not reversible. Some records we are legally required '
+    'to keep, such as proof of a transaction, are kept for as long as the law '
+    'requires.',
   ),
 
   LegalBlock('5. Your rights', isHeading: true),
@@ -336,4 +360,92 @@ const List<LegalBlock> help = [
   LegalBlock('Helpful Links', isHeading: true),
   LegalBlock('Privacy Policy'),
   LegalBlock('Terms & Conditions'),
+];
+
+/// How to delete an account, as a page on the web.
+///
+/// Play will not accept a listing from an app that creates accounts without a
+/// URL where deletion can be requested, and it checks three things: that the
+/// page names the app, that the steps are prominent, and that it says what is
+/// deleted and what is kept.
+///
+/// That last one is why this is written against `workers/src/account.ts` rather
+/// than from memory. Everything under `users/{uid}` goes, including the
+/// subcollections the client cannot even read. `purchases/{sha256}` does not —
+/// it lives outside that subtree and is what recognises a refund notice from a
+/// store after the account is gone. A page claiming everything is erased while
+/// that row remains would be a claim rather than a disclosure.
+///
+/// It lives here rather than in the Worker so that the words a person reads on
+/// the web come from the same file as the words they read in the app.
+const List<LegalBlock> accountDeletion = [
+  LegalBlock(
+    'This page explains how to delete your Carbsai account and the data held '
+    'with it.',
+  ),
+
+  LegalBlock('Delete it yourself, in the app', isHeading: true),
+  LegalBlock('1. Open Carbsai and sign in.'),
+  LegalBlock('2. Go to Settings.'),
+  LegalBlock('3. Tap “Delete account” and confirm.'),
+  LegalBlock(
+    'Deletion runs on our server rather than on your phone, so it finishes '
+    'even if you uninstall the app straight afterwards. The app waits for it '
+    'and tells you if anything could not be removed.',
+  ),
+
+  LegalBlock('Ask us instead', isHeading: true),
+  LegalBlock(
+    'If you cannot sign in — a lost password, a phone you no longer have — '
+    'email ${LegalOperator.email} from the address on the account, with '
+    '“Delete my account” as the subject. We will confirm and delete it within '
+    '30 days.',
+  ),
+
+  LegalBlock('What is deleted', isHeading: true),
+  LegalBlock(
+    '• Your profile: name, email address, date of birth, sex, height, weight, '
+    'activity level, goal and calorie targets.',
+  ),
+  LegalBlock('• Your food diary: every meal, with its figures and its photo.'),
+  LegalBlock('• Diet plans you built or saved, and your favourites.'),
+  LegalBlock('• Your weight history.'),
+  LegalBlock('• Notifications and reminder preferences.'),
+  LegalBlock(
+    '• Records you were never able to see yourself: the scan log, your scan '
+    'quota and your subscription entitlement.',
+  ),
+  LegalBlock('• Any meal photographs held in our storage.'),
+  LegalBlock(
+    '• The sign-in account itself, so the email address can be used again from '
+    'scratch.',
+  ),
+  LegalBlock(
+    'All of it goes at once. There is no grace period and nothing is archived.',
+  ),
+
+  LegalBlock('What is kept, and why', isHeading: true),
+  LegalBlock(
+    '• If you ever subscribed, we keep a one-way hash of the store’s purchase '
+    'identifier. It is what lets us recognise a refund or cancellation notice '
+    'from Google or Apple after the account is gone. It holds no name, no '
+    'email address and nothing from your diary, and it cannot be turned back '
+    'into your purchase.',
+  ),
+  LegalBlock(
+    '• Google Play and Apple keep their own record of any purchase, under '
+    'their policies rather than ours. Deleting your Carbsai account does not '
+    'cancel a subscription — do that in the Play Store or the App Store.',
+  ),
+  LegalBlock(
+    '• The totals we use to cap what the AI provider costs us in a day are '
+    'counts and nothing else. They are not attached to any account, and there '
+    'is nothing in them to delete.',
+  ),
+
+  LegalBlock('Removing some data without deleting your account', isHeading: true),
+  LegalBlock(
+    'Press and hold any meal on the home screen to remove it. To remove '
+    'everything, delete the account.',
+  ),
 ];
