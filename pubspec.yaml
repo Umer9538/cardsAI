@@ -76,6 +76,14 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # Runs the widget harness on a real device or simulator, which is the only
+  # way to prove a `DesignCanvas` screen on a viewport the artboard was never
+  # drawn for. `tablet_reachability_test` asserts the same geometry off-device
+  # and is the faster of the two; this one is what caught that the numbers and
+  # the glass agree.
+  integration_test:
+    sdk: flutter
+
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your

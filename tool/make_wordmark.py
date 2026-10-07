@@ -25,6 +25,17 @@ import pathlib
 from PIL import Image, ImageDraw, ImageFont
 
 OUT = pathlib.Path("assets/images/splash/logo_carbsai.png")
+
+# iOS draws its own launch screen from these, before Flutter exists.
+#
+# They were missed when the mark was redrawn, so an iPhone showed "Carbsai" for
+# the first second and then "Carbs AI" — the old brand and the new one, in that
+# order, every cold start. Nothing in Dart references them and no test renders
+# them, so the only way they stay right is being generated from the same canvas
+# as everything else. 1x is 162x54, which is what the splash places on the
+# artboard; @2x and @3x are that doubled and trebled.
+LAUNCH = pathlib.Path("ios/Runner/Assets.xcassets/LaunchImage.imageset")
+LAUNCH_SCALES = {"LaunchImage.png": 1, "LaunchImage@2x.png": 2, "LaunchImage@3x.png": 3}
 FONT = pathlib.Path("assets/fonts/SpaceGrotesk-Bold.ttf")
 
 # AppColors.white and AppColors.primary.
@@ -67,6 +78,15 @@ def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(OUT)
     print(f"wrote {OUT}  {canvas.size}  mode={canvas.mode}")
+
+    # Downscaled from the 3x canvas rather than re-drawn at each size: redrawing
+    # 108pt type at a third of the size is a different hinting decision and the
+    # two marks stop matching.
+    for name, scale in LAUNCH_SCALES.items():
+        size = (WIDTH // 3 * scale, HEIGHT // 3 * scale)
+        out = LAUNCH / name
+        canvas.resize(size, Image.LANCZOS).save(out)
+        print(f"wrote {out}  {size}")
 
 
 if __name__ == "__main__":

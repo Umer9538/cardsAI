@@ -4,12 +4,22 @@ import 'package:flutter/material.dart';
 
 /// How a [DesignCanvas] maps its fixed artboard onto the viewport.
 enum DesignFit {
-  /// Scale by whichever axis needs more and crop the overflow.
+  /// Scale by whichever axis needs more so the artboard reaches every edge,
+  /// then crop whatever that pushes out — but never past [safeHeight].
   ///
-  /// Only for screens whose artwork is meant to bleed off the edges and whose
-  /// content sits comfortably inside the middle of the frame — the splash and
-  /// onboarding artboards. Never for a screen with a bottom-anchored control:
-  /// at 375x667 this pushes anything below y≈760 off the bottom of the display.
+  /// For screens whose artwork is meant to bleed: the splash, onboarding and
+  /// the camera. What it crops is the *bottom*, on every viewport that is
+  /// proportionally taller than the 428x926 artboard — which is all of them.
+  /// [DesignCanvas.coverVisibleHeight] is the arithmetic, and it is brutal:
+  /// 926 units on the artboard, 761 on an iPhone SE, 571 on a 13" iPad.
+  ///
+  /// The comment here used to say "never for a screen with a bottom-anchored
+  /// control", and that was a convention nothing enforced. Onboarding's Next
+  /// button sits at y=788 and the scanning shutter at y=789, so both were
+  /// already off the display on an iPhone SE, and on an iPad the whole app
+  /// stopped at the first onboarding page with no tappable node anywhere in the
+  /// accessibility tree. A rule that is only a comment is a rule that has
+  /// already been broken. [safeHeight] is the same rule as arithmetic.
   cover,
 
   /// Scale by width, cap the scale on large displays, and scroll if the
@@ -37,6 +47,7 @@ class DesignCanvas extends StatelessWidget {
     this.width = designWidth,
     this.height = designHeight,
     this.maxScale = defaultMaxScale,
+    this.safeHeight = designHeight,
   });
 
   static const double designWidth = 428;
@@ -56,6 +67,30 @@ class DesignCanvas extends StatelessWidget {
   final double width;
   final double height;
   final double maxScale;
+
+  /// The artboard height [DesignFit.cover] must keep on screen.
+  ///
+  /// Defaults to the full artboard, so cover crops nothing it was not told it
+  /// may crop. That default is the point: the old behaviour cropped by however
+  /// much the viewport's aspect ratio demanded and told nobody, so the cost
+  /// landed on whichever control happened to sit lowest. A screen that is
+  /// genuinely pure bleed — artwork with nothing to reach — can lower this and
+  /// say why.
+  ///
+  /// It has no effect under [DesignFit.fit], which degrades to a scroll instead
+  /// of to a crop and therefore never strands anything.
+  final double safeHeight;
+
+  /// How much of the artboard's height [DesignFit.cover] can show in [viewport].
+  ///
+  /// Exposed because it is the number that explains every bug of this class,
+  /// and it is not obvious from reading the branch below: cover scales by
+  /// `max(viewport.width / 428, viewport.height / 926)`, so on anything
+  /// proportionally taller than the artboard the width wins and the visible
+  /// height collapses to `428 / aspect`.
+  static double coverVisibleHeight(Size viewport) =>
+      viewport.height /
+      math.max(viewport.width / designWidth, viewport.height / designHeight);
 
   /// The largest OS text scale this artboard can absorb without breaking.
   ///
@@ -106,26 +141,65 @@ class DesignCanvas extends StatelessWidget {
       // the viewport so it can genuinely cover.
       return LayoutBuilder(
         builder: (context, constraints) {
-          final availableWidth =
-              constraints.maxWidth.isFinite ? constraints.maxWidth : width;
-          final availableHeight =
-              constraints.maxHeight.isFinite ? constraints.maxHeight : height;
+          final availableWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : width;
+          final availableHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : height;
 
-          final scale = math.max(availableWidth / width, availableHeight / height);
+          // Three ceilings, and the smallest wins.
+          //
+          // `fill` is what cover means: reach every edge, crop the rest.
+          //
+          // `reachable` is the fix for what cover costs. It is the scale at
+          // which [safeHeight] exactly fills the display, so clamping to it
+          // guarantees nothing above that line is ever cropped away. On an
+          // iPad this is what puts the Next button back on screen — unclamped,
+          // cover scaled the artboard 2.41x and showed its top 571 units, and
+          // the button lives at 788.
+          //
+          // `maxScale` is the tablet ceiling the `fit` branch already applies,
+          // and cover needs it for a reason of its own: without it onboarding
+          // would scale 1.49x on a 13" iPad while the login screen behind it
+          // scaled 1.15x, so consecutive screens would change size as you
+          // moved between them. Matching the cap keeps one canvas width across
+          // the whole app on a given device.
+          final fill = math.max(
+            availableWidth / width,
+            availableHeight / height,
+          );
+          final reachable = availableHeight / safeHeight;
+          final scale = math.min(math.min(fill, reachable), maxScale);
           final scaledWidth = width * scale;
           final scaledHeight = height * scale;
 
-          return ClipRect(
-            child: OverflowBox(
-              alignment: Alignment.topCenter,
-              minWidth: scaledWidth,
-              maxWidth: scaledWidth,
-              minHeight: scaledHeight,
-              maxHeight: scaledHeight,
-              child: SizedBox(
-                width: scaledWidth,
-                height: scaledHeight,
-                child: FittedBox(fit: BoxFit.fill, child: canvas),
+          // Top-aligned only while there is genuinely more canvas than display.
+          //
+          // Cover's crop has always come off the bottom, which is deliberate —
+          // the artboards mock a status bar at y=0..47 and the content hangs
+          // from the top. But once a ceiling above has made the canvas *shorter*
+          // than the viewport there is nothing to crop, and topCenter would
+          // then pin it to the status bar with all the slack in one band at the
+          // bottom. Centred is what the `fit` branch does in the same position.
+          final alignment = scaledHeight > availableHeight
+              ? Alignment.topCenter
+              : Alignment.center;
+
+          return ColoredBox(
+            color: background,
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: alignment,
+                minWidth: scaledWidth,
+                maxWidth: scaledWidth,
+                minHeight: scaledHeight,
+                maxHeight: scaledHeight,
+                child: SizedBox(
+                  width: scaledWidth,
+                  height: scaledHeight,
+                  child: FittedBox(fit: BoxFit.fill, child: canvas),
+                ),
               ),
             ),
           );
@@ -135,10 +209,12 @@ class DesignCanvas extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final availableWidth =
-            constraints.maxWidth.isFinite ? constraints.maxWidth : width;
-        final availableHeight =
-            constraints.maxHeight.isFinite ? constraints.maxHeight : height;
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : width;
+        final availableHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : height;
 
         final scale = math.min(availableWidth / width, maxScale);
         final scaledHeight = height * scale;
