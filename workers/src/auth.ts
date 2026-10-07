@@ -75,7 +75,14 @@ interface IdTokenClaims {
 }
 
 function decodeJson<T>(segment: string): T {
-  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(segment))) as T;
+  // Garbage in the header or payload — "abc.def.ghi" — used to throw out of
+  // the decoder and surface as a 500 "Something went wrong". It is a token
+  // we cannot read, which is the same answer as no token.
+  try {
+    return JSON.parse(new TextDecoder().decode(base64UrlToBytes(segment))) as T;
+  } catch {
+    throw new HttpsError("unauthenticated", "Sign in first.");
+  }
 }
 
 export async function verifyIdToken(token: string, env: Env): Promise<IdTokenClaims> {

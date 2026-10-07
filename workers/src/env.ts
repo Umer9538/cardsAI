@@ -33,7 +33,7 @@ export interface Env {
    * Firestore writes.
    */
   SYNC_KEY: string;
-  /** e.g. "Carbsai <no-reply@yourdomain>" */
+  /** e.g. "Carbs AI <no-reply@yourdomain>" */
   EMAIL_FROM: string;
 
   // ---- purchases ----

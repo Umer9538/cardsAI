@@ -66,3 +66,11 @@ android/key.properties
 android/*.jks
 android/*.p12
 android/*.keystore
+
+# goldie store assets (generated)
+goldie/out/
+goldie/goldie.design.json
+
+# Local tooling scratch
+.argent/
+*.bak-goldie

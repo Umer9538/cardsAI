@@ -220,6 +220,17 @@ export async function analyzeMeal(
     );
   }
 
+  // Not an image at all — wrong bytes, a `data:` prefix, a file picked from
+  // Downloads that was never a photo. Caught here from the first sixteen
+  // bytes rather than six seconds later as a provider 400 that used to read
+  // "contact support".
+  if (isPhoto && !looksLikeImage(imageBase64)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "That photo could not be read. Try another one, or describe your meal.",
+    );
+  }
+
   // Before the per-user quota, because it is the cheaper check and the one
   // that protects the account rather than the person.
   await assertUnderDailyCap(db, config.dailySpendCapUsd);
@@ -228,6 +239,13 @@ export async function analyzeMeal(
   await reserveQuota(db, uid, bucket);
 
   const started = Date.now();
+
+  // The catch below refunds the quota unit; these say it has already been
+  // given back, or that the call was billed and must not be. Without the
+  // first flag a scan that found no food and then failed to write its log
+  // refunded twice and drove `used` negative.
+  let refunded = false;
+  let billed = false;
 
   try {
     const content = isPhoto
@@ -251,7 +269,7 @@ export async function analyzeMeal(
         authorization: `Bearer ${modelApiKey(env)}`,
         "content-type": "application/json",
         // Attribution on OpenRouter's app rankings. Ignored elsewhere.
-        "X-OpenRouter-Title": "Carbsai",
+        "X-OpenRouter-Title": "Carbs AI",
       },
       body: JSON.stringify({
         model: config.model,
@@ -290,6 +308,24 @@ export async function analyzeMeal(
     const body = (await response.json()) as ChatBody;
     const choice = body.choices?.[0];
 
+    // Cost is recorded here, before the refusal, truncation and parse checks
+    // below — every one of those is a call the provider has already billed,
+    // and each used to throw past `recordSpend`, so the most expensive
+    // failures were the ones the daily fuse could not see. Awaited, not
+    // fire-and-forget: an un-awaited promise can be cancelled when the
+    // response is returned, and `recordSpend` swallows its own errors, so
+    // awaiting it cannot fail a scan.
+    const usage = body.usage;
+    const spentUsd =
+      typeof usage?.cost === "number"
+        ? usage.cost
+        : ((usage?.prompt_tokens ?? 0) / 1_000_000) * config.inputPricePerMTok +
+          ((usage?.completion_tokens ?? 0) / 1_000_000) * config.outputPricePerMTok;
+    if (spentUsd > 0) {
+      billed = true;
+      await recordSpend(db, spentUsd);
+    }
+
     // A refusal arrives in its own field rather than as schema-shaped output,
     // so it has to be looked for explicitly.
     const refusal = choice?.message?.refusal;
@@ -306,6 +342,10 @@ export async function analyzeMeal(
     // budget rather than the meal being complicated.
     if (choice?.finish_reason === "length") {
       console.error("truncated response", uid, config.maxOutputTokens);
+      // Deliberately not refunded: this is the most expensive call the route
+      // can make — the whole output budget spent on reasoning — and refunding
+      // it let one account retry it without limit.
+      refunded = true;
       throw new HttpsError(
         "resource-exhausted",
         "That one took too long to work out. Try a closer photo.",
@@ -325,7 +365,16 @@ export async function analyzeMeal(
       throw new HttpsError("internal", "The analyser returned a bad response.");
     }
 
-    const analysis = sanitize(parsed);
+    const analysis = sanitize(parsed, isPhoto);
+
+    // Nothing edible in the picture: the person gets a question, not a
+    // plate, and should not pay a scan for it. The model call itself is
+    // still recorded against the daily spend cap, which is what bounds
+    // someone feeding the analyser wallpaper.
+    if (analysis.items.length === 0) {
+      await releaseQuota(db, uid, bucket.id);
+      refunded = true;
+    }
     const latencyMs = Date.now() - started;
 
     const inputTokens = body.usage?.prompt_tokens ?? 0;
@@ -333,14 +382,9 @@ export async function analyzeMeal(
     const reasoningTokens =
       body.usage?.completion_tokens_details?.reasoning_tokens ?? 0;
 
-    // Prefer the provider's own figure. OpenRouter always reports it, and it is
-    // the amount actually charged — the constants below are a stale-price
-    // estimate kept only for providers that report nothing.
-    const costUsd =
-      typeof body.usage?.cost === "number"
-        ? body.usage.cost
-        : (inputTokens / 1_000_000) * config.inputPricePerMTok +
-          (outputTokens / 1_000_000) * config.outputPricePerMTok;
+    // Computed above, where it is recorded against the daily cap; the same
+    // figure is written to the scan log so the two can never disagree.
+    const costUsd = spentUsd;
 
     // The scan log is the eval set and the cost dashboard in one. The image is
     // never written here — only what it cost and what came back. `observations`
@@ -369,10 +413,6 @@ export async function analyzeMeal(
       createdAt: serverTimestamp(),
     });
 
-    // Not awaited into the response: a failure to record spend must never fail
-    // a scan the user has already waited for. See `recordSpend`.
-    void recordSpend(db, costUsd);
-
     console.log("scan complete", JSON.stringify({
       uid, model: config.model, itemCount: analysis.items.length,
       latencyMs, reasoningTokens, costUsd,
@@ -387,9 +427,14 @@ export async function analyzeMeal(
       latencyMs,
     };
   } catch (error) {
-    await releaseQuota(db, uid, bucket.id);
+    // One refund at most, and none for a call the provider billed.
+    if (!refunded) {
+      refunded = true;
+      await releaseQuota(db, uid, bucket.id);
+    }
 
     if (error instanceof HttpsError) throw error;
+    if (billed) console.warn("billed scan failed after the model answered", uid);
 
     // Everything below is an upstream failure. What the user sees is
     // deliberately generic: an OpenAI error string is not something to put in
@@ -407,11 +452,15 @@ export async function analyzeMeal(
       );
     }
     if (status === 400) {
-      // Almost always a config/scan edit that named a model without vision or
-      // without structured outputs.
+      // With a photo attached this is the provider failing to decode it — a
+      // corrupt or truncated file that passed the magic-byte check. Without
+      // one it is almost always a config/scan edit that named a model without
+      // vision or without structured outputs.
       throw new HttpsError(
-        "failed-precondition",
-        "The analyser rejected that request. Please contact support.",
+        isPhoto ? "invalid-argument" : "failed-precondition",
+        isPhoto
+          ? "That photo could not be read. Try a clearer one, or describe your meal."
+          : "The analyser rejected that request. Please contact support.",
       );
     }
     throw new HttpsError(
@@ -436,4 +485,33 @@ export class UpstreamError extends Error {
   constructor(readonly status: number, body: string) {
     super(`openai ${status}: ${body.slice(0, 500)}`);
   }
+}
+
+/**
+ * Whether [base64] begins like a JPEG, PNG, WebP, GIF or HEIC/HEIF file.
+ *
+ * Only the first sixteen bytes are decoded, so this costs nothing on a
+ * 300 KB upload. Anything the client can produce — the camera plugin, the
+ * photo picker, the file picker — starts with one of these; anything else
+ * is not a picture and would only come back as a provider error.
+ */
+export function looksLikeImage(base64: string): boolean {
+  let head: Uint8Array;
+  try {
+    const chunk = base64.slice(0, 24).replace(/[^A-Za-z0-9+/=]/g, "");
+    if (chunk.length < 16) return false;
+    const bin = atob(chunk.slice(0, chunk.length - (chunk.length % 4)));
+    head = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  } catch {
+    return false;
+  }
+  if (head.length < 12) return false;
+  const ascii = (from: number, to: number): string =>
+    String.fromCharCode(...head.slice(from, to));
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return true; // JPEG
+  if (head[0] === 0x89 && ascii(1, 4) === "PNG") return true;
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return true;
+  if (ascii(0, 4) === "GIF8") return true;
+  if (ascii(4, 8) === "ftyp") return true; // HEIC / HEIF / AVIF
+  return false;
 }

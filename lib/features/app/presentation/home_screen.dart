@@ -13,6 +13,8 @@ import 'widgets/bottom_nav.dart';
 import 'widgets/calorie_gauge.dart';
 import 'widgets/meal_card.dart';
 import 'widgets/meal_sheet.dart';
+import 'widgets/activity_card.dart';
+import 'widgets/water_card.dart';
 import 'widgets/weight_card.dart';
 
 /// Home — Figma frame `23_Home` (2002:1388).
@@ -63,32 +65,67 @@ class HomeScreen extends ConsumerWidget {
   /// and the app was already promising a goal date without ever asking for it.
   static const double _weightTop = _extrasTop + _extrasHeight + 14;
 
-  /// Room reserved for it. The card sizes to its own content — with or without
-  /// a sparkline — so this only books space on the canvas, which scrolls.
-  static const double _weightReserve = 168;
+  /// Water sits under weight: both are the day's other inputs, and water is
+  /// the one onboarding has promised since the first build without the app
+  /// being able to record a glass.
+  ///
+  /// A function of the weight card's state, because that card is 122 empty and
+  /// 220 once anything is logged. It used to book a flat 168 for both, which
+  /// left a gap half again the size of every other one on the screen when
+  /// empty and overlapped this card when not.
+  static double _waterTop({required bool hasWeight}) =>
+      _weightTop + WeightCard.reserveFor(hasReadings: hasWeight) + 14;
 
-  /// Everything below the macro cards moves down by both additions.
-  static const double _extrasShift = _extrasHeight + 8 + _weightReserve + 14;
+  /// Activity sits under water — the last of the day's other inputs, and the
+  /// other half of what onboarding has always promised.
+  static double _activityTop({required bool hasWeight}) =>
+      _waterTop(hasWeight: hasWeight) + WaterCard.reserve + 14;
+
+  /// Everything below the macro cards moves down by all four additions.
+  ///
+  /// A function of [activityCount], because the activity card grows with the
+  /// day's bouts. It was a constant while every addition had a fixed height;
+  /// leaving it one would draw the diary over a second logged walk, which is
+  /// the exact bug `home_layout_test` exists to catch.
+  static double _extrasShift(int activityCount, {bool hasWeight = false}) =>
+      _extrasHeight +
+      8 +
+      WeightCard.reserveFor(hasReadings: hasWeight) +
+      14 +
+      WaterCard.reserve +
+      14 +
+      ActivityCard.reserveFor(activityCount) +
+      14;
 
   /// Where the artboard puts the Diet Plan heading, before the meals list is
   /// inserted above it.
-  static const double _dietPlanTop = 771 + _extrasShift;
+  static double _dietPlanTop(int activityCount, {bool hasWeight = false}) =>
+      771 + _extrasShift(activityCount, hasWeight: hasWeight);
 
   /// Top of the meals section, immediately below the two macro cards.
-  static const double _mealsTop = 771 + _extrasShift;
+  static double _mealsTop(int activityCount, {bool hasWeight = false}) =>
+      771 + _extrasShift(activityCount, hasWeight: hasWeight);
 
   /// Exposed so a test can assert the plan card clears the diary. Two
   /// `Positioned` children overlapping throws nothing and renders plausibly,
   /// so it has to be checked by arithmetic rather than by rendering.
   @visibleForTesting
-  static double get mealsTop => _mealsTop;
+  static double mealsTop([int activityCount = 0, bool hasWeight = false]) =>
+      _mealsTop(activityCount, hasWeight: hasWeight);
 
   @visibleForTesting
   static double mealsHeight(int count) => _mealsHeight(count);
 
   @visibleForTesting
-  static double dietCardTop(int mealCount) =>
-      _dietPlanTop + _mealsHeight(mealCount) + 24 + 56;
+  static double dietCardTop(
+    int mealCount, [
+    int activityCount = 0,
+    bool hasWeight = false,
+  ]) =>
+      _dietPlanTop(activityCount, hasWeight: hasWeight) +
+      _mealsHeight(mealCount) +
+      24 +
+      56;
 
   static const double _mealGap = 12;
   static const double _sectionTitleHeight = 48;
@@ -112,9 +149,13 @@ class HomeScreen extends ConsumerWidget {
   /// than to this canvas, so without trailing room that row can never be
   /// scrolled out from under it — see [AppBottomNav.clearance]. That part is
   /// not design.
-  static double contentHeightFor(int mealCount) =>
+  static double contentHeightFor(
+    int mealCount, [
+    int activityCount = 0,
+    bool hasWeight = false,
+  ]) =>
       1109 +
-      _extrasShift +
+      _extrasShift(activityCount, hasWeight: hasWeight) +
       _mealsHeight(mealCount) +
       24 +
       AppBottomNav.clearance;
@@ -128,6 +169,16 @@ class HomeScreen extends ConsumerWidget {
     final meals = log.meals;
     // Everything below the meals section shifts down by whatever it occupies.
     final shift = _mealsHeight(meals.length) + 24;
+    // And everything below the activity card shifts by however many bouts it
+    // is showing.
+    final activity = ref.watch(activityLogProvider);
+    // The weight card is 122 empty and 220 populated, so everything under it
+    // moves with that too.
+    final weight =
+        ref.watch(weightHistoryProvider).value ?? WeightHistory.empty;
+    final hasWeight = !weight.isEmpty;
+    final dietPlanTop =
+        _dietPlanTop(activity.entries.length, hasWeight: hasWeight);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
@@ -141,12 +192,17 @@ class HomeScreen extends ConsumerWidget {
           children: [
             DesignCanvas(
               background: AppColors.background,
-              height: contentHeightFor(meals.length),
+              height: contentHeightFor(
+                meals.length,
+                activity.entries.length,
+                hasWeight,
+              ),
               children: [
                 _Header(
                   profile: profile,
                   onPremium: onPremium,
                   onNotifications: onNotifications,
+                  unread: ref.watch(unreadNotificationCountProvider),
                 ),
                 _CalendarCard(
                   selected: ref.watch(selectedDateProvider),
@@ -179,18 +235,24 @@ class HomeScreen extends ConsumerWidget {
                   consumed: log.consumed,
                   targets: log.targets,
                 ),
+                WaterCard(top: _waterTop(hasWeight: hasWeight)),
+                ActivityCard(top: _activityTop(hasWeight: hasWeight)),
                 WeightCard(
                   top: _weightTop,
+                  preview: weight,
                   onLog: () => showWeightSheet(context, ref),
                 ),
                 _MealsSection(
-                  top: _mealsTop,
+                  top: _mealsTop(
+                    activity.entries.length,
+                    hasWeight: hasWeight,
+                  ),
                   date: log.date,
                   meals: meals,
                   onTap: (meal) => showMealSheet(context, ref, meal),
                   onDelete: (meal) => _confirmDelete(context, ref, meal),
                 ),
-                _SectionTitle(text: 'Diet Plan', top: _dietPlanTop + shift),
+                _SectionTitle(text: 'Diet Plan', top: dietPlanTop + shift),
                 if (plan != null)
                   _DietCard(
                     plan: plan,
@@ -201,7 +263,7 @@ class HomeScreen extends ConsumerWidget {
                     // meals section, and a logged meal simply vanished under
                     // the plan photo. Derived from the heading now so the two
                     // cannot drift apart again.
-                    top: _dietPlanTop + shift + 56,
+                    top: dietPlanTop + shift + 56,
                     onTap: onPlanTap == null ? null : () => onPlanTap!(plan),
                   ),
               ],
@@ -284,11 +346,19 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({this.profile, this.onPremium, this.onNotifications});
+  const _Header({
+    this.profile,
+    this.onPremium,
+    this.onNotifications,
+    this.unread = 0,
+  });
 
   final UserProfile? profile;
   final VoidCallback? onPremium;
   final VoidCallback? onNotifications;
+
+  /// Unread notifications, for the badge on the bell.
+  final int unread;
 
   @override
   Widget build(BuildContext context) {
@@ -319,6 +389,7 @@ class _Header extends StatelessWidget {
           left: 368,
           icon: 'assets/images/app/icon_bell.png',
           label: 'Notifications',
+          badge: unread,
           onTap: onNotifications,
         ),
       ],
@@ -350,6 +421,7 @@ class _OutlineIconButton extends StatelessWidget {
     required this.left,
     required this.icon,
     required this.label,
+    this.badge = 0,
     this.onTap,
   });
 
@@ -359,6 +431,15 @@ class _OutlineIconButton extends StatelessWidget {
   /// Required, not optional: these are bare glyphs with no text near them, so
   /// the label is the only thing that announces them.
   final String label;
+
+  /// Unread count. Zero draws nothing — a badge showing "0" is a notification
+  /// that there is nothing to notify you about.
+  ///
+  /// `unreadNotificationCountProvider` has existed since the inbox did and was
+  /// read by nothing, so the bell looked identical whether there were six
+  /// unread messages or none. An inbox nobody is told about is an inbox nobody
+  /// opens.
+  final int badge;
 
   final VoidCallback? onTap;
 
@@ -371,23 +452,73 @@ class _OutlineIconButton extends StatelessWidget {
       height: 40,
       child: Semantics(
         button: true,
-        label: label,
+        // The count goes in the label too. These are bare glyphs with no text
+        // near them, so for a screen reader the badge does not otherwise
+        // exist.
+        label: badge > 0 ? '$label, $badge unread' : label,
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.inkMuted),
-            ),
-            alignment: Alignment.center,
-            child: Image.asset(
-              icon,
-              width: 20,
-              height: 20,
-              filterQuality: FilterQuality.high,
-            ),
+          child: Stack(
+            // The badge sits over the disc's edge, which is outside the 40pt
+            // box.
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.inkMuted),
+                ),
+                alignment: Alignment.center,
+                child: Image.asset(
+                  icon,
+                  width: 20,
+                  height: 20,
+                  filterQuality: FilterQuality.high,
+                ),
+              ),
+              if (badge > 0)
+                Positioned(top: -2, right: -4, child: _Badge(count: badge)),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The unread count on the bell.
+///
+/// A stadium rather than a circle, because two digits in an 18pt circle either
+/// overflow it or have to be shrunk to the point of being decoration. It stops
+/// at "99+": past that the exact number has stopped being information.
+class _Badge extends StatelessWidget {
+  const _Badge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = count > 99 ? '99+' : '$count';
+    return Container(
+      constraints: const BoxConstraints(minWidth: 18),
+      height: 18,
+      padding: EdgeInsets.symmetric(horizontal: text.length == 1 ? 0 : 5),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(9),
+        // A ring in the page colour, so the badge reads as sitting on top of
+        // the disc rather than being part of its outline.
+        border: Border.all(color: AppColors.background, width: 2),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: AppTypography.meta(color: AppColors.white).copyWith(
+          fontSize: 10,
+          height: 1.0,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -479,7 +610,15 @@ class _CalendarCard extends StatelessWidget {
                       selected: date == selected,
                       // A future day has nothing logged against it yet.
                       dimmed: date.isAfter(today),
-                      onTap: () => onSelect?.call(date),
+                      // And it is not selectable either. `dimmed` was doing
+                      // this job alone, which is to say not at all: it greyed
+                      // the number and left the GestureDetector live, so a
+                      // tap on tomorrow opened an empty day that looked like
+                      // a day with nothing logged. A null callback also lets
+                      // _DayColumn drop the detector entirely.
+                      onTap: date.isAfter(today)
+                          ? null
+                          : () => onSelect?.call(date),
                     );
                   },
                 ),
@@ -618,6 +757,14 @@ class _CaloriesCard extends StatelessWidget {
 
   final DailyLog log;
 
+  /// Where the "0" and target captions sit, in card coordinates.
+  ///
+  /// Derived from the gauge rather than taken from the artboard, so the two
+  /// cannot drift apart again: it is the bottom of the arc's round cap plus a
+  /// little air.
+  static const double _gaugeCaptionTop =
+      (366.93 - 325) + 112.67 + 27.33 / 2 + 4;
+
   @override
   Widget build(BuildContext context) {
     // Negative once the goal is passed. The artboard has no over-budget state,
@@ -677,9 +824,21 @@ class _CaloriesCard extends StatelessWidget {
               ],
             ),
           ),
+          // The two end captions, below the arc rather than across it.
+          //
+          // The artboard puts them at y=480.2, which is the arc's own centre
+          // line — so each one landed inside a round cap. With the day barely
+          // started that read as a cramped "0" sitting on the grey band; once
+          // the arc filled, the ink-coloured "0" was drawn over the ink-coloured
+          // cap and disappeared completely. The geometry came from the raster
+          // export and the label positions from the Figma text nodes, and the
+          // two did not agree.
+          //
+          // The cap bottom is the gauge's centre plus half its stroke:
+          // 41.93 + 112.67 + 13.67 = 168.27 in card space. 4pt under that.
           Positioned(
             left: 133.3 - 20,
-            top: 480.2 - 325,
+            top: _gaugeCaptionTop,
             child: Text(
               '0',
               style: AppTypography.meta(
@@ -689,7 +848,7 @@ class _CaloriesCard extends StatelessWidget {
           ),
           Positioned(
             left: 277.5 - 20,
-            top: 480.2 - 325,
+            top: _gaugeCaptionTop,
             child: Text(
               NutritionFormat.calories(log.targets.calories).split(' ').first,
               style: AppTypography.meta(

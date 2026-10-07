@@ -21,12 +21,28 @@ import 'widgets/pinned_cta.dart';
 /// quota, and it costs nothing — which makes it the right fallback when a photo
 /// fails and the honest option once someone has used up their scans.
 class FoodSearchScreen extends ConsumerStatefulWidget {
-  const FoodSearchScreen({super.key, this.onBack, this.onDone, this.results});
+  const FoodSearchScreen({
+    super.key,
+    this.onBack,
+    this.onDone,
+    this.onDescribe,
+    this.results,
+  });
 
   final VoidCallback? onBack;
 
   /// Fired once the picked foods are in the controller.
   final VoidCallback? onDone;
+
+  /// Hands the typed query to the describe-a-meal path.
+  ///
+  /// The databases behind this screen are USDA FoodData Central and Open Food
+  /// Facts, and neither holds most home-cooked South Asian food — a tester
+  /// searched "malai botti" and got a full stop. The app can answer that
+  /// question: the describe path sends the words to the model and is the one
+  /// route that works for any dish. Without this the screen names the gap and
+  /// then leaves the person on it.
+  final void Function(String query)? onDescribe;
 
   /// Pins the result list, shadowing whatever a search would return.
   ///
@@ -241,14 +257,14 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                 child: Text(
                   _showingRecent && _recent.isNotEmpty
                       ? 'Foods you log often. Tap to add one again, or search '
-                          'for something else.'
+                            'for something else.'
                       // Named the wrong database. Search reads the USDA
                       // FoodData Central mirror first and only falls through to
                       // Open Food Facts when that has nothing — so the line
                       // credited the last resort and explained the wrong gaps.
                       : 'Results come from USDA FoodData Central, the '
-                          'lab-analysed reference database. Packaged products '
-                          'are easier to find by barcode.',
+                            'lab-analysed reference database. Packaged products '
+                            'are easier to find by barcode.',
                   style: AppTypography.meta(color: AppColors.muted),
                 ),
               ),
@@ -270,12 +286,53 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                   left: 20,
                   top: _listTop,
                   width: 388,
-                  height: 40,
-                  child: Text(
-                    _error!,
-                    style: AppTypography.socialLabel(
-                      color: AppColors.placeholder,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _error!,
+                        style: AppTypography.socialLabel(
+                          color: AppColors.placeholder,
+                        ),
+                      ),
+                      // A search that found nothing is not the end of the
+                      // road, and saying so is the whole point: these two
+                      // databases are reference tables of mostly Western and
+                      // packaged food, and the model handles everything they
+                      // do not. Offering it here turns the most common dead
+                      // end in the app into one tap.
+                      if (widget.onDescribe != null) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          'These databases are strongest on packaged and '
+                          'Western foods. For a home-cooked dish, describe it '
+                          'instead — that goes to the AI, which knows it.',
+                          style: AppTypography.meta(color: AppColors.muted),
+                        ),
+                        const SizedBox(height: 14),
+                        _DescribeInstead(
+                          onTap: () => widget.onDescribe!(_query.text.trim()),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+              // Nothing typed and nothing logged yet — a brand-new account
+              // lands here, and it used to be a title, a caption and 700pt of
+              // black. These are the foods that actually resolve in the
+              // reference tables, so a first tap returns something.
+              if (_showingRecent && _recent.isEmpty && !_searching)
+                Positioned(
+                  left: 20,
+                  top: _listTop,
+                  width: 388,
+                  child: _Suggestions(
+                    onPick: (term) {
+                      _query.text = term;
+                      _onQueryChanged(term);
+                    },
                   ),
                 ),
 
@@ -383,6 +440,101 @@ class _ResultRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The way out of a search that found nothing.
+class _DescribeInstead extends StatelessWidget {
+  const _DescribeInstead({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Describe this meal instead',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Text(
+            'Describe it instead',
+            style: AppTypography.cardHeading(color: AppColors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Starter taps for an account with no history.
+///
+/// Deliberately generic reference foods rather than anything regional: these
+/// have to *resolve*, and the tables behind this screen are strongest exactly
+/// here. A suggestion that returns "nothing found" would be worse than no
+/// suggestion at all.
+class _Suggestions extends StatelessWidget {
+  const _Suggestions({required this.onPick});
+
+  final void Function(String term) onPick;
+
+  static const List<String> terms = [
+    'Chicken breast',
+    'Rice',
+    'Egg',
+    'Milk',
+    'Banana',
+    'Bread',
+    'Yogurt',
+    'Potato',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Try one of these', style: AppTypography.cardHeading()),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final term in terms)
+              Semantics(
+                button: true,
+                label: 'Search $term',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () => onPick(term),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.inkMuted,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: AppColors.outline),
+                    ),
+                    child: Text(term, style: AppTypography.socialLabel()),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

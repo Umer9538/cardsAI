@@ -43,7 +43,14 @@ const List<_Page> _pages = [
     illustrationLeft: 84,
     illustrationWidth: 260,
     title: 'Track Everything That Matters',
-    body: 'Log calories, macros, water, and activity — \nall in one place.',
+    // Back to the artboard's promise, and now every word of it is true: the
+    // app logs calories and macros through the scan pipeline, water through
+    // `WaterCard`, and activity through `ActivityCard`. The sentence was
+    // briefly narrowed to "calories, macros and weight" because two thirds of
+    // it was untrue — a first screen that overstates is what store reviews
+    // call bait — and widening it again was a reason to build the features
+    // rather than to edit the copy back.
+    body: 'Log calories, macros, water and activity — \nall in one place.',
   ),
   _Page(
     background: AppColors.accentOrange,

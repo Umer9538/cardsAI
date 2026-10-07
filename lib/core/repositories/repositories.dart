@@ -109,6 +109,43 @@ abstract interface class DietRepository {
 /// Separate from the diary because the two answer different questions and are
 /// written at different rhythms — meals several times a day, weight once in the
 /// morning if at all.
+/// The water diary.
+///
+/// Unlike [WeightRepository] there is no one-per-day rule: a second drink is a
+/// second drink. [removeLast] is the undo for a mistapped glass, which is the
+/// only correction this needs — nobody edits what they drank at 11am.
+abstract interface class WaterRepository {
+  /// Every drink on [day], oldest first.
+  Stream<List<WaterEntry>> watchDay(DateTime day);
+
+  /// Totals per day across [from]..[to], keyed by midnight-local. For the
+  /// Analysis screen, which asks about ranges rather than a single day.
+  Future<Map<DateTime, double>> totalsBetween(DateTime from, DateTime to);
+
+  Future<void> log(double ml, {DateTime? at});
+
+  /// Removes the most recent drink on [day], if there is one.
+  Future<void> removeLast(DateTime day);
+}
+
+/// Exercise, logged by hand.
+///
+/// Accumulates within a day like [WaterRepository] and unlike
+/// [WeightRepository]: two walks are two walks. [remove] takes an id rather
+/// than "the last", because a bout has a name and minutes worth correcting —
+/// unlike a glass of water, which is only ever a mistap.
+abstract interface class ActivityRepository {
+  /// Everything done on [day], oldest first.
+  Stream<List<ActivityEntry>> watchDay(DateTime day);
+
+  /// Totals per day across [from]..[to], keyed by midnight-local.
+  Future<Map<DateTime, ActivityLog>> logsBetween(DateTime from, DateTime to);
+
+  Future<void> log(ActivityEntry entry);
+
+  Future<void> remove(String id);
+}
+
 abstract interface class WeightRepository {
   /// Oldest first, so a chart can plot it without sorting.
   Stream<WeightHistory> watch();
@@ -129,8 +166,10 @@ abstract interface class WeightRepository {
 /// calorie floors are applied, so letting a client send its own would let the
 /// one feature that most needs those guards bypass them.
 abstract interface class PlannerRepository {
-  /// [notes] is the user's own free text — cuisine, allergies, dislikes.
-  Future<DietPlan> generate({String? notes});
+  /// [taste] is what the builder's quiz learned — dishes tapped, leanings,
+  /// avoidances, cook time — and [notes] is the person's own free text.
+  /// Neither carries a number; the numbers are the server's to read.
+  Future<DietPlan> generate({TasteProfile? taste, String? notes});
 }
 
 /// Turns a capture into nutrition figures.
@@ -162,6 +201,19 @@ abstract interface class NotificationRepository {
   Future<void> markRead(String id);
   Future<void> markAllRead();
   Future<void> clear();
+
+  /// Adds any of [entries] the feed does not already hold, keyed on id, and
+  /// returns the ones it actually added.
+  ///
+  /// The return value is what makes OS delivery possible: only a *newly*
+  /// derived entry is worth putting on the lock screen, and the stable ids are
+  /// already the thing that knows which those are. Re-posting one would be the
+  /// same notification arriving every time the app opens.
+  ///
+  /// `ActivityFeed` re-derives the same stable ids on every run, so an entry
+  /// that is already there must be left exactly as it is — reposting it would
+  /// clear the read flag and make the bell badge reappear every launch.
+  Future<List<AppNotification>> upsertAll(List<AppNotification> entries);
 }
 
 /// A food database, for the paths that are a lookup rather than an estimate.

@@ -725,3 +725,54 @@ class _SparklePainter extends CustomPainter {
   @override
   bool shouldRepaint(_SparklePainter old) => old.colour != colour;
 }
+
+/// Cross-fades between steps, sliding the new one up a little as it lands.
+///
+/// [step] is the identity: a new value means a new child, and the same value
+/// with a rebuilt child is not a transition.
+class QuizFade extends StatelessWidget {
+  const QuizFade({super.key, required this.step, required this.child});
+
+  final Object step;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOut,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween(begin: const Offset(0, 0.15), end: Offset.zero)
+              .animate(animation),
+          child: child,
+        ),
+      ),
+      child: KeyedSubtree(key: ValueKey(step), child: child),
+    );
+  }
+}
+
+/// Back and Skip: quiet text, a generous hit area, no decoration.
+class QuizTextButton extends StatelessWidget {
+  const QuizTextButton({super.key, required this.label, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Text(
+          label,
+          style: AppTypography.socialLabel(color: AppColors.inkMuted),
+        ),
+      ),
+    );
+  }
+}

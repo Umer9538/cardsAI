@@ -41,7 +41,14 @@ const today = (): string => new Date().toISOString().slice(0, 10);
  * paid for the call it was meant to prevent.
  */
 export async function assertUnderDailyCap(db: Firestore, limitUsd?: number): Promise<void> {
-  const limit = limitUsd && limitUsd > 0 ? limitUsd : DEFAULT_DAILY_LIMIT_USD;
+  // Zero is a kill switch, not an omission: setting `config/scan.dailySpendCapUsd`
+  // to 0 used to fall through to the $20 default, so the one lever an operator
+  // would reach for in an incident did nothing. Only a missing or negative
+  // value takes the default.
+  const limit =
+    typeof limitUsd === "number" && Number.isFinite(limitUsd) && limitUsd >= 0
+      ? limitUsd
+      : DEFAULT_DAILY_LIMIT_USD;
 
   let spent: number;
   try {
@@ -59,7 +66,7 @@ export async function assertUnderDailyCap(db: Firestore, limitUsd?: number): Pro
     );
   }
 
-  if (spent >= limit) {
+  if (limit === 0 || spent >= limit) {
     console.error("daily spend cap reached", JSON.stringify({ spent, limit }));
     throw new HttpsError(
       "resource-exhausted",

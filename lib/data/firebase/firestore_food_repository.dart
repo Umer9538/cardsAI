@@ -105,7 +105,11 @@ class FirestoreFoodRepository implements FoodDatabaseRepository {
       if (docs.isEmpty) {
         // An empty mirror is also the state before the first sync completes,
         // and is indistinguishable here from a genuinely unknown food.
-        return _fallback.search(trimmed, limit: limit);
+        //
+        // Awaited inside the try on purpose: the fallback is the live search,
+        // which fails with RepositoryException rather than FirebaseException,
+        // so the catch below cannot swallow it and re-enter itself.
+        return await _fallback.search(trimmed, limit: limit);
       }
 
       final phrase = trimmed.toLowerCase();

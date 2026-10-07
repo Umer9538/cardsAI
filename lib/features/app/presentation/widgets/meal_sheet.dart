@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +11,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../auth/presentation/widgets/auth_widgets.dart';
 import '../../../scan/presentation/widgets/item_edit_sheet.dart';
+import '../../../../core/design/app_toast.dart';
 
 /// Opens the actions for one logged meal.
 ///
@@ -86,7 +89,7 @@ class _MealSheetState extends ConsumerState<_MealSheet> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(failure)));
+          .showSnackBar(appToast(failure, tone: ToastTone.error));
     }
   }
 
@@ -109,16 +112,19 @@ class _MealSheetState extends ConsumerState<_MealSheet> {
   void _logAgain() {
     final now = DateTime.now();
     _run(
-      () => ref.read(diaryRepositoryProvider).addMeal(
+      () async {
+        await ref.read(diaryRepositoryProvider).addMeal(
             Meal(
               id: _uuid.v4(),
               eatenAt: now,
               items: _items,
               slot: MealSlot.forTime(now),
-              photoPath: widget.meal.photoPath,
-              title: widget.meal.title,
-            ),
+            photoPath: widget.meal.photoPath,
+            title: widget.meal.title,
           ),
+        );
+        unawaited(ref.read(mealRemindersProvider).mealLogged());
+      },
       'That could not be logged. Try again.',
     );
   }

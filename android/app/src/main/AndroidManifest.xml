@@ -11,6 +11,16 @@
          still a permission the store shows. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"
         tools:node="remove" />
+    <!-- A transitive AAR declares READ_EXTERNAL_STORAGE with no maxSdkVersion,
+         and the manifest merger keeps the broader of two declarations - so the
+         shipped APK asked for it on every API level. Android 13+ ignores the
+         permission entirely (READ_MEDIA_* replaced it), so capping it changes
+         nothing the app can do and stops Play listing broad storage access on
+         the app's page. `replace` is required: without it the merger keeps the
+         library's uncapped version and this line does nothing. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"
+        tools:node="replace" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+. Requested when the reminder toggle is turned on, not at
          launch: a permission prompt before anyone has seen the feature is the
@@ -23,7 +33,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
-        android:label="Carbsai"
+        android:label="Carbs AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:fullBackupContent="@xml/backup_rules"

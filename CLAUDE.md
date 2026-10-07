@@ -64,10 +64,19 @@ functions/                    SUPERSEDED by workers/. Kept for reference only �
 `generatePlan` — same Worker, same OpenRouter model, same strict `json_schema` discipline as
 the scan. It writes a one-day plan of real food that adds up to the user's own targets.
 
-**The targets are read from Firestore, never taken from the request.** They are
-`TargetCalculator`'s output, which is where the 25% deficit cap and the 1200/1500 kcal floors
-are applied — so a client that could send its own numbers would let the one feature that most
-needs those guards bypass them. The only thing the client sends is the person's free text.
+**The targets are never taken from the request — and no longer trusted from the profile
+either.** `users/{uid}` is owner-writable, so a stored `targets` block is a number the client
+chose. `planner.ts` carries a port of `TargetCalculator` (Mifflin-St Jeor, the activity
+multipliers, the 25% deficit cap, the 1200/1500 kcal floors, the g/kg split) and recomputes
+from the profile's own inputs whenever they are present; the stored targets are the fallback
+for a skipped quiz, and both paths are clamped to the floors and a 6000 kcal ceiling. Keep the
+two calculators in step — the TS one is checked against `target_calculator_test.dart`'s
+numbers. The client sends only what the quiz learned (`TasteProfile`) and the free text.
+
+Every generation writes `users/{uid}/planLogs/{id}` — model, prompt version, tokens and cost
+summed across attempts, the taste summary as counts and enum names (never the note text),
+`retried`, and what was violated. No rules match it, so clients cannot read it, and account
+deletion's subcollection sweep removes it.
 
 `planPrompt.ts` is separate from `prompt.ts` because the two jobs pull opposite ways: the scan
 prompt is an *estimator* told to push back on portions and flag its own uncertainty, this one
@@ -87,6 +96,115 @@ but honest, and it keeps the flow walkable with no network.
 Generated plans are stored apart from the catalogue (`StoreKeys.myPlans`, or their own
 Firestore documents) because the catalogue reconcile rebuilds from `SeedData` and would
 otherwise delete them.
+
+### The plan builder is a quiz about food, not a text box
+
+`TasteQuizScreen` (`features/diets/presentation/`) replaced the "describe your diet" text box.
+An empty text box mostly goes unused; this is about fifty seconds of tapping pictures, and in
+the one controlled study of the idea (Yum-me, Yang et al.) plans built that way were accepted
+72.5% of the time against 50.8% for the same nutrition with no taste input. The cuisine and
+cook-time questions people expect predicted taste *worse* than the pictures did, so the grids
+are the instrument and the chips are for what a photo cannot show.
+
+**Every question is about the food, never the person.** Calories, goal, diet type and meals a
+day were answered in onboarding; asking again is a second quiz on top of the first, and
+*sending* them would let a client name its own target. The only thing that leaves the screen is
+a `TasteProfile`: dish ids tapped, a pole per this-or-that axis, a set of avoidances, a cook
+time, and the optional note. The Worker resolves every id against its own copy of the taxonomy
+and reads the targets from the profile.
+
+The steps, in order: two 3×3 grids of dishes (`DishTaxonomy.gridA`, then `gridB`, chosen to
+be *unlike* the first — a no is data too); five this-or-that pairs (`TasteAxis`), each isolating
+one variable — shawarma against falafel is a protein question and nothing else; "Neither" on
+the breakfast pair means *I skip it*, which the plan needs to know, so that axis carries a
+third pole; avoidance chips; cook time; one optional line. Then the build step reuses
+onboarding's ring (`QuizBuildStep`, extracted for exactly this) with the taste it is about to
+send resolving line by line while the real call runs underneath. There is deliberately no
+percentage on this ring: the sweep is the inputs being read out, not the plan, and the first
+device run showed a "100%" sitting under "still writing" for fifteen seconds, which reads as a
+stuck screen. The centre is a sparkle that grows with the four-second sweep, then an
+indeterminate spinner while the model writes, with a caption that says how long it usually
+takes (15–20 s) and, after 30 s, that it is taking longer than usual. The wait itself is the
+model at the lowest reasoning effort; a faster model for the planner would be a
+`config/scan` change, not a UI one.
+
+**The taxonomy exists twice** — `core/nutrition/dish_taxonomy.dart` and
+`workers/src/taxonomy.ts` — and `dish_taxonomy_test.dart` reads the TypeScript as text and
+diffs ids, poles, avoidance words and cook times. A value one side knows and the other does not
+is a tap that changes nothing, silently.
+
+**Avoidances are a rule, enforced twice.** The prompt says MUST NOT, and the Worker scans the
+returned plan (`violations()` in `planner.ts`: name, description, `eat`, every meal title and
+item name) and retries once, quoting the offending items, before refusing. `AvoidanceCheck`
+(`core/nutrition/`) is the Dart twin with identical semantics, used by the local planner, and
+`avoidance_check_test.dart` holds the cases both must agree on. The semantics were learned the
+hard way: whole-word matching refused "oat milk" and "corn tortilla" as dairy and gluten —
+exactly the substitutes a model reaches for when told MUST NOT — and passed "creamy korma"
+and "cheeseburger". So `Avoidance.words` match at a **word start** (`cream` catches "creamy"),
+after every `except` phrase has been removed ("oat milk", "eggplant", "hamburger" under pork),
+and an exception ending in `free` or starting with `non-` is a qualifier that takes the next
+word with it ("gluten-free bread"). Both a false refusal, which burns a quota unit, and a false
+pass, which reaches an allergic person, are a list entry away rather than a regex change.
+
+The failure that check catches most often is not a forbidden food but a **title that drops a
+qualifier the items carry**: seen live, the items said "Corn tortillas, 2" and the meal title
+said "avocado tortillas", which reads as gluten. So the prompt tells the model to write every
+substitute by its full qualified name everywhere, titles included, and the retry names the
+*word* that fired and the allowed forms that contain it ("if you mean corn tortillas, write it
+that way in full"). Before that, the retry only named the label and the model repeated the
+title; the person was refused after two billed calls for a plan that contained no gluten.
+
+`DietPlan.builtFor` is `TasteProfile.summary` frozen at generation — "South Asian & Middle
+Eastern", "No dairy", "Under 15 min" — and the detail screen shows it as "Built for you". The
+answers are not kept; the plan is the record. Without it a plan someone built from their own
+taste looks exactly like another catalogue card, which is the failure the whole quiz exists to
+prevent.
+
+**The plan has a purpose, and it is the server's reading of the profile.** The Worker reads
+`goal` and `motivation` off `users/{uid}` — both stored by onboarding, `motivation` read by
+nothing until this — resolves each against the enum names the client stores (anything else is
+dropped, like `dietPreference`), and derives one of five purposes in `purposeFor`
+(`planPrompt.ts`): **building muscle** whenever `motivation` is `muscle`, whatever the goal;
+otherwise `lose` → fat loss at a deficit, `gain` → healthy weight gain, `maintain` → eating
+better when the motivation is `healthier` or `understand`, else a balanced day. No goal means
+no purpose — the default target is neither a deficit nor a surplus, and a plan claiming
+"weight loss" over it would claim something the numbers do not do. It renders as a `Purpose:`
+paragraph directly under the targets, above the taste block, with the food-level consequences
+spelled out (protein spread and a named post-training meal for muscle; volume, fibre and no
+liquid calories for loss), and the label comes back as `purpose` on the response and the
+`planLogs` record. The client sends nothing about it — it is `PlanPurpose` in
+`core/nutrition/plan_purpose.dart` only so the local planner and the build step's last line
+(the label "For weight loss" beside the value "1700 kcal") can show the same word the plan
+will carry; the two tables
+must agree, and `plan_purpose_test.dart` reads the TypeScript to check the labels do. It goes
+**first** in `builtFor`, ahead of the taste chips: what the day is for, then what is in it.
+
+**Purpose can be changed after sign-up.** The Profile screen carries a "Goal & targets" row
+that re-runs the onboarding quiz (`ProfileScreen.onEditGoal`). Before it, goal and motivation
+were set once at sign-up and nothing in the app could change them, so someone who joined to
+lose weight and later wanted to build muscle was stuck with a deficit and a fat-loss plan. The
+quiz already saves the profile and recomputes the targets, so re-running it is the whole fix.
+
+**The dish photos are openly licensed and credited.** Every tile is a 640×640 WebP crop of a
+CC0, public-domain or CC BY photograph found through the Openverse API (about 55 KB each,
+1.1 MB for the set). `tool/dish_photos.json` is the record — Openverse id, creator, source
+page, license and license URL — and `tool/apply_dish_photos.py` turns it into the asset files,
+the `Dish.asset` entries, `assets/images/dishes/ATTRIBUTION.md` and `DishPhotoCredits`, which
+renders at the foot of the Help page because CC BY requires the creator to be named somewhere
+a person can read. Swap a photo by editing the JSON and re-running the script, never by hand,
+so the credit and the file cannot drift apart. Never accept a BY-SA, NC or ND image. Three
+tiles are the weakest of the set and worth replacing when a better openly licensed one turns
+up: the chicken karahi is the white variant, the taco bowl reads as a taco salad, and the
+shawarma is a dark flash photo. A wrong photo is worse than none — someone tapping "biryani"
+over a picture of pilaf has told us about pilaf — so a swap has to be looked at, not just
+found. `Dish.asset` stays nullable and the tile still draws its name over a tinted card
+without one.
+
+Body content in the quiz is **top-aligned** through the `AnimatedSwitcher`'s `layoutBuilder`;
+its default centres the child, which left the pair cards floating a third of the way down the
+body with a void under the subtitle. And the detail screen sets its own system-bar style like
+every other dark screen — it is pushed straight over the cream quiz, and a style only holds
+while the widget that set it is on screen.
 
 ### The scan pipeline
 
@@ -185,6 +303,18 @@ over `config/scan.dailySpendCapUsd`, and refuses when it cannot read the counter
 because a limiter that opens under failure is not one. Spend is counted in **micro-dollars**:
 the Firestore increment transform here writes `integerValue`, so storing $0.0012 as dollars
 would round to zero every call and the counter would sit at zero while the bill grew.
+
+**A photo is checked before it is paid for.** `looksLikeImage()` in `scan.ts` decodes the
+first sixteen bytes and refuses anything that is not a JPEG, PNG, WebP, GIF or HEIC with
+"That photo could not be read", before the quota and before the model. Without it a junk file
+or a `data:` prefix went all the way to the provider and came back six seconds later as a 400
+that the app rendered as "contact support". A provider 400 on a photo request now says the
+same thing; on a text-only request it still means the config named a model without vision.
+**A scan that finds no food refunds its quota unit** and always carries a clarifying question —
+the prompt asks for one and the model does not always oblige, and an empty plate with nothing
+to say is a dead screen. The model call still counts against the daily spend cap, which is
+what bounds someone feeding the analyser wallpaper. And a bearer token that is not a JWT at all
+is `unauthenticated`, not the 500 the decoder used to throw.
 
 **Both free-text fields are clamped server-side.** `prompt.ts` interpolates `hint` and
 `description` raw, so an unbounded string was an unbounded bill — a 1MB "description" is
@@ -338,13 +468,14 @@ to a uid, written at activation, because a notification names a purchase and not
 else. A store that is merely *unreachable* never revokes — only an explicit
 `permission-denied` from the store does, or an outage would cancel every subscriber.
 
-One thing is **not done**, and it is a switch rather than code:
-
-1. **`ALLOW_UNVERIFIED_PURCHASES = "1"`** in `workers/wrangler.toml`, because there are
-   no store products to validate against yet. With it on, `activateSubscription` grants
-   whatever is asked for; with it off — and it is off by default, absent means off —
-   it **refuses** until `PLAY_SERVICE_ACCOUNT` or `APPLE_SHARED_SECRET` is set.
-   **Flip it before the first paid release.**
+**`ALLOW_UNVERIFIED_PURCHASES` is off** (`"0"` in `workers/wrangler.toml`, deployed 4
+September 2026). It was on during development because there were no store products to
+validate against, and with it on `activateSubscription` granted whatever was asked for — which
+on a live Worker means anyone who can call the endpoint grants themselves premium. Off, it
+**refuses** every activation until `PLAY_SERVICE_ACCOUNT` or `APPLE_SHARED_SECRET` is set, so
+purchases stay non-functional until the store products and credentials exist, which they must
+before the first paid release anyway. Flip it back to `"1"` only on a dev deployment, never on
+the one the shipped app points at.
 
 Prices must come from the store once products exist — `_merge()` already does this.
 Hardcoded "$4.99" shown to someone paying in another currency is a rejection.
@@ -367,6 +498,95 @@ wrong unit and sending them to Settings then is how the screen loses them.
 
 `formatHeight` rounds to total inches *before* taking the feet, or 5 ft 11.6 in renders as
 `5′ 12″`. The test sweeps every height in the slider's range to prove it never does.
+
+### Water and activity, because onboarding promised them
+
+Onboarding page 2 says "Log calories, macros, water and activity". For every build
+before this one the app logged calories, macros and weight — **two thirds of the first
+promise it makes were untrue.** The sentence was briefly narrowed to match the app; the
+right fix was the other way round, and both features exist now.
+
+**Water accumulates; weight replaces.** A second reading on a day is the same measurement
+taken twice, so `weights/{day}` is keyed by the day. A second glass is a second glass, so
+`WaterEntry` has no one-per-day rule and the day's figure is the sum. `removeLast` is the
+only correction offered, because a glass of water is only ever a mistap — nobody edits what
+they drank at 11am.
+
+Storage is millilitres, like every other measurement here; `WaterUnits` on `UnitSystem`
+decides whether the card says `500 ml` or `17 fl oz`. The target is **35 ml/kg of the
+person's own weight**, clamped 1500–4000, falling back to the familiar 2000 ml when the quiz
+was skipped — presented as this app's own default, never as advice, like the calorie floors.
+`WaterCard` logs in **one tap** from three quick-add amounts; anything slower than that will
+not be used twice.
+
+**Activity is logged by hand, and its energy is not given back.** `ActivityCatalogue` holds
+ten MET values from the *Compendium of Physical Activities* and computes
+`MET × 3.5 × kg / 200` per minute — bodyweight is a parameter because the same half hour
+costs a 100 kg person twice what it costs a 50 kg one, and a table of flat numbers would be
+wrong for nearly everybody. The estimate stays editable: a figure off a treadmill beats
+anything a table derives, and typing one pins it, exactly as a macro field does in
+`ItemEditSheet`.
+
+**`ActivityLog.kcal` is deliberately not added to the day's calorie budget**, and the sheet
+says so. Consumer estimates of exercise energy are widely off; an app that hands back 500
+kcal for a run it guessed at is inventing a number and then inviting someone to eat it. The
+ring stays what `TargetCalculator` computed and the deficit stays real.
+
+Reading steps out of HealthKit / Health Connect is the obvious next step and is **not** what
+this replaces: a step count is a background total, this is "I went for a run". Manual logging
+also needs no plugin, no second platform permission flow, and works identically on
+`BACKEND=local`.
+
+**`ActivityCard.reserveFor` is a function, so Home's `_extrasShift` had to become one too.**
+Every other addition to Home has a fixed height; this card grows with the day's bouts, so a
+constant shift would draw the diary over a second logged walk — the exact bug
+`home_layout_test` exists to catch, which now sweeps meals *and* bouts.
+
+**`WaterCard.reserve` was guessed at 132 and the card measures 135.** Booked room that is
+short of the rendered height is an overlap on every device, and two `Positioned` children
+overlapping throws nothing. `home_cards_test` asserts the rendered height of both cards
+against their reserves at the 1.15× text ceiling, and it is the only thing that catches it.
+
+**Both subcollections needed a `firestore.rules` match block.** `users/{uid}/water` and
+`users/{uid}/activity` otherwise fall through to the catch-all deny — and that is not a loud
+failure, because the offline cache accepts the write and serves it straight back. The app
+looks correct until the next cold start. The rules enumerate subcollections rather than using
+a recursive wildcard, so **anything added under `users/{uid}` owes a block**. Account
+deletion needs nothing: the Worker enumerates with `listCollectionIds`.
+
+The privacy policy names both, in the same commit, under what is collected and what deletion
+removes. Neither leaves the account — nothing about water or exercise goes to the AI provider.
+
+### Water reminders, and the three switches that are now independent
+
+`WaterSchedule` spreads up to six nudges across the person's **own eating window** — bounded
+by their first and last meal reminder, which the three-rung ladder already derived from when
+they actually eat. A fixed office day is one to four hours wrong for someone who eats
+breakfast at 06:00 or dinner at 22:00, and those are the people a water reminder is for.
+
+Fenceposts matter: *n* reminders need *n+1* intervals, so neither the first nor the last
+lands on a meal reminder — two notifications in the same minute read as one duplicate. The
+gap has a **60-minute floor and the count yields to it**: a four-hour window returns three
+reminders rather than four bunched ones, and a window too short for even one returns nothing.
+
+There is no time picker. Six times is six fields nobody fills in, and a derived time moves
+when the person's day moves.
+
+**`ReminderService.sync` no longer takes an `enabled` flag, and that was a bug fix.** The
+flag was the *meal* preference and the method returned early on it, so switching meal
+reminders off silently unscheduled the weekly weigh-in someone had turned on — and
+`cancelAll` never cancelled the weigh-in's id at all, so switching *that* off left it
+scheduled forever. `sync` now schedules exactly what it is handed; an empty list is how a
+kind is switched off, `cancelAll` clears every id all three kinds can occupy (including every
+water slot up to `maxPerDay`, because turning six down to three has to cancel three ids
+nothing currently holds), and the three switches are independent.
+
+All three still go through `MealReminders`, and still out of **one** `sync` call, for the
+original reason: it opens with `cancelAll`, so a second coordinator would cancel the first
+one's work on its way past. `setWeighInEnabled` and `setWaterEnabled` exist so those toggles
+get the same OS permission prompt the meal one does — either may be the first notification
+anyone enables — and both await the rewrite, so a caller told the switch settled on `true`
+has been told the notification is scheduled.
 
 ### Weight, the outcome the app kept promising
 
@@ -505,6 +725,9 @@ Firestore layout — everything under `users/{uid}`, so the rules are one owners
 ```
 users/{uid}                    profile
 users/{uid}/meals/{mealId}     the diary
+users/{uid}/weights/{day}      one reading a day
+users/{uid}/water/{entryId}    drinks, which accumulate
+users/{uid}/activity/{id}      exercise, logged by hand
 users/{uid}/plans/{planId}     the catalogue, copied per user (see the note in the file)
 users/{uid}/notifications/{id}
 users/{uid}/prefs/notifications
@@ -1023,6 +1246,89 @@ goal is 328 consumed, which cannot also be 140g carbs + 60g protein = 800 kcal).
 now computes from the diary, **so a render diff against that artboard differs in the
 numbers, and should.**
 
+## Production readiness
+
+An adversarial audit on 4 September 2026 (eight release surfaces, two skeptics per finding)
+produced the state below. What is fixed is fixed; what is left is listed because someone has
+to do it, not because it was missed.
+
+**The route table was a secret leak, and it is the reason to distrust a bare object literal.**
+`CALLABLES[path]` on a plain object reaches `Object.prototype`, so `POST /constructor` returned
+the `Object` function, the router called it as `handler(env, uid, data)` — `Object(env)` is
+`env` — and serialised **every Worker secret, the Firebase service-account private key
+included**, to any signed-in caller. `toString`, `valueOf` and `__proto__` hit the same
+dispatch. Fixed with `Object.prototype.hasOwnProperty.call` plus a `typeof handler ===
+"function"` check, and verified against the deployed Worker. **Every secret that Worker held
+must be rotated**; a fix does not un-leak a key.
+
+**Money moves only when it is recorded.** Spend used to be written with a bare `void
+recordSpend(...)`, which Cloudflare may cancel once the response is returned, and the refusal,
+truncation and unparseable-JSON paths threw *past* it — so the most expensive failures were
+invisible to the daily cap and were refunded to the user besides. Cost is now read from
+`usage` the moment the provider answers, recorded with `await`, and only then are those checks
+run. A truncation is not refunded: it is the single most expensive call the route can make.
+`dailySpendCapUsd: 0` now means **stop**, not "unset" — the one lever an operator reaches for
+in an incident used to fall through to the $20 default. The planner refunds its daily slot
+only when the call never reached the model.
+
+**Refunds are idempotent.** A scan that found no food refunded its quota unit inside the `try`,
+and a later failure in the same block refunded it again, driving `used` negative. One flag,
+one refund.
+
+**Two allergens were not in their own word lists.** "Nuts" and "seafood" as bare words passed
+the post-check — "Mixed nuts, 30 g" reached a plate that excluded nuts. Both are now scan
+words, with `nutmeg`, `nutrition` and `minced garlic`-style compounds in `except`.
+`avoidance_check_test.dart` carries each case.
+
+**A purchase is acknowledged only after the server grants it.** `completePurchase` used to run
+whatever the Worker answered, so a validation failure left a charged customer with no premium
+and no refund — an acknowledged Play purchase is never auto-refunded. Left pending, Play
+refunds after three days and StoreKit re-delivers on next launch.
+
+**The paywall says what it sells.** The feature lists named weekly AI progress reports and
+exclusive diet programs, neither of which exists; the offer screen advertised "50% OFF Your
+First Year" with no introductory offer behind it. Both were store rejections and, worse,
+untrue. The plan screen now carries the billing period, an auto-renew sentence, and
+**Restore Purchases**, which both stores require and which had no control anywhere in the app.
+
+**The stand-in photograph is never billed.** A shutter tap before the camera opened sent
+`assets/images/app/scan_food.webp` to the model, charged a scan, and told the person their
+lunch was a salmon salad. Guarded on the screen and again in the shell: outside
+`BACKEND=local`, a null capture path is refused.
+
+**One tap, one meal.** `logMeal` holds its in-flight future, so a double tap — or "Add to My
+Diet" followed by the favourite heart — joins the first write instead of logging the plate
+twice. An empty result refuses outright; the heart used to bypass the disabled CTA and write a
+meal with nothing in it.
+
+**The AI transfer is disclosed in the app, once, before it happens** (`confirmAiDisclosure`).
+Play's User Data policy requires that in the app and before the data leaves, not in a policy
+two menus deep, and the most significant thing this app does is send a photograph of someone's
+meal to a third party. It gates the scan flow and the plan builder.
+
+**The privacy policy describes the app again.** It had drifted: quiz answers were "used to
+calculate your calorie target and nothing else" while the planner sent them to OpenRouter,
+plan records and taste answers were undisclosed, the free tier was described as a monthly
+allowance when it is three scans that never renew, and it claimed R2 photo storage and 30-day
+backups the deployment does not do. `legal_content_test.dart` now fails on each of those
+sentences. `tool/build_release.sh` refuses to build while `LegalOperator` still holds
+`REPLACE-WITH-YOUR-*`, and builds with `--obfuscate --split-debug-info`.
+
+**Still to do, and every one of them needs a person rather than a patch:**
+
+1. **Rotate every Worker secret** — service account, model key, OTP pepper, sync and notify
+   keys — because of the leak above.
+2. **Fill `LegalOperator`** (legal name, support inbox, jurisdiction) and host the policy at a
+   public URL: both stores need one in the listing, and Play needs a web deletion route.
+3. **Real AdMob ids** — the app ids in the manifest and plist are Google's test publisher, and
+   the release script refuses to build until they and the four unit ids are replaced.
+4. **Store products and credentials together** — create `monthly` and `annual`, then set
+   `PLAY_SERVICE_ACCOUNT` / `APPLE_SHARED_SECRET` / `STORE_NOTIFY_KEY` *before* the listing
+   goes live, or every purchase is refused.
+5. **App Check** is verified but not enforced; a release build needs Play Integrity and
+   DeviceCheck registered before enforcement can be switched on.
+6. **Firestore free-tier writes** (20k/day) bind before the $20 spend cap does.
+
 ## Accessibility, and what the artboard costs
 
 **Text scaling is clamped, and that is a limitation rather than a design.** Every child of a
@@ -1097,15 +1403,141 @@ the transactional quota reserve, a strict `json_schema` response, and the scan-l
 write.
 
 **Meal reminders** are local notifications, timed to the person's own diary.
-`ReminderSchedule` takes the **median** hour of each of breakfast, lunch and dinner
-over the last 28 days, needs at least 3 samples per slot, and adds 45 minutes of
-grace. Generic fixed-time prompts measured as no better than none at all in the
-published trials; prompts timed to the individual raised food-photo capture from 2.8
-to 4.6 images a day. So an empty or thin diary schedules **nothing** rather than
-guessing 7:15. Permission is asked for when the toggle is turned on, never at launch,
-and a refusal leaves the switch off rather than claiming reminders are on. Android
-needs core-library desugaring (`app/build.gradle.kts`) and both receivers declared in
-the manifest — the plugin ships neither, and without the boot receiver every reminder
+`ReminderSchedule` is a pure function of the diary and the person's answers, and
+`ReminderService` schedules whatever it returns — the split exists because the first
+half can be tested exactly and the second half ends at a platform channel.
+
+**The time comes off a three-rung ladder, best signal first** (`ReminderSource`):
+
+1. **chosen** — a time set in Settings. It beats everything below: a time someone
+   typed is a statement of intent, the median is an inference about the past.
+2. **observed** — the **median** hour of that slot over the last 28 days, needing at
+   least 3 samples, plus 45 minutes of grace. Reminding at the median is reminding
+   someone of something already done; the point is the day it is running late.
+3. **suggested** — what this person's *country* eats, until one of the above exists.
+
+Grace is added to both **derived** rungs, because both say when someone eats and a
+time to eat has to be turned into a time to remind. A **chosen** time is taken
+literally: it is what the person typed into a row that says "remind me at".
+
+**Rung 3 is new, and it is the fix for a feature that reminded nobody.** The schedule
+used to be rung 2 alone, so a slot under the sample floor produced no reminder — and
+a new account has no samples, so it got an empty schedule and never heard from the
+app again. The diary that would have earned it a reminder is the thing reminders
+exist to produce, so reminders only ever reached people who had already built the
+habit unprompted. That is not the trade the evidence describes: prompts timed to the
+individual raised food-photo capture from 2.8 to 4.6 images a day (p≤.001) while
+generic fixed-time prompts produced +0.83 at p=.23, but the comparison there is
+tailored-versus-generic, not tailored-versus-silence. A suggested time is also not
+the generic prompt that was measured, because it stops being fixed the moment anyone
+moves it or logs three of anything.
+
+**There is no hour that works everywhere, so rung 3 is a country table.**
+`MealClock` (`core/notifications/meal_clock.dart`) holds fifteen patterns and the
+countries on each — dinner is 17:30 in Stockholm, 18:00 in Chicago, 20:30 in Karachi
+and 21:30 in Madrid, so one global default is one to four hours wrong for most of the
+world: late enough to arrive after the meal in Sweden, early enough to arrive before
+it in Spain, useless in both. It is grouped by how a country *eats*, not by
+continent, which is why the Netherlands sits with the Nordics, Brazil is not filed
+with the rest of South America, and Spain is its own entry. **The signal is the IANA time zone, and the locale is only the fallback.**
+`MealClock.forDevice` checks `DeviceTimeZone.name` first. Choosing the locale instead
+was wrong and was caught on the first real device: an `en-US` phone standing in
+`Asia/Karachi`, being offered dinner at 18:45 instead of 21:15. A phone set to English
+(United States) outside the United States is not unusual, it is the norm across much of
+the world — the locale says which language somebody reads, and what time dinner is
+depends entirely on where they are standing. The locale still earns the fallback slot,
+for an unlisted zone or a platform that reports none. Both tables are checked for
+duplicate entries by reading the source back. `meal_clock_test.dart` holds
+the table to its orderings rather than to specific minutes, and reads the source back
+to catch a country listed under two patterns.
+
+**So the times are editable, and the card says where each one came from.**
+`ReminderTimesCard` sits under the Meal Reminders switch (and only while it is on),
+showing each slot's time, a per-slot switch, and a caption — "Suggested for South
+Asia" / "From when you usually eat" / "You set this". Those are different
+promises, and someone who can watch the app learn their morning has a reason to leave
+the notifications on. "Use my diary's times" clears the chosen ones and hands the slot
+back to rung 2. The times live in `StoreKeys.reminderTimes` on the device, not on the
+profile: the notifications are scheduled by the OS on this handset, so there is
+nothing to sync, and it keeps the feature identical on `BACKEND=local`.
+
+**A meal already logged today starts its reminder tomorrow.** `MealReminder.loggedToday`
+flows into `_nextInstanceOf`, which already skipped to tomorrow for a time that had
+passed. A reminder to log the lunch you logged an hour ago is the one that teaches
+people the notifications are not worth reading. It needs the schedule to be rewritten
+when the diary changes — which the class comment on `MealReminders` claimed as a
+trigger and never had. `mealLogged()` is that trigger, called from all four log paths
+(scan, meal sheet's Log again, a plan's Log this meal) and never awaited by them: a
+meal that was written must not be reported as failed because a notification could not
+be moved.
+
+`ReminderTimesCard` takes a `preview` override for the reason the whole convention
+exists — the card is invisible until the switch is on, so a default render of the
+screen never reaches it, which is exactly how the search result row shipped 2px over.
+Its rows carry a `minHeight`, not a height: 25 + 19 is exactly 44 and therefore has
+no slack, and at the 1.15x text ceiling they need 51.
+
+**`tz.local` has to be set, and until now it never was.** `zonedSchedule` takes a
+`TZDateTime` and `_nextInstanceOf` builds one in `tz.local`, which
+`initializeTimeZones()` leaves as **UTC** — so a 09:00 reminder was 09:00 UTC: 14:00
+in Karachi, 04:00 in New York, 20:00 in Sydney. The feature was correct in exactly one
+time zone. `DeviceTimeZone.resolve()` fixes it, and it runs in `main()` before the
+first frame rather than lazily, because two separate things need it: the scheduler, and
+`MealClock`, which has to answer synchronously. If `flutter_timezone` cannot answer it
+falls back to any zone whose offset currently matches the device's — not the right zone,
+but the right wall clock today, which staying on UTC is not; the *name* is left null
+there on purpose, so `MealClock` cannot read a country out of a guess.
+
+Verified end to end on a Pixel 8 in Karachi: three `RTC_WAKEUP` alarms at 21:15, 09:15
+and 14:15 PKT.
+
+**The notification is written to be read, and to keep being read.** The title is the
+meal and nothing else, because Android prints the app name above it and iOS beside it.
+The body rotates over four lines per meal, keyed on the day of the year so it stays a
+pure function: the failure mode of a daily notification is not annoyance but
+invisibility, and one identical sentence at one identical time is furniture inside a
+week. It changes when the schedule is rewritten rather than at midnight — the OS holds
+a repeating notification's text until something reschedules it — so an active user sees
+the rotation and a lapsed one sees a single line, which is the right way round. No
+streak, no number (any number would be stale by the time it fired), no exclamation
+mark; `reminder_copy_test.dart` enforces all three, and the reason is that reviewers of
+this category name guilt-worded reminders as what made them turn notifications off for
+good.
+
+**The small icon is generated, and it had to be.** Android draws a notification's
+small icon from its **alpha channel only**, so `@mipmap/ic_launcher` — opaque edge to
+edge — rendered as a solid white square. The mascot is no better: at 24dp a silhouette
+merges the leaf, thumb and gloves into a blob, and the face is interior detail an alpha
+mask throws away. `tool/make_notification_icon.py` draws the one shape that survives 24
+square pixels — the avocado half with the pit knocked out, as the union of two circles
+and their tangents — at all five densities into `drawable-*/ic_stat_meal.png`. Regenerate
+it rather than editing the PNGs, and check `build/notification_icon_preview.png`.
+
+**It is also in `res/raw/keep.xml`, and it has to be.** `isShrinkResources = true`
+deletes every resource nothing in Java, Kotlin or XML mentions, and this one is named
+only in Dart — the string lives inside `libapp.so`, which R8 does not read. So the
+shrinker removed it from the resource table of the **release** APK while the debug APK
+kept it, nothing failed at build time, and the icon would simply not have resolved on a
+shipped device. Verified by looking for the name in `resources.arsc`: `ic_launcher` was
+there and `ic_stat_meal` was not. Anything else referenced by name from Dart belongs in
+that file for the same reason.
+
+**There is a "Send a test reminder" row, and the feature is untestable without it.**
+The first real reminder is hours away, so someone who has just switched reminders on
+cannot tell working from silently-refused-permission from broken — and neither can
+anyone supporting them. It goes through the same channel and details as a real one, so
+an arriving test proves the three things that actually fail: permission granted, channel
+not muted, small icon resolves. It cannot prove the scheduling survives an OEM battery
+manager, which is a different class of problem. A failure names its cause rather than
+saying it did not work.
+
+Permission is asked for when the toggle is turned on, never at launch, and a refusal
+leaves the switch off rather than claiming reminders are on. **The toggle ships off**, so
+an account that skipped the onboarding question has no reminders and has never been
+asked for the permission — which is what "notifications are not working" turned out to
+mean the first time it was reported. Android needs
+core-library desugaring (`app/build.gradle.kts`) and both receivers declared in the
+manifest — the plugin ships neither, and without the boot receiver every reminder
 dies the first time the phone restarts.
 
 **Account deletion goes through the Worker** (`workers/src/account.ts`). It has to:

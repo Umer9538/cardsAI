@@ -22,11 +22,11 @@ interface Mail {
   html: string;
 }
 
-/** Splits `"Carbsai <no-reply@x>"` into its parts; a bare address also works. */
+/** Splits `"Carbs AI <no-reply@x>"` into its parts; a bare address also works. */
 function sender(from: string): { name: string; email: string } {
   const match = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(from);
-  if (match) return { name: match[1] || "Carbsai", email: match[2] };
-  return { name: "Carbsai", email: from.trim() };
+  if (match) return { name: match[1] || "Carbs AI", email: match[2] };
+  return { name: "Carbs AI", email: from.trim() };
 }
 
 export async function sendEmail(env: Env, mail: Mail): Promise<void> {

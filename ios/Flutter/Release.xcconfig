@@ -1,2 +1,8 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+
+// google_mobile_ads 9.1.0 imports <GoogleMobileAds/GoogleMobileAds_Beta.h>,
+// which Google ships in the framework's PrivateHeaders. Clang rejects a
+// non-modular include inside a framework module, and the diagnostic fires in
+// the target that IMPORTS the module - Runner - not only in the pod target.
+CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES

@@ -4,6 +4,7 @@ import '../../../core/design/design_canvas.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../premium/presentation/widgets/premium_widgets.dart';
+import '../../../core/nutrition/dish_photo_credits.dart';
 import 'legal_content.dart';
 
 /// Long-form text page — Figma frames `43_Terms and Conditions` (2002:804),
@@ -38,7 +39,9 @@ class LegalPageScreen extends StatelessWidget {
 
   factory LegalPageScreen.help({VoidCallback? onBack}) => LegalPageScreen(
         title: 'Help',
-        blocks: help,
+        // Photo credits at the foot: CC BY requires the creator to be named
+        // somewhere a person can read, and Help is the page people open.
+        blocks: [...help, ...DishPhotoCredits.blocks],
         onBack: onBack,
       );
 

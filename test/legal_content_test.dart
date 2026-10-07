@@ -13,6 +13,26 @@ import 'support/design_render.dart';
 void main() {
   setUpAll(loadDesignFonts);
 
+  test('the policy discloses what the AI features actually send', () {
+    final text = [
+      for (final b in privacyPolicy) b.text,
+      for (final b in termsAndConditions) b.text,
+    ].join('\n');
+
+    // Each of these was wrong or missing while the feature was live, which is
+    // the failure mode a policy has: it describes the app it was written for.
+    expect(text, contains('plan builder'));
+    expect(text, contains('Plan records'));
+    expect(text, contains('cook'));
+    expect(text, contains('three at the time of writing'));
+    // Photos are not uploaded; the policy claimed R2 stored them.
+    expect(text, isNot(contains('Cloudflare R2 stores meal')));
+    // Backups we do not run.
+    expect(text, isNot(contains('Backups roll off')));
+    // The quiz answers no longer stop at the calorie target.
+    expect(text, isNot(contains('calorie target and nothing else')));
+  });
+
   test('the policy discloses what the app actually does', () {
     final text = privacyPolicy.map((b) => b.text).join('\n').toLowerCase();
 

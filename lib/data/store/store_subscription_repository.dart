@@ -178,6 +178,7 @@ class StoreSubscriptionRepository implements SubscriptionRepository {
 
   Future<void> _onPurchases(List<PurchaseDetails> purchases) async {
     for (final purchase in purchases) {
+      bool activated = false;
       switch (purchase.status) {
         case PurchaseStatus.pending:
           continue;
@@ -200,18 +201,28 @@ class StoreSubscriptionRepository implements SubscriptionRepository {
 
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
-          await _validate(purchase);
+          activated = await _validate(purchase);
       }
 
-      // Required on both platforms. Skipping it makes the store refund the
-      // purchase after a few days, which looks to the user like theft.
-      if (purchase.pendingCompletePurchase) {
+      // Completing a purchase acknowledges it, and on Play an acknowledged
+      // purchase is never auto-refunded. So it is completed only once the
+      // server has actually granted the entitlement.
+      //
+      // The alternative — acknowledge whatever the store hands us — is how a
+      // person pays, gets told "Purchases are not available yet" because a
+      // store credential is missing on the Worker, and is left with neither
+      // premium nor a refund. Left pending, Play refunds it after three days
+      // and StoreKit re-delivers the transaction on the next launch, which is
+      // the recoverable state.
+      if (activated && purchase.pendingCompletePurchase) {
         await _iap.completePurchase(purchase);
       }
     }
   }
 
-  Future<void> _validate(PurchaseDetails purchase) async {
+  /// Whether the server granted the entitlement. `false` leaves the purchase
+  /// pending with the store — see the caller.
+  Future<bool> _validate(PurchaseDetails purchase) async {
     try {
       final result = await _functions
           .workerCallable('activateSubscription')
@@ -226,15 +237,29 @@ class StoreSubscriptionRepository implements SubscriptionRepository {
       );
       _pending?.complete(subscription);
       _pending = null;
+      return true;
     } on FirebaseFunctionsException catch (e) {
       _fail(
         RepositoryException(
           e.message?.isNotEmpty ?? false
               ? e.message!
-              : 'We could not confirm that purchase.',
+              : 'We could not confirm that purchase. You have not been charged '
+                  'for anything we cannot deliver — if the payment went '
+                  'through, it will be refunded automatically.',
           code: e.code,
         ),
       );
+      return false;
+    } catch (e) {
+      // A transport failure is not a granted entitlement either.
+      _fail(
+        const RepositoryException(
+          'We could not reach the server to confirm that purchase. It will be '
+          'completed the next time you open the app, or refunded.',
+          code: 'unavailable',
+        ),
+      );
+      return false;
     }
   }
 

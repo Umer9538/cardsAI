@@ -116,7 +116,19 @@ class MacroBar extends StatelessWidget {
   final String target;
 
   static const double width = 152;
-  static const double height = 31;
+
+  /// 36, not the export's 31.
+  ///
+  /// The label sits at [_labelTop] = 16.67 and its line box is 19 tall, so it
+  /// needs 35.67 — and a `Stack` clips to its box by default. The bottom 4.67pt
+  /// of every figure on both macro cards was being cut off, which did not read
+  /// as a layout bug because what it removed was the *descender*: "250g"
+  /// rendered as "250a" and "0g" as "0a", so the cards looked like they were
+  /// showing a unit nobody uses rather than like they were broken.
+  ///
+  /// The card reserves 173 and the bar starts at 126, so there is 47 to take
+  /// this from.
+  static const double height = 36;
   static const double _trackHeight = 6;
   static const double _labelTop = 16.67;
 
@@ -126,6 +138,9 @@ class MacroBar extends StatelessWidget {
       width: width,
       height: height,
       child: Stack(
+        // And unclipped, so the text scale ceiling spills into the room the
+        // card has rather than losing the descender again at 1.15x.
+        clipBehavior: Clip.none,
         children: [
           Positioned(
             left: 0,

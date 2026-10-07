@@ -390,6 +390,161 @@ class FirestoreWeightRepository with _UserScoped implements WeightRepository {
   Future<void> remove(String id) => _weights.doc(id).delete();
 }
 
+class FirestoreActivityRepository
+    with _UserScoped
+    implements ActivityRepository {
+  FirestoreActivityRepository(this.firestore, this.auth);
+
+  @override
+  final FirebaseFirestore firestore;
+  @override
+  final fb.FirebaseAuth auth;
+
+  CollectionReference<Map<String, dynamic>> get _activity =>
+      collection('activity');
+
+  static DateTime _midnight(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// The Timestamp beside the ISO string, for the same reason as
+  /// `Meal.eatenAtTs` — only the Timestamp is range-queryable.
+  Map<String, dynamic> _doc(ActivityEntry entry) => {
+        ...entry.toJson(),
+        'atTs': Timestamp.fromDate(entry.at),
+      };
+
+  @override
+  Stream<List<ActivityEntry>> watchDay(DateTime day) {
+    final start = _midnight(day);
+    final end = start.add(const Duration(days: 1));
+    return whenSignedIn(
+      () => _activity
+          .where('atTs', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('atTs', isLessThan: Timestamp.fromDate(end))
+          .orderBy('atTs')
+          .snapshots()
+          .map((snap) => [
+                for (final doc in snap.docs) ActivityEntry.fromJson(doc.data()),
+              ]),
+      const <ActivityEntry>[],
+    );
+  }
+
+  @override
+  Future<Map<DateTime, ActivityLog>> logsBetween(
+    DateTime from,
+    DateTime to,
+  ) async {
+    final snap = await _activity
+        .where('atTs', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
+        .where('atTs', isLessThanOrEqualTo: Timestamp.fromDate(to))
+        .get();
+
+    final byDay = <DateTime, List<ActivityEntry>>{};
+    for (final doc in snap.docs) {
+      final entry = ActivityEntry.fromJson(doc.data());
+      (byDay[entry.day] ??= []).add(entry);
+    }
+    return {
+      for (final day in byDay.keys) day: ActivityLog(entries: byDay[day]!),
+    };
+  }
+
+  @override
+  Future<void> log(ActivityEntry entry) async {
+    if (entry.minutes < ActivityCatalogue.minimumMinutes) return;
+    final doc = entry.id.isEmpty ? _activity.doc() : _activity.doc(entry.id);
+    // Not awaited: the local cache already holds it and `set` waits on the
+    // server. See the note in CLAUDE.md.
+    unawaited(doc.set(_doc(entry.copyWith(id: doc.id))));
+  }
+
+  @override
+  Future<void> remove(String id) => _activity.doc(id).delete();
+}
+
+class FirestoreWaterRepository with _UserScoped implements WaterRepository {
+  FirestoreWaterRepository(this.firestore, this.auth);
+
+  @override
+  final FirebaseFirestore firestore;
+  @override
+  final fb.FirebaseAuth auth;
+
+  CollectionReference<Map<String, dynamic>> get _water => collection('water');
+
+  static DateTime _midnight(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Stored alongside the ISO string so the range query below has something
+  /// it can actually order on — the same pairing, and the same reason, as
+  /// `Meal.eatenAtTs`.
+  Map<String, dynamic> _doc(WaterEntry entry) => {
+        ...entry.toJson(),
+        'atTs': Timestamp.fromDate(entry.at),
+      };
+
+  @override
+  Stream<List<WaterEntry>> watchDay(DateTime day) {
+    final start = _midnight(day);
+    final end = start.add(const Duration(days: 1));
+    return whenSignedIn(
+      () => _water
+          .where('atTs', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('atTs', isLessThan: Timestamp.fromDate(end))
+          .orderBy('atTs')
+          .snapshots()
+          .map((snap) => [
+                for (final doc in snap.docs) WaterEntry.fromJson(doc.data()),
+              ]),
+      const <WaterEntry>[],
+    );
+  }
+
+  @override
+  Future<Map<DateTime, double>> totalsBetween(
+    DateTime from,
+    DateTime to,
+  ) async {
+    final snap = await _water
+        .where('atTs', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
+        .where('atTs', isLessThanOrEqualTo: Timestamp.fromDate(to))
+        .get();
+
+    final totals = <DateTime, double>{};
+    for (final doc in snap.docs) {
+      final entry = WaterEntry.fromJson(doc.data());
+      totals[entry.day] = (totals[entry.day] ?? 0) + entry.ml;
+    }
+    return totals;
+  }
+
+  @override
+  Future<void> log(double ml, {DateTime? at}) async {
+    if (ml <= 0) return;
+    final when = at ?? DateTime.now();
+    final doc = _water.doc();
+    // Not awaited: `set` resolves when the *server* acknowledges, and the
+    // local cache already holds it. Awaiting would put a round trip in front
+    // of a tap on a plus button. See the note in CLAUDE.md.
+    unawaited(
+      doc.set(_doc(WaterEntry(id: doc.id, at: when, ml: ml))),
+    );
+  }
+
+  @override
+  Future<void> removeLast(DateTime day) async {
+    final start = _midnight(day);
+    final end = start.add(const Duration(days: 1));
+    final snap = await _water
+        .where('atTs', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('atTs', isLessThan: Timestamp.fromDate(end))
+        .orderBy('atTs', descending: true)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return;
+    await snap.docs.first.reference.delete();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------
@@ -431,6 +586,30 @@ class FirestoreNotificationRepository
       batch.update(doc.reference, {'read': true});
     }
     await batch.commit();
+  }
+
+  @override
+  Future<List<AppNotification>> upsertAll(
+    List<AppNotification> entries,
+  ) async {
+    if (entries.isEmpty) return const [];
+
+    // Read the ids that exist, then write only the ones that do not. `set`
+    // alone would overwrite an entry that is already there and clear its read
+    // flag, so the bell badge would come back on every launch — and Firestore
+    // has no insert-if-absent. One read plus one batch, rather than a
+    // transaction per entry.
+    final existing = await _items.get();
+    final known = {for (final doc in existing.docs) doc.id};
+    final fresh = [for (final e in entries) if (!known.contains(e.id)) e];
+    if (fresh.isEmpty) return const [];
+
+    final batch = firestore.batch();
+    for (final entry in fresh) {
+      batch.set(_items.doc(entry.id), entry.toJson());
+    }
+    await batch.commit();
+    return fresh;
   }
 
   @override

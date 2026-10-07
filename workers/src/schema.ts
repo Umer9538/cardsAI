@@ -170,7 +170,14 @@ export interface MealAnalysis {
  * corrected here also has its confidence dropped to `low`, so the UI flags it
  * rather than presenting a corrected-but-invented number as fact.
  */
-export function sanitize(analysis: MealAnalysis): MealAnalysis {
+export function sanitize(
+  analysis: MealAnalysis,
+  /// Which journey this was. The fallback question below is the only thing
+  /// that depends on it, and it matters: a description has no photo to take
+  /// again, so telling someone to try a brighter one is advice they cannot
+  /// act on and reads as the app not having received what they typed.
+  isPhoto = true,
+): MealAnalysis {
   const items = analysis.items.map((item) => {
     let corrected = false;
 
@@ -235,6 +242,15 @@ export function sanitize(analysis: MealAnalysis): MealAnalysis {
       anyLow && analysis.overall_confidence === "high"
         ? "medium"
         : analysis.overall_confidence,
-    clarifying_question: analysis.clarifying_question?.trim() || null,
+    // The prompt asks for a question when nothing edible is found; the model
+    // does not always oblige (a 1×1 image came back with no items and no
+    // question). An empty plate with nothing to say is a dead screen.
+    clarifying_question:
+      analysis.clarifying_question?.trim() ||
+      (items.length === 0
+        ? isPhoto
+          ? "I couldn't find any food in that. Try a closer, brighter photo, or describe what you ate."
+          : "I couldn't tell what that was. Try naming each food and roughly how much, for example \"two eggs and a slice of toast\"."
+        : null),
   };
 }

@@ -1,4 +1,3 @@
-import 'package:carbsai/core/models/models.dart';
 import 'package:carbsai/core/notifications/reminder_schedule.dart';
 import 'package:carbsai/core/notifications/reminder_service.dart';
 
@@ -35,15 +34,58 @@ class FakeReminderService implements ReminderService {
     return granted;
   }
 
+  /// The weigh-in passed to the last [sync], if any.
+  WeightReminder? weighIn;
+
+  /// The water run passed to the last [sync].
+  List<WaterReminder> water = const [];
+
   @override
-  Future<void> sync(List<Meal> meals, {required bool enabled}) async {
+  Future<void> sync(
+    List<MealReminder> reminders, {
+    WeightReminder? weighIn,
+    List<WaterReminder> water = const [],
+    DaySummaryReminder? daySummary,
+  }) async {
     syncs++;
-    scheduled = enabled ? ReminderSchedule.from(meals) : const [];
+    scheduled = reminders;
+    this.weighIn = weighIn;
+    this.water = water;
+    this.daySummary = daySummary;
+  }
+
+  /// The nightly summary handed to the last [sync], if any.
+  DaySummaryReminder? daySummary;
+
+  /// What [sendTest] should answer.
+  ReminderTestResult testResult = ReminderTestResult.sent;
+  int testsSent = 0;
+
+  @override
+  Future<ReminderTestResult> sendTest() async {
+    testsSent++;
+    return permitted ? testResult : ReminderTestResult.noPermission;
+  }
+
+  /// Everything handed to [post], in order.
+  final List<({int id, String body, NotificationChannel channel})> posted = [];
+
+  @override
+  Future<void> post({
+    required int id,
+    required String title,
+    required String body,
+    required NotificationChannel channel,
+  }) async {
+    if (!permitted) return;
+    posted.add((id: id, body: body, channel: channel));
   }
 
   @override
   Future<void> cancelAll() async {
     cancels++;
     scheduled = const [];
+    weighIn = null;
+    water = const [];
   }
 }

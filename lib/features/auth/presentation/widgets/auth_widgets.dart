@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -25,6 +26,9 @@ class AuthTextField extends StatefulWidget {
     this.keyboardType,
     this.textInputAction,
     this.onSubmitted,
+    this.readOnly = false,
+    this.inputFormatters,
+    this.onTap,
   });
 
   final String label;
@@ -35,6 +39,20 @@ class AuthTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
+
+  /// Shows the value but refuses the caret. For a field that is a *fact about
+  /// the account* rather than something the person is being asked for — see
+  /// the email row on My Profile.
+  final bool readOnly;
+
+  /// What the field will physically accept. The cheapest validation there is:
+  /// a height that cannot contain a letter never has to be rejected later.
+  final List<TextInputFormatter>? inputFormatters;
+
+  /// Makes the whole field a button — for a value that is *chosen* rather than
+  /// typed, like a date or one of a fixed set. Pair with [readOnly], or the
+  /// keyboard and the picker both open.
+  final VoidCallback? onTap;
 
   static const double fieldHeight = 50;
   static const double labelHeight = 25;
@@ -96,13 +114,24 @@ class _AuthTextFieldState extends State<AuthTextField> {
           child: TextField(
             controller: widget.controller,
             focusNode: _focus,
+            readOnly: widget.readOnly,
+            inputFormatters: widget.inputFormatters,
+            onTap: widget.onTap,
+            // No caret and no keyboard on a read-only field: a caret that
+            // blinks in a box nothing can change is an invitation.
+            showCursor: !widget.readOnly,
+            enableInteractiveSelection: !widget.readOnly,
             obscureText: widget.obscure,
             keyboardType: widget.keyboardType,
             textInputAction: widget.textInputAction,
             onSubmitted: widget.onSubmitted,
             cursorColor: AppColors.white,
             cursorWidth: 1,
-            style: AppTypography.body(),
+            style: AppTypography.body(
+              color: widget.readOnly && widget.onTap == null
+                  ? AppColors.placeholder
+                  : AppColors.white,
+            ),
             decoration: InputDecoration(
               isCollapsed: true,
               border: InputBorder.none,

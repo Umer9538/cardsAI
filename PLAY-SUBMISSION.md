@@ -308,12 +308,94 @@ deliberate.
 | Asset | Spec | Status |
 |---|---|---|
 | App icon | 512 × 512 PNG, 32-bit | Export from `assets/images/brand/` |
-| Feature graphic | 1024 × 500 PNG or JPEG | Needs designing |
+| Feature graphic | 1024 × 500 PNG or JPEG | ✅ `build/feature_graphic_1024x500.png` — regenerate with `python3 tool/make_feature_graphic.py`. Verified 1024×500, RGB, **no alpha channel** (Play rejects alpha here) |
 | Phone screenshots | 2–8, min 320 px, 16:9 or 9:16 | Capture from the release build |
 
 > The feature graphic carries no text on many surfaces — put the mascot and the
 > wordmark in it, not a sentence. For screenshots, lead with the scan result: it
 > is the only screen that shows what the app is for in one glance.
+
+---
+
+## Store compliance — verified against the shipped APK, 7 October 2026
+
+Checked by reading the built artifact, not the source. These are the ones that
+fail submissions quietly.
+
+| Requirement | Status |
+|---|---|
+| **targetSdk 36 / compileSdk 36 / minSdk 24** | ✅ Play requires API 36 for new apps from 31 Aug 2026 |
+| **16 KB page size** (Play, from 1 Nov 2025) | ✅ All 7 native libs aligned. `libapp.so` and `libflutter.so` at `0x10000`; the five plugin libs — including ML Kit's `libbarhopper_v3.so` — at `0x4000` |
+| **APK zip alignment `-P 16`** | ✅ Pass |
+| **64-bit** | ✅ arm64-v8a present |
+| **Permissions minimal** | ✅ 4 declared in source. `RECORD_AUDIO` confirmed **stripped** from the merged manifest, so Play will not list "Microphone" |
+| **No `READ_MEDIA_IMAGES` / `_VIDEO`** | ✅ Absent from the merged manifest, so Play's Photo and Video Permissions declaration form is **not** triggered |
+| **In-app account deletion** | ✅ More → Delete Account. Confirmation sheet, then the Worker purge, then a wait that reports a real failure. Required by Play *and* App Store 5.1.1(v) |
+| **Web account deletion route** | ✅ `carbsai.pages.dev/delete-account` |
+| **Privacy policy reachable in-app** | ✅ More → Privacy Policy, and More → Terms and Conditions |
+| **Crashlytics** | ✅ `FlutterError.onError` + `PlatformDispatcher.onError`, collection off in debug, no user identifier attached |
+| **App Check** | ✅ Play Integrity + App Attest in release builds, debug providers in debug. **Enforcement deliberately off** — see below |
+| **`ALLOW_UNVERIFIED_PURCHASES`** | ✅ `"0"`, so no caller can grant itself premium |
+| **No placeholders left** | ✅ Nothing matching `REPLACE-WITH-*` anywhere in `lib/` or `workers/src/` |
+
+### Two permission findings, and what was done
+
+**`READ_EXTERNAL_STORAGE` was uncapped.** `open_filex` declares it correctly with
+`maxSdkVersion="32"`, but a transitive AAR declares it uncapped and the manifest
+merger keeps the broader of two declarations — so the shipped APK requested it on
+every API level, and Play would list broad storage access on the app's page.
+Now overridden in `AndroidManifest.xml` with `maxSdkVersion="32"` and
+`tools:node="replace"`. Android 13+ ignores the permission outright, so nothing
+the app can do changed.
+
+**`FOREGROUND_SERVICE` is declared and nothing in this app starts one.** It
+arrives transitively with AndroidX WorkManager. It is **deliberately left in
+place**: `play-services-ads` is a plausible WorkManager consumer, and removing a
+permission a bundled library may use at runtime trades a cosmetic win for a
+crash nobody would see until production. No typed `FOREGROUND_SERVICE_*`
+permission is declared and no service declares a `foregroundServiceType`, so the
+Android 14+ `MissingForegroundServiceTypeException` path is unreachable.
+
+> If Play Console asks for a foreground-service declaration, the honest answer is
+> that the app starts no foreground service; the permission is transitive.
+
+### iOS — `PrivacyInfo.xcprivacy` contradicted itself
+
+It declared `NSPrivacyTracking = false` while also declaring
+`NSPrivacyCollectedDataTypeDeviceID` with `Tracking = true` and a
+`ThirdPartyAdvertising` purpose — and `NSPrivacyTrackingDomains` was empty.
+
+The Google Mobile Ads SDK's **own** manifest, bundled in the binary, declares
+that same `DeviceID` / `Tracking = true` pair. And the app has shipped
+`NSUserTrackingUsageDescription` since ads were added: requesting ATT is the
+admission that the app tracks. So `false` was simply wrong.
+
+Now `NSPrivacyTracking = true`, with one domain — `googleads.g.doubleclick.net`.
+Two facts drove that:
+
+- Apple requires **at least one** domain once `NSPrivacyTracking` is true.
+- **Google publishes no official AdMob tracking-domain list.** Their own SDK team
+  has said so on the developer forum, so every publisher picks their own.
+
+A domain listed here is documented to make requests to it **fail when ATT is
+denied**. Apple does not appear to enforce that blocking yet, but it may. So each
+extra entry is non-personalised ad revenue wagered on a guess about Google's
+infrastructure — which is why the list holds the primary ad-request endpoint and
+nothing else. Add to it only with evidence the SDK uses the domain.
+
+### One small inaccuracy, left alone deliberately
+
+If the Worker still reports `done: false` after 20 passes, the client shows
+*"Nothing has been removed from your account."* By then some documents **have**
+been removed — the passes delete as they go. The sentence is wrong in that one
+path.
+
+It is left as-is because the alternative wording ("some of your data was
+removed") is worse for the person reading it: the account still exists, the app
+still works, and the honest instruction is still "please try again". Reaching
+this path needs an account of roughly six thousand documents, which is years of
+diary. Worth fixing if anyone ever hits it; not worth a vaguer message for
+everyone who does not.
 
 ---
 

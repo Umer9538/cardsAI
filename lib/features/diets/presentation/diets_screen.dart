@@ -296,6 +296,14 @@ class DietCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                // A plan someone built from their own taste says so, or it
+                // reads as one more catalogue card. Over the photo rather
+                // than under the name: the column below the photo is the
+                // artboard's 282 exactly, with no row to spare, and the
+                // photo's top-left is the one corner nothing else owns —
+                // the heart has the top-right.
+                if (plan.builtFor.isNotEmpty)
+                  const Positioned(left: 20, top: 20, child: _BuiltForTag()),
                 if (showFavourite)
                   Positioned(
                     left: 344,
@@ -328,6 +336,30 @@ class DietCard extends StatelessWidget {
 }
 
 
+/// The tag on a built plan's card. Brand orange on the app's ground so it is
+/// legible over any photo; 24 tall to sit level with the heart beside it.
+class _BuiltForTag extends StatelessWidget {
+  const _BuiltForTag();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary),
+      ),
+      child: Text(
+        'Built for you',
+        style: AppTypography.meta(color: AppColors.primary),
+      ),
+    );
+  }
+}
+
 /// The way into the planner.
 ///
 /// Deliberately a row rather than another photo card: it is not a plan, and
@@ -343,7 +375,12 @@ class _BuildPlanCard extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+        // Vertical padding of 10, not 11. The card sits at y=212 and the
+        // first plan card at 290, so it has 78 to work with; at the 1.15
+        // text-scale ceiling its two lines plus border rendered 79 tall with
+        // 11 either side, which put its bottom at 291 — 1pt into the card
+        // below. With 10 it renders 77 and ends at 289 (282 at 1.0x).
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.inkMuted,
           borderRadius: BorderRadius.circular(16),
@@ -358,10 +395,19 @@ class _BuildPlanCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Build my own plan', style: AppTypography.cardTitle()),
+                  // cardHeading, not cardTitle: at 24pt this line measures
+                  // 351 against the 304 the row leaves it, and a title that
+                  // ellipsises is a promise cut off mid-word. 18pt measures
+                  // 263 and still fits at the 1.15 text-scale ceiling.
+                  Text(
+                    'Build a plan around your taste',
+                    style: AppTypography.cardHeading(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
                   Text(
-                    'From your targets, in your food',
+                    'A 50-second quiz — tap what looks good',
                     style: AppTypography.meta(color: AppColors.placeholder),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

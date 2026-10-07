@@ -16,7 +16,7 @@ import { handleStoreNotification } from "./storeNotify.js";
 import { activateSubscription, cancelSubscription } from "./subscription.js";
 
 /**
- * The Carbsai backend.
+ * The Carbs AI backend.
  *
  * Replaces the Firebase Cloud Functions in `functions/`, so the Firebase
  * project can stay on Spark — Spark blocks outbound calls to any non-Google
@@ -152,8 +152,17 @@ async function route(request: Request, env: Env): Promise<Response> {
       throw new HttpsError("not-found", "No such route.");
     }
 
-    const handler = CALLABLES[path];
-    if (!handler || request.method !== "POST") {
+    // `CALLABLES[path]` is an own-property lookup, and that is not a style
+    // choice. A plain object literal inherits from `Object.prototype`, so
+    // `CALLABLES["constructor"]` returned the `Object` function itself, which
+    // this line then called as `handler(env, uid, data)` — `Object(env)` is
+    // `env` — and the next line serialised every Worker secret, the Firebase
+    // service-account private key included, to any signed-in caller.
+    // `"toString"`, `"valueOf"` and `"__proto__"` reached the same dispatch.
+    const handler = Object.prototype.hasOwnProperty.call(CALLABLES, path)
+      ? CALLABLES[path]
+      : undefined;
+    if (typeof handler !== "function" || request.method !== "POST") {
       throw new HttpsError("not-found", "No such route.");
     }
 

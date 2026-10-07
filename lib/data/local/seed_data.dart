@@ -1152,28 +1152,6 @@ abstract final class SeedData {
     ),
   ];
 
-  /// The seven messages the populated notifications artboard ships with.
-  static List<AppNotification> notifications(DateTime now) {
-    const bodies = [
-      'It’s time for your Lunch – Don’t forget to log your meal.',
-      'You’re doing great! Try adding more fiber-rich foods to hit today’s '
-          'target.',
-      'You’ve hit 80% of your daily calorie goal—keep it going!',
-      'Stay hydrated! Aim for at least 8 cups of water today.',
-      'Consider a light snack to help maintain your energy levels.',
-      'Review your progress this week and celebrate your small wins!',
-      'Plan your dinner ahead—choosing healthier options can be fun!',
-    ];
-    return [
-      for (final (i, body) in bodies.indexed)
-        AppNotification(
-          id: 'seed-notif-$i',
-          body: body,
-          // Newest first, an hour apart, so ordering is stable and obvious.
-          createdAt: now.subtract(Duration(hours: i)),
-        ),
-    ];
-  }
 
   /// A week of diary history so Analysis and the streak have something real to
   /// work from on a fresh install.

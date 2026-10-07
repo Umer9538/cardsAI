@@ -16,6 +16,7 @@ class SignUpScreen extends ConsumerStatefulWidget {
 
   final VoidCallback? onBack;
   final VoidCallback? onLogIn;
+
   /// Receives the address the account was created with, so the verification
   /// screen can address it without the caller having to hold on to it.
   final ValueChanged<String>? onSignedUp;
@@ -43,12 +44,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   Future<void> _submit() async {
     setState(() {
-      _nameError =
-          _name.text.trim().isEmpty ? 'Please enter your full name' : null;
-      _emailError =
-          _email.text.trim().isEmpty ? 'Please enter your email' : null;
-      _passwordError =
-          _password.text.isEmpty ? 'Please enter a password' : null;
+      _nameError = _name.text.trim().isEmpty
+          ? 'Please enter your full name'
+          : null;
+      _emailError = _email.text.trim().isEmpty
+          ? 'Please enter your email'
+          : null;
+      _passwordError = _password.text.isEmpty
+          ? 'Please enter a password'
+          : null;
     });
     if (_nameError != null || _emailError != null || _passwordError != null) {
       return;
@@ -64,7 +68,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (ok) {
       widget.onSignedUp?.call(_email.text.trim());
     } else {
-      setState(() => _emailError = controller.errorMessage);
+      setState(() {
+        final message = controller.errorMessage;
+        // Route it to the field it is actually about, exactly as the login
+        // screen already does. Sending every failure to `_emailError` put
+        // "Use at least 6 characters." — a `weak-password` message — under the
+        // Email field, with the email outlined in red and the password left
+        // looking fine. The person is then told to fix the one thing that was
+        // correct.
+        final aboutPassword = controller.errorCode == 'weak-password';
+        _emailError = aboutPassword ? null : message;
+        _passwordError = aboutPassword ? message : null;
+      });
     }
   }
 
@@ -74,7 +89,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
     return AuthScaffold(
       onBack: widget.onBack,
-      title: 'Create Your Carbsai Account',
+      // Not "Create Your Carbs AI Account": at 28pt that is 28 characters
+      // against a 388pt box, so "Account" wrapped onto a line the 42pt box
+      // cannot show. The brand is already on the screen before this one and on
+      // the home screen itself; the verb is what this title has to carry.
+      title: 'Create Your Account',
       subtitle: 'Eat better. Get back on track.',
       children: [
         // One auto-layout column at y=254 with 20pt gaps, so an inline

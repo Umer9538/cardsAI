@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/models/barcode.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../auth/presentation/widgets/auth_widgets.dart';
@@ -31,13 +32,31 @@ class BarcodeEntrySheet extends StatefulWidget {
 class _BarcodeEntrySheetState extends State<BarcodeEntrySheet> {
   final _controller = TextEditingController();
 
-  /// EAN-8 through EAN-13/UPC-A. Shorter than 8 is not a product code, and
-  /// sending it would spend a lookup to be told so.
-  bool get _valid {
-    final digits = _controller.text.trim();
-    return digits.length >= 8 &&
-        digits.length <= 14 &&
-        int.tryParse(digits) != null;
+  String get _digits => _controller.text.trim();
+
+  /// A real GTIN, check digit and all.
+  ///
+  /// It used to be "8 to 14 digits that parse as an int", which accepts the
+  /// 10^8 codes that are the right shape and the wrong number. A tester typed
+  /// `88888888`, which is one of them — the valid EAN-8 ends in 0 — and got a
+  /// Bordeaux back from Open Food Facts. The checksum is the cheapest possible
+  /// way to tell "no such product" from a confident wrong answer, and the
+  /// camera path has always had it for free.
+  bool get _valid => Barcode.isValid(_digits);
+
+  /// What is wrong with it, once there is enough typed to say.
+  ///
+  /// Nothing while the field is short: complaining about a number somebody is
+  /// halfway through entering is noise.
+  String? get _problem {
+    final digits = _digits;
+    if (digits.isEmpty || _valid) return null;
+    if (!RegExp(r'^\d*$').hasMatch(digits)) return 'Digits only.';
+    if (digits.length < 8) return null;
+    if (!Barcode.lengths.contains(digits.length)) {
+      return 'A barcode is 8, 12, 13 or 14 digits.';
+    }
+    return 'That is not a valid barcode — check the digits.';
   }
 
   @override
@@ -107,6 +126,20 @@ class _BarcodeEntrySheetState extends State<BarcodeEntrySheet> {
                     hintStyle: AppTypography.body(color: AppColors.muted),
                   ),
                 ),
+              ),
+              // Says what is wrong rather than leaving a disabled button and
+              // no explanation — a dead control reads as a broken app.
+              SizedBox(
+                height: 22,
+                child: _problem == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          _problem!,
+                          style: AppTypography.meta(color: AppColors.error),
+                        ),
+                      ),
               ),
               const SizedBox(height: 20),
               SizedBox(

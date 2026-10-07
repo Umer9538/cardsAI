@@ -30,12 +30,13 @@ ANDROID_PACKAGE_NAME = "com.carbsai.app"
 
 # Accept purchases without asking the store whether they are real.
 #
-# ON while there are no store products to validate against — the app cannot be
-# tested end to end otherwise. **Set this to "0" before the first paid
-# release**, and validation takes over as soon as PLAY_SERVICE_ACCOUNT or
-# APPLE_SHARED_SECRET is set. With it on, anyone who can call
-# activateSubscription has premium.
-ALLOW_UNVERIFIED_PURCHASES = "1"
+# OFF. With it on, anyone who can call activateSubscription has premium, so it
+# is never on for the deployment the shipped app points at. Validation takes
+# over as soon as PLAY_SERVICE_ACCOUNT or APPLE_SHARED_SECRET is set; until
+# then every activation is refused, which is the honest state while the store
+# products do not exist. Set "1" only on a separate dev deployment to walk the
+# purchase flow end to end.
+ALLOW_UNVERIFIED_PURCHASES = "0"
 
 # Meal photos. Replaces Cloud Storage — R2 has zero egress fees, which is the
 # whole reason it is here rather than in Firebase.

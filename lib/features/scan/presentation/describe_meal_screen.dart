@@ -15,7 +15,19 @@ import 'scan_controller.dart';
 /// this a must-have for exactly that reason. It runs the same pipeline as a
 /// photo, text-only, which is roughly a tenth of the cost.
 class DescribeMealScreen extends ConsumerStatefulWidget {
-  const DescribeMealScreen({super.key, this.onBack, this.onAnalysed});
+  const DescribeMealScreen({
+    super.key,
+    this.onBack,
+    this.onAnalysed,
+    this.initialText,
+  });
+
+  /// Carries a failed search's words straight into the box.
+  ///
+  /// Someone who just typed "malai botti" into search and was told there is no
+  /// such record should not have to type it a second time to ask the one thing
+  /// that can answer.
+  final String? initialText;
 
   final VoidCallback? onBack;
 
@@ -27,7 +39,7 @@ class DescribeMealScreen extends ConsumerStatefulWidget {
 }
 
 class _DescribeMealScreenState extends ConsumerState<DescribeMealScreen> {
-  final _text = TextEditingController();
+  late final _text = TextEditingController(text: widget.initialText ?? '');
   String? _error;
 
   static const List<String> _examples = [
@@ -101,6 +113,17 @@ class _DescribeMealScreenState extends ConsumerState<DescribeMealScreen> {
               child: TextField(
                 controller: _text,
                 autofocus: true,
+                // The Worker clamps this too — an unbounded description is an
+                // unbounded bill against one quota unit — but there is no
+                // reason to send a megabyte to find that out.
+                maxLength: 300,
+                buildCounter:
+                    (
+                      _, {
+                      required currentLength,
+                      required isFocused,
+                      maxLength,
+                    }) => null,
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
@@ -109,8 +132,7 @@ class _DescribeMealScreenState extends ConsumerState<DescribeMealScreen> {
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration.collapsed(
                   hintText: 'e.g. two eggs on toast with butter',
-                  hintStyle:
-                      AppTypography.body(color: AppColors.placeholder),
+                  hintStyle: AppTypography.body(color: AppColors.placeholder),
                 ),
                 onChanged: (_) {
                   if (_error != null) setState(() => _error = null);

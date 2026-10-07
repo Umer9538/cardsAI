@@ -70,7 +70,7 @@ class _MoreScreenState extends State<MoreScreen> {
           if (_confirming)
             ConfirmDialog(
               title: 'Are you sure you want \nto delete account?',
-              body: 'Permanently remove your data and close your Carbsai '
+              body: 'Permanently remove your data and close your Carbs AI '
                   'account.',
               secondaryLabel: 'Cancel',
               primaryLabel: 'Delete',

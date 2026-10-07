@@ -87,7 +87,7 @@ String _render(String title, List<LegalBlock> blocks) {
   return '''${_head(title)}
 <main>
   <header>
-    <p class="brand">Carbsai</p>
+    <p class="brand">Carbs AI</p>
     <h1>${_escape(title)}</h1>
     <p class="updated">Last updated ${_escape(LegalOperator.updated)}</p>
   </header>
@@ -105,11 +105,11 @@ $body
 String _index() => '''${_head('Legal')}
 <main>
   <header>
-    <p class="brand">Carbsai</p>
+    <p class="brand">Carbs AI</p>
     <h1>Legal</h1>
     <p class="updated">Last updated ${_escape(LegalOperator.updated)}</p>
   </header>
-  <p>Carbsai estimates the nutrition in a photograph of your food. These are the
+  <p>Carbs AI estimates the nutrition in a photograph of your food. These are the
   documents that govern it.</p>
   <h2><a href="/privacy">Privacy Policy</a></h2>
   <p>What the app collects, where it goes, and what you can do about it.</p>
@@ -132,8 +132,8 @@ String _head(String title) => '''<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Carbsai — ${_escape(title)}</title>
-<meta name="description" content="Carbsai — ${_escape(title)}">
+<title>Carbs AI — ${_escape(title)}</title>
+<meta name="description" content="Carbs AI — ${_escape(title)}">
 <style>
   :root {
     color-scheme: light dark;

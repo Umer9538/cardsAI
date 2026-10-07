@@ -189,6 +189,27 @@ class _TrendPainter extends CustomPainter {
       ..color = AppColors.ink.withValues(alpha: 0.18)
       ..strokeWidth = 1;
 
+    // Zero, drawn first and drawn differently.
+    //
+    // The loop below used to start at `step`, so the lowest thing on the axis
+    // was 1,000 and the curve appeared to hang above an unlabelled edge — a
+    // chart whose baseline is invisible is one nobody can read a quantity off,
+    // because "half as tall" only means "half as many" if the bottom is zero.
+    // The data range always was 0..top (`y(0)` is `plot.bottom`); only the
+    // axis failed to say so.
+    //
+    // Solid and a little stronger than the dashed gridlines, because it is the
+    // axis rather than another division of it.
+    final base = y(0);
+    canvas.drawLine(
+      Offset(plot.left, base),
+      Offset(plot.right, base),
+      Paint()
+        ..color = AppColors.ink.withValues(alpha: 0.38)
+        ..strokeWidth = 1,
+    );
+    _label(canvas, '0', Offset(0, base - 9), _axisWidth - 8, TextAlign.right);
+
     for (var value = step; value <= top + 0.5; value += step) {
       final at = y(value);
       _dashedLine(canvas, Offset(plot.left, at), Offset(plot.right, at), line);

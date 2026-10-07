@@ -1,5 +1,6 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/main_shell.dart';
 import 'core/ads/ads_providers.dart';
 import 'core/app_config.dart';
+import 'core/notifications/device_time_zone.dart';
 import 'core/route_observer.dart';
 import 'core/providers/providers.dart';
 import 'core/theme/app_colors.dart';
@@ -20,6 +22,7 @@ import 'features/onboarding/presentation/onboarding_quiz_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
 import 'features/splash/presentation/splash_screen.dart';
 import 'firebase_options.dart';
+import 'core/design/app_toast.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +42,10 @@ Future<void> main() async {
   // it happens before the first frame and is injected rather than awaited
   // inside a provider. That keeps every repository construction synchronous.
   final store = await JsonStore.open();
+  // Before the first frame, because two things read it and both are wrong
+  // without it: the reminder scheduler, which otherwise builds its times in
+  // UTC, and the suggested meal times, which have to answer synchronously.
+  await DeviceTimeZone.resolve();
   final backend = await _startBackend();
 
   // Release only. Debug and profile keep the fallback, which is the whole
@@ -103,6 +110,7 @@ Future<AppBackend> _startBackend() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await _startCrashReporting();
     await _startAppCheck();
     return AppBackend.firebase;
   } catch (error, stack) {
@@ -113,6 +121,64 @@ Future<AppBackend> _startBackend() async {
       );
     }
     return AppBackend.local;
+  }
+}
+
+/// Sends crashes to Firebase Crashlytics.
+///
+/// The app had no crash reporting at all: a crash on someone's phone produced
+/// a bad review and nothing else. Play Console's Android vitals sees native
+/// crashes and ANRs, but a Dart exception that kills a screen is not one — it
+/// is caught by the framework, drawn as a grey box in release, and never
+/// leaves the device.
+///
+/// **Set up here rather than in `main()` because it needs Firebase**, and
+/// `_startBackend` is the one place that knows whether Firebase actually came
+/// up. On `BACKEND=local`, or after a failed init, nothing below runs and the
+/// app is unchanged.
+///
+/// Two handlers, because Flutter has two error paths and each misses what the
+/// other catches:
+///
+///   * `FlutterError.onError` — anything thrown inside the framework: a build,
+///     a layout, a gesture callback.
+///   * `PlatformDispatcher.onError` — everything else that reaches the engine,
+///     which is mostly an unawaited future that threw. `runZonedGuarded` was
+///     the old way to catch these; it is no longer needed and brings a zone
+///     mismatch with `WidgetsFlutterBinding` if it is used carelessly.
+///
+/// **No user identifier is attached.** `setUserIdentifier` would tie a crash to
+/// an account, which is occasionally useful and would put a persistent
+/// identifier into a third-party crash record for every user forever. A stack
+/// trace is what fixes a bug; who hit it is not.
+Future<void> _startCrashReporting() async {
+  try {
+    // Nothing from a development machine. A dashboard full of crashes from
+    // hot reload and a half-written screen is how the real ones become
+    // unfindable, and every one of them would also count against the issue
+    // list the store release is judged on.
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
+
+    final present = FlutterError.onError;
+    FlutterError.onError = (details) {
+      // The previous handler is kept rather than replaced: it is what prints
+      // the error to the console and draws the red screen in debug, and a
+      // silent debug build is a worse trade than a duplicated report.
+      present?.call(details);
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    };
+
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      // Handled, so the engine does not also print it. Returning false here
+      // would double-report every one of them.
+      return true;
+    };
+  } catch (error) {
+    // Crash reporting that cannot start must not be the thing that stops the
+    // app starting.
+    debugPrint('crash reporting unavailable: $error');
   }
 }
 
@@ -194,7 +260,7 @@ class _MisconfiguredApp extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Carbsai can’t start',
+                  'Carbs AI can’t start',
                   style: AppTypography.authTitle(),
                   textAlign: TextAlign.center,
                 ),
@@ -219,7 +285,7 @@ class CarbsaiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Carbsai',
+      title: 'Carbs AI',
       // So a screen holding a camera can tell when another route covers it.
       // See [appRouteObserver].
       navigatorObservers: [appRouteObserver],
@@ -454,10 +520,10 @@ class _AuthFlow extends StatelessWidget {
               // then changed in the browser. The six-box code screen and the
               // in-app reset form cannot serve that flow, so this confirms and
               // returns to log in rather than opening screens that dead-end.
-              onSent: (email) => ScaffoldMessenger.of(c).showSnackBar(
-                SnackBar(
-                  content: Text('Password reset link sent to $email.'),
-                ),
+              onSent: (email) => showToast(
+                c,
+                'Password reset link sent to $email.',
+                tone: ToastTone.success,
               ),
             ),
           ),

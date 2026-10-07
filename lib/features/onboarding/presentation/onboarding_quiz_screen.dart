@@ -13,6 +13,7 @@ import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import 'quiz_answers.dart';
+import 'widgets/quiz_build_step.dart';
 import 'widgets/quiz_controls.dart';
 
 /// The steps, in order. `goalWeight` is skipped when maintaining.
@@ -197,13 +198,13 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
               Positioned(
                 left: 20,
                 top: 96,
-                child: _TextButton(label: 'Back', onTap: _back),
+                child: QuizTextButton(label: 'Back', onTap: _back),
               ),
             if (!isPlan && !isBuilding)
               Positioned(
                 right: 20,
                 top: 96,
-                child: _TextButton(label: 'Skip', onTap: widget.onFinished),
+                child: QuizTextButton(label: 'Skip', onTap: widget.onFinished),
               ),
             // The question moves with its answers rather than snapping while
             // the cards slide, which made the two read as separate screens.
@@ -212,7 +213,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
               top: 148,
               width: 388,
               height: 84,
-              child: _Fading(
+              child: QuizFade(
                 step: _step,
                 child: Text(
                   _title,
@@ -228,7 +229,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
               top: 238,
               width: 388,
               height: 50,
-              child: _Fading(
+              child: QuizFade(
                 step: _step,
                 child: Text(
                   _subtitle,
@@ -478,57 +479,6 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
 // Pieces
 // ---------------------------------------------------------------------------
 
-/// Crossfades its child whenever the step changes.
-///
-/// The question and its answers used to move independently — the cards slid in
-/// while the title snapped — which read as two screens sharing a background
-/// rather than one screen changing.
-class _Fading extends StatelessWidget {
-  const _Fading({required this.step, required this.child});
-
-  final Object step;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 260),
-      switchInCurve: Curves.easeOut,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: Tween(begin: const Offset(0, 0.15), end: Offset.zero)
-              .animate(animation),
-          child: child,
-        ),
-      ),
-      child: KeyedSubtree(key: ValueKey(step), child: child),
-    );
-  }
-}
-
-class _TextButton extends StatelessWidget {
-  const _TextButton({required this.label, this.onTap});
-
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        child: Text(
-          label,
-          style: AppTypography.socialLabel(color: AppColors.inkMuted),
-        ),
-      ),
-    );
-  }
-}
-
 /// Goal weight, plus how fast to get there.
 class _GoalWeight extends StatelessWidget {
   const _GoalWeight({
@@ -667,7 +617,11 @@ class _RateChip extends StatelessWidget {
 /// It is still theatre — all four are arithmetic and take no time at all — but
 /// theatre that is true. A number that appears instantly reads as a lookup; one
 /// you watch being derived reads as a plan.
-class _Building extends StatefulWidget {
+///
+/// The ring and the rows live in [QuizBuildStep] so the plan builder's quiz
+/// can show its own working the same way; this only decides what the lines
+/// say.
+class _Building extends StatelessWidget {
   const _Building({
     required this.accent,
     required this.profile,
@@ -678,37 +632,9 @@ class _Building extends StatefulWidget {
   final UserProfile profile;
   final VoidCallback onDone;
 
-  @override
-  State<_Building> createState() => _BuildingState();
-}
-
-class _BuildingState extends State<_Building>
-    with SingleTickerProviderStateMixin {
-  static const Duration _run = Duration(milliseconds: 2600);
-
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: _run,
-  )
-    ..addStatusListener((status) {
-      if (status != AnimationStatus.completed || !mounted) return;
-      HapticFeedback.mediumImpact();
-      widget.onDone();
-    })
-    ..forward();
-
-  /// One tick per stage as it lands, so the sequence is felt as well as seen.
-  int _tapped = 0;
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
   /// The real intermediate values, in the order they are computed.
   List<(String, String)> get _stages {
-    final p = widget.profile;
+    final p = profile;
     if (!p.canPersonaliseTargets) {
       return const [
         ('Reading your answers', ''),
@@ -734,179 +660,8 @@ class _BuildingState extends State<_Building>
   }
 
   @override
-  Widget build(BuildContext context) {
-    final stages = _stages;
-
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, _) {
-        final progress = _c.value;
-        // A stage is done once the sweep has passed its share of the ring.
-        final done = (progress * stages.length).floor();
-        if (done > _tapped && done <= stages.length) {
-          _tapped = done;
-          HapticFeedback.selectionClick();
-        }
-
-        return Column(
-          children: [
-            const SizedBox(height: 6),
-            SizedBox(
-              width: 148,
-              height: 148,
-              child: CustomPaint(
-                painter: _RingPainter(
-                  progress: progress,
-                  accent: widget.accent,
-                ),
-                child: Center(
-                  child: Text(
-                    '${(progress * 100).round()}%',
-                    style: AppTypography.onboardingTitle(color: QuizPalette.ink)
-                        .copyWith(fontSize: 34, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 22),
-            for (var i = 0; i < stages.length; i++)
-              _StageRow(
-                label: stages[i].$1,
-                value: stages[i].$2,
-                accent: widget.accent,
-                // Each row owns a quarter of the sweep.
-                progress: ((progress * stages.length) - i).clamp(0.0, 1.0),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// One line of the working, revealing its value as the sweep passes it.
-class _StageRow extends StatelessWidget {
-  const _StageRow({
-    required this.label,
-    required this.value,
-    required this.accent,
-    required this.progress,
-  });
-
-  final String label;
-  final String value;
-  final Color accent;
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final done = progress >= 1;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Opacity(
-        // Pending rows are present but recede, so the list does not reflow as
-        // each one lands.
-        opacity: 0.25 + 0.75 * progress,
-        child: Transform.translate(
-          offset: Offset(14 * (1 - progress), 0),
-          child: Row(
-            children: [
-              // The tick stamps in rather than fading: it is the moment the
-              // step completed.
-              AnimatedScale(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutBack,
-                scale: done ? 1 : 0.4,
-                child: Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    color: done ? accent : QuizPalette.card,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: QuizPalette.ink, width: 2),
-                  ),
-                  child: done
-                      ? Icon(Icons.check_rounded,
-                          size: 14, color: QuizPalette.onAccent(accent))
-                      : null,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTypography.socialLabel(color: QuizPalette.ink),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              // The value counts up rather than appearing, so the figure looks
-              // arrived at.
-              if (value.isNotEmpty)
-                Opacity(
-                  opacity: progress,
-                  child: Text(
-                    value,
-                    style: AppTypography.socialLabel(color: QuizPalette.ink)
-                        .copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The sweep. Outlined on both edges so it belongs with everything else here.
-class _RingPainter extends CustomPainter {
-  const _RingPainter({required this.progress, required this.accent});
-
-  final double progress;
-  final Color accent;
-
-  static const double _stroke = 18;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final centre = size.center(Offset.zero);
-    final radius = (size.shortestSide - _stroke) / 2 - QuizPalette.stroke;
-    final rect = Rect.fromCircle(center: centre, radius: radius);
-    const start = -math.pi / 2;
-
-    // Track.
-    canvas.drawArc(rect, 0, math.pi * 2, false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _stroke
-          ..color = QuizPalette.card);
-
-    // Filled sweep.
-    if (progress > 0) {
-      canvas.drawArc(rect, start, math.pi * 2 * progress, false,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = _stroke
-            ..strokeCap = StrokeCap.round
-            ..color = accent);
-    }
-
-    // The two black edges of the band, drawn last so the fill cannot bleed
-    // over them.
-    final outline = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = QuizPalette.stroke
-      ..color = QuizPalette.ink;
-    canvas
-      ..drawCircle(centre, radius + _stroke / 2, outline)
-      ..drawCircle(centre, radius - _stroke / 2, outline);
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter old) =>
-      old.progress != progress || old.accent != accent;
+  Widget build(BuildContext context) =>
+      QuizBuildStep(accent: accent, stages: _stages, onDone: onDone);
 }
 
 /// The payoff: the number the whole quiz was for.

@@ -21,11 +21,26 @@
   <!-- No ad network reaches this app's data for tracking without the ATT
        prompt, and a refusal is honoured. AdMob itself declares its own
        tracking domains in the SDK's manifest. -->
+  <!-- True because the app serves AdMob ads and requests ATT. The Google
+       Mobile Ads SDK's own manifest declares NSPrivacyCollectedDataTypeDeviceID
+       with Tracking=true, so declaring false here contradicts an SDK that is
+       bundled in this binary. Requesting ATT at all is the admission that the
+       app tracks; NSUserTrackingUsageDescription has been in Info.plist since
+       ads were added. -->
   <key>NSPrivacyTracking</key>
-  <false/>
+  <true/>
 
+  <!-- Apple requires at least one domain once NSPrivacyTracking is true.
+       Google publishes no official AdMob tracking-domain list - their own SDK
+       team has said so on the developer forum - so this names the primary ad
+       request endpoint the SDK contacts and nothing else. A domain listed here
+       is documented to make requests to it fail when ATT is denied, so each
+       extra entry is non-personalised ad revenue wagered on a guess about
+       Google's infrastructure. Add one only with evidence the SDK uses it. -->
   <key>NSPrivacyTrackingDomains</key>
-  <array/>
+  <array>
+    <string>googleads.g.doubleclick.net</string>
+  </array>
 
   <key>NSPrivacyAccessedAPITypes</key>
   <array>

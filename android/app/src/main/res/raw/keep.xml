@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resources the shrinker cannot see a reference to.
+
+  `isShrinkResources = true` removes every resource nothing in Java, Kotlin or
+  XML mentions. The meal-reminder icon is named only in Dart — the string
+  "ic_stat_meal" lives inside libapp.so, which R8 does not read — so the
+  shrinker concluded nothing used it and deleted it from the resource table.
+
+  It was gone from the release APK while being present in the debug one, and
+  nothing failed at build time: the icon simply would not resolve on a device,
+  in the shipped app only. Anything else referenced by name from Dart belongs
+  in this list for the same reason.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_meal" />

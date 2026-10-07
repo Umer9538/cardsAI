@@ -69,6 +69,8 @@ dependencies:
   http: ^1.6.0
   mobile_scanner: ^7.4.0
   firebase_app_check: ^0.4.7
+  flutter_timezone: ^5.1.0
+  firebase_crashlytics: ^5.3.0
 
 dev_dependencies:
   flutter_test:
@@ -94,6 +96,7 @@ flutter:
     - assets/images/auth/
     - assets/images/premium/
     - assets/images/app/
+    - assets/images/dishes/
     # Named file, not the directory. `brand/` also holds the icon masters —
     # app_icon_1024.png and adaptive_foreground_432.png — which every one of
     # the 25 platform icon files is generated from. They belong in the repo and

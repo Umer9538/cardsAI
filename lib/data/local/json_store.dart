@@ -84,6 +84,16 @@ abstract final class StoreKeys {
   /// deleting an account should not replay onboarding.
   static const String onboardingSeen = 'carbsai.onboardingSeen';
 
+  /// Whether the person has been told, in the app, that a photo or a
+  /// description of their meal leaves the device and goes to a third-party AI
+  /// provider.
+  ///
+  /// Google Play's User Data policy requires that disclosure *in the app*,
+  /// before the data is collected, and not only in a policy behind two menus.
+  /// Shown once, before the first AI action of any kind. Device-scoped like
+  /// [onboardingSeen]: it is a disclosure to the person holding the phone.
+  static const String aiDisclosureSeen = 'carbsai.aiDisclosureSeen';
+
   /// Whether the personalisation quiz has been answered or skipped.
   ///
   /// Separate from the profile's own completeness because skipping is a valid
@@ -92,6 +102,12 @@ abstract final class StoreKeys {
   static const String quizSeen = 'carbsai.quizSeen';
 
   /// The weight log.
+  /// The water diary. Belongs to the person, so it is in [all].
+  static const String water = 'carbsai.water';
+
+  /// The exercise diary, for the same reason.
+  static const String activity = 'carbsai.activity';
+
   static const String weights = 'carbsai.weights';
 
   /// Plans the user generated, kept apart from the catalogue copy so the
@@ -101,6 +117,34 @@ abstract final class StoreKeys {
   /// Which revision of the plan catalogue the stored copy was written from.
   /// See `LocalDietRepository._load`.
   static const String plansVersion = 'carbsai.plansVersion';
+
+  /// The taste answers the last generated plan was built from.
+  ///
+  /// `DietPlan.builtFor` is the *summary* frozen on the plan — "South Asian",
+  /// "No dairy" — which is the right thing to show and not enough to generate
+  /// from again. Keeping the profile itself is what lets "Something else" give
+  /// someone a different plan without making them answer fifty seconds of
+  /// questions they have already answered.
+  ///
+  /// Device-scoped and in [all]: it is theirs, and it is the shape of their
+  /// last answer rather than a record of anything.
+  static const String lastTaste = 'carbsai.lastTaste';
+
+  /// Meal-reminder times the person set, and slots they switched off.
+  ///
+  /// Device-scoped storage, but it is theirs, so it is in [all]. Notifications
+  /// are scheduled by the OS on this handset — there is nothing to sync — and
+  /// keeping it out of the profile means the schedule works identically on
+  /// `BACKEND=local`, which is where reminders are usually tested.
+  static const String reminderTimes = 'carbsai.reminderTimes';
+
+  /// Weekday and time for the weekly weigh-in prompt. Device-scoped for the
+  /// same reason as [reminderTimes].
+  static const String weighInReminder = 'carbsai.weighInReminder';
+
+  /// The water nudges' switch and how many a day, for the same reason as
+  /// [reminderTimes] — the OS that rings is this handset.
+  static const String waterReminder = 'carbsai.waterReminder';
 
   /// Metric or imperial, for display only. Deliberately NOT in [all]: deleting
   /// an account should not put an American back on centimetres.
@@ -116,6 +160,8 @@ abstract final class StoreKeys {
     profile,
     myPlans,
     weights,
+    water,
+    activity,
     meals,
     subscription,
     plans,
@@ -125,5 +171,8 @@ abstract final class StoreKeys {
     scans,
     session,
     quizSeen,
+    reminderTimes,
+    weighInReminder,
+    waterReminder,
   ];
 }
