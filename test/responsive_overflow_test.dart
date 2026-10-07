@@ -6,6 +6,7 @@ import 'package:carbsai/features/auth/presentation/verification_screen.dart';
 import 'package:carbsai/features/analysis/presentation/analysis_screen.dart';
 import 'package:carbsai/features/app/presentation/home_screen.dart';
 import 'package:carbsai/features/diets/presentation/diets_screen.dart';
+import 'package:carbsai/features/diets/presentation/taste_quiz_screen.dart';
 import 'package:carbsai/features/app/presentation/notifications_screen.dart';
 import 'package:carbsai/features/scan/presentation/scan_result_screen.dart';
 import 'package:carbsai/features/scan/presentation/scanning_screen.dart';
@@ -62,6 +63,9 @@ List<(String, Widget)> _screens() => [
   ('diets all', const DietsScreen()),
   ('diets mine', DietsScreen(tab: DietsTab.mine)),
   ('diets mine empty', DietsScreen(tab: DietsTab.mine, myPlans: [])),
+  // The plan builder's quiz, on its first grid: nine tiles with shadows is
+  // the tallest body any quiz step has.
+  ('taste quiz', const TasteQuizScreen()),
   ('notifications', const NotificationsScreen()),
   ('notifications empty', NotificationsScreen(items: [])),
   ('scanning', const ScanningScreen()),

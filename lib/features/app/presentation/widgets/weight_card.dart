@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/models.dart';
@@ -6,6 +7,7 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../auth/presentation/widgets/auth_widgets.dart';
+import '../../../../core/design/app_toast.dart';
 
 /// Weight, on Home.
 ///
@@ -20,17 +22,42 @@ import '../../../auth/presentation/widgets/auth_widgets.dart';
 /// estimate of where someone actually is, and it is the number that makes
 /// people abandon a plan that is working.
 class WeightCard extends ConsumerWidget {
-  const WeightCard({super.key, required this.top, this.onLog});
+  const WeightCard({super.key, required this.top, this.onLog, this.preview});
 
   final double top;
   final VoidCallback? onLog;
 
+  /// Pins the history, for tests and previews. Null reads the real one.
+  ///
+  /// The sibling cards have had this since they were written; this one did
+  /// not, so the populated state — the one with a sparkline, and the taller of
+  /// the two — could not be rendered by any test. Its reserved height was a
+  /// guess nothing checked, and it was 59pt too generous for the empty state,
+  /// which is what put a double-sized gap under it on Home.
+  final WeightHistory? preview;
+
   static const double width = 388;
+
+  /// Room Home books for this card, which depends on what is in it.
+  ///
+  /// A function, like [ActivityCard.reserveFor], because the two states are
+  /// not close: empty it is a heading and one sentence, populated it carries a
+  /// trend, a change figure and a sparkline. Measured at the 1.15x text
+  /// ceiling — empty 119, populated 216 — plus a little slack, which is the
+  /// lesson the search result row taught at 2px over.
+  ///
+  /// It was one constant, 168, and that was wrong in **both** directions: 49pt
+  /// too generous when empty, which is the double-sized gap a tester reported
+  /// under it, and 48pt too small once anything was logged, at which point the
+  /// card silently drew over the water card below it. Two overlapping
+  /// `Positioned` children throw nothing.
+  static double reserveFor({required bool hasReadings}) =>
+      hasReadings ? 220 : 122;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final history =
-        ref.watch(weightHistoryProvider).value ?? WeightHistory.empty;
+        preview ?? ref.watch(weightHistoryProvider).value ?? WeightHistory.empty;
     final units = ref.watch(unitSystemProvider);
     final goal = ref.watch(profileProvider).value?.goalWeightKg;
 
@@ -224,13 +251,27 @@ class _WeightSheetState extends ConsumerState<_WeightSheet> {
 
   Future<void> _save() async {
     final units = ref.read(unitSystemProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    void refuse(String why) =>
+        messenger.showSnackBar(appToast(why, tone: ToastTone.error));
+
     final typed = double.tryParse(_field.text.trim().replaceAll(',', '.'));
-    if (typed == null || typed <= 0) return;
+    // Every one of these used to be a bare `return`, so the sheet simply did
+    // not close and Save read as broken.
+    if (typed == null || typed <= 0) {
+      refuse('Enter your weight as a number.');
+      return;
+    }
 
     // Typed in whatever they read off the scale; stored in kilograms, like
     // every other body measurement here.
     final kg = units.isMetric ? typed : typed / 2.2046226218;
-    if (kg < 25 || kg > 350) return;
+    if (kg < 25 || kg > 350) {
+      refuse(units.isMetric
+          ? 'Weight must be between 25 and 350 kg.'
+          : 'Weight must be between 55 and 770 lb.');
+      return;
+    }
 
     setState(() => _busy = true);
     await ref.read(weightRepositoryProvider).log(kg);
@@ -293,6 +334,10 @@ class _WeightSheetState extends ConsumerState<_WeightSheet> {
                       child: TextField(
                         controller: _field,
                         autofocus: true,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                          LengthLimitingTextInputFormatter(6),
+                        ],
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
@@ -312,7 +357,34 @@ class _WeightSheetState extends ConsumerState<_WeightSheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
+              // The unit switch belongs here for the same reason it is on the
+              // quiz's weight step: this is the moment someone notices they
+              // are being asked for a number in a unit they do not think in,
+              // and sending them to Settings then is how the sheet loses them.
+              // Until now the quiz was the *only* place in the app that could
+              // change it, so anyone who skipped onboarding was stuck.
+              //
+              // It writes the same global preference, so the hint, the suffix
+              // and every other weight in the app move together — storage
+              // stays metric either way, as everywhere else.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () =>
+                      ref.read(unitSystemProvider.notifier).toggle(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      units.isMetric ? 'Use pounds' : 'Use kilograms',
+                      style: AppTypography.meta(color: AppColors.primary)
+                          .copyWith(decoration: TextDecoration.underline),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
               SizedBox(
                 height: 50,
                 width: double.infinity,

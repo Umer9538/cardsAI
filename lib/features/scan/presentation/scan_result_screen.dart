@@ -17,6 +17,7 @@ import '../../auth/presentation/widgets/auth_widgets.dart';
 import 'scan_controller.dart';
 import 'widgets/item_edit_sheet.dart';
 import 'widgets/pinned_cta.dart';
+import '../../../core/design/app_toast.dart';
 
 /// One macro tile in the 2x2 grid.
 class MacroStat {
@@ -70,6 +71,7 @@ class ScanResultScreen extends ConsumerWidget {
 
   static const double _gridTop = 340;
   static const double _gridHeight = 212;
+
   /// The artboard's 86, plus the portion row the design does not have.
   ///
   /// An AI estimate that cannot be corrected is worse than useless — it
@@ -143,7 +145,9 @@ class ScanResultScreen extends ConsumerWidget {
   ) async {
     final edited = await showItemEditSheet(context, food);
     if (edited == null) return;
-    ref.read(scanControllerProvider.notifier).applyEdit(
+    ref
+        .read(scanControllerProvider.notifier)
+        .applyEdit(
           itemId: food.id,
           name: edited.name,
           nutrition: edited.nutrition,
@@ -162,7 +166,18 @@ class ScanResultScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(scanControllerProvider);
-    final scan = result ?? state.value;
+    // `state.value` survives a bare `AsyncLoading()` on an AsyncNotifier, so
+    // during a new scan it still holds the *previous* result. Everything below
+    // reads `scan`, so taking it at face value while loading rendered the last
+    // meal's photo, items and macros under the progress overlay.
+    // `AsyncError` keeps the previous value too, not just `AsyncLoading`, so a
+    // failed lookup rendered the *last* product's photo and macros dimmed
+    // behind the error card — a barcode that could not be reached showed the
+    // previous bottle at 59 kcal under "Could not reach the food database".
+    // The overlay's only action is Back, so it was never actionable; it was
+    // just the wrong picture under an error about a different product.
+    final loading = state.isLoading;
+    final scan = result ?? (loading || state.hasError ? null : state.value);
     final foods = scan?.items ?? const <FoodItem>[];
     final targets = ref.watch(targetsProvider);
 
@@ -180,7 +195,15 @@ class ScanResultScreen extends ConsumerWidget {
               background: AppColors.background,
               height: _contentHeight(foods.length),
               children: [
-                _CaptureImage(path: scan?.photoPath),
+                // While a scan runs there is no result yet, so the hero
+                // shows what is being analysed rather than nothing.
+                _CaptureImage(
+                  path: loading
+                      ? ref
+                            .read(scanControllerProvider.notifier)
+                            .pendingPhotoPath
+                      : scan?.photoPath,
+                ),
                 // Sheet, overlapping the photo's lower third.
                 Positioned(
                   left: 0,
@@ -218,7 +241,10 @@ class ScanResultScreen extends ConsumerWidget {
                   top: 73,
                   width: 200,
                   height: 36,
-                  child: Text('Scan', style: AppTypography.topBarTitle()),
+                  child: Text(
+                    _titleFor(scan?.input),
+                    style: AppTypography.topBarTitle(),
+                  ),
                 ),
                 Positioned(
                   left: 368,
@@ -229,9 +255,10 @@ class ScanResultScreen extends ConsumerWidget {
                 ),
 
                 // 2x2 macro grid: 184pt columns 20pt apart, 100pt rows 12 apart.
-                for (final (i, macro)
-                    in _macros(scan?.nutrition ?? Nutrition.zero, targets)
-                        .indexed)
+                for (final (i, macro) in _macros(
+                  scan?.nutrition ?? Nutrition.zero,
+                  targets,
+                ).indexed)
                   Positioned(
                     left: 20 + (i.isOdd ? 204 : 0),
                     top: _gridTop + (i >= 2 ? 112 : 0),
@@ -243,7 +270,11 @@ class ScanResultScreen extends ConsumerWidget {
                 for (final (i, food) in foods.indexed)
                   Positioned(
                     left: 20,
-                    top: _gridTop + _gridHeight + _gap + i * (_itemHeight + _gap),
+                    top:
+                        _gridTop +
+                        _gridHeight +
+                        _gap +
+                        i * (_itemHeight + _gap),
                     width: 388,
                     child: _FoodItemCard(
                       food: food,
@@ -252,18 +283,18 @@ class ScanResultScreen extends ConsumerWidget {
                       portion: result != null
                           ? 1
                           : ref
-                              .read(scanControllerProvider.notifier)
-                              .portionOf(food.id),
+                                .read(scanControllerProvider.notifier)
+                                .portionOf(food.id),
                       onPortion: result != null
                           ? null
                           : (factor) => ref
-                              .read(scanControllerProvider.notifier)
-                              .adjustPortion(food.id, factor),
+                                .read(scanControllerProvider.notifier)
+                                .adjustPortion(food.id, factor),
                       onRemove: result != null
                           ? null
                           : () => ref
-                              .read(scanControllerProvider.notifier)
-                              .removeItem(food.id),
+                                .read(scanControllerProvider.notifier)
+                                .removeItem(food.id),
                       onEdit: result != null
                           ? null
                           : () => _editItem(context, ref, food),
@@ -289,14 +320,13 @@ class ScanResultScreen extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'No food found in that photo',
+                          _emptyTitleFor(scan?.input),
                           style: AppTypography.cardTitle(),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           scan?.clarifyingQuestion ??
-                              'Try again with the plate filling more of the '
-                                  'frame, or describe the meal in words.',
+                              _emptyHintFor(scan?.input),
                           style: AppTypography.socialLabel(
                             color: AppColors.placeholder,
                           ),
@@ -316,7 +346,8 @@ class ScanResultScreen extends ConsumerWidget {
                     scan.confidence != FoodConfidence.high)
                   Positioned(
                     left: 20,
-                    top: _gridTop +
+                    top:
+                        _gridTop +
                         _gridHeight +
                         _gap +
                         foods.length * (_itemHeight + _gap) -
@@ -324,8 +355,7 @@ class ScanResultScreen extends ConsumerWidget {
                     width: 388,
                     height: 38,
                     child: Text(
-                      scan.clarifyingQuestion ??
-                          'AI estimate — adjust portions when you know better.',
+                      scan.clarifyingQuestion ?? _footnoteFor(scan.input),
                       style: AppTypography.meta(color: AppColors.placeholder),
                     ),
                   ),
@@ -343,12 +373,20 @@ class ScanResultScreen extends ConsumerWidget {
               ),
             ),
 
-            if (state.isLoading) _AnalysingOverlay(path: scan?.photoPath),
+            if (loading)
+              _AnalysingOverlay(
+                path: ref
+                    .read(scanControllerProvider.notifier)
+                    .pendingPhotoPath,
+              ),
             if (state.hasError)
               _ErrorOverlay(
-                message: ref.read(scanControllerProvider.notifier).errorMessage!,
-                outOfScans:
-                    ref.read(scanControllerProvider.notifier).outOfScans,
+                message: ref
+                    .read(scanControllerProvider.notifier)
+                    .errorMessage!,
+                outOfScans: ref
+                    .read(scanControllerProvider.notifier)
+                    .outOfScans,
                 onDismiss: onBack,
                 onUpgrade: onUpgrade,
               ),
@@ -357,6 +395,61 @@ class ScanResultScreen extends ConsumerWidget {
       ),
     );
   }
+
+  /// This screen is the end of four different journeys, and it used to claim
+  /// to be one.
+  ///
+  /// `ScanResult.input` has carried the origin since the model was written and
+  /// every repository sets it correctly — the screen simply never read it. So
+  /// describing a meal in words ended on a screen headed "Scan" that then said
+  /// "No food found in that photo", about a photo that was never taken. That
+  /// reads as the app having lost the thing you just typed.
+  static String _titleFor(ScanInput? input) => switch (input) {
+    ScanInput.text => 'Described',
+    ScanInput.barcode => 'Barcode',
+    ScanInput.search => 'Food',
+    // Photo and gallery both end in a picture of the plate.
+    _ => 'Scan',
+  };
+
+  static String _emptyTitleFor(ScanInput? input) => switch (input) {
+    ScanInput.text => 'No food found in that description',
+    ScanInput.barcode => 'Nothing found for that barcode',
+    ScanInput.search => 'No food found',
+    _ => 'No food found in that photo',
+  };
+
+  /// Only used when the model returned no clarifying question of its own —
+  /// which the prompt asks for on an empty result precisely so this screen has
+  /// something specific to say.
+  /// The line under the food list, which used to say "AI estimate" on every
+  /// path including the two that never touch the model.
+  ///
+  /// `CLAUDE.md` is explicit that barcode and search do not use the model — a
+  /// barcode identifies a product exactly and a search is someone telling us
+  /// what they ate — so calling either an estimate is both wrong and the kind
+  /// of wrong that makes the honest labels untrustworthy. `FoodSource`'s own
+  /// doc comment says it "drives the AI estimate labelling"; nothing read it.
+  static String _footnoteFor(ScanInput? input) => switch (input) {
+    ScanInput.barcode =>
+      'From the product label — adjust the portion if you ate less.',
+    ScanInput.search =>
+      'From the USDA database — adjust the portion to what you ate.',
+    _ => 'AI estimate — adjust portions when you know better.',
+  };
+
+  static String _emptyHintFor(ScanInput? input) => switch (input) {
+    ScanInput.text =>
+      'Try naming each food and roughly how much, for example '
+          '"two eggs and a slice of toast".',
+    ScanInput.barcode =>
+      'That product is not in the database yet. Try describing it in '
+          'words, or search for it by name.',
+    ScanInput.search => 'Try a simpler name, like "chicken breast".',
+    _ =>
+      'Try again with the plate filling more of the frame, or '
+          'describe the meal in words.',
+  };
 }
 
 /// The captured photo, or the artboard's stand-in before a real camera exists.
@@ -376,15 +469,15 @@ class _CaptureImage extends StatelessWidget {
   /// still loading — which put a picture of fajitas above "Chicken breast,
   /// stewed" and read as the app having recognised that dish. It had not.
   static Widget _standIn() => ColoredBox(
-        color: AppColors.inkMuted,
-        child: Center(
-          child: Icon(
-            Icons.restaurant_menu,
-            size: 56,
-            color: AppColors.placeholder.withValues(alpha: 0.5),
-          ),
-        ),
-      );
+    color: AppColors.inkMuted,
+    child: Center(
+      child: Icon(
+        Icons.restaurant_menu,
+        size: 56,
+        color: AppColors.placeholder.withValues(alpha: 0.5),
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -713,16 +806,15 @@ class _ErrorOverlay extends ConsumerWidget {
     if (granted == null) {
       final problem = controller.errorMessage;
       if (problem != null) {
-        messenger.showSnackBar(SnackBar(content: Text(problem)));
+        messenger.showSnackBar(appToast(problem, tone: ToastTone.error));
       }
       return;
     }
 
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          granted == 1 ? '1 scan added.' : '$granted scans added.',
-        ),
+      appToast(
+        granted == 1 ? '1 scan added.' : '$granted scans added.',
+        tone: ToastTone.success,
       ),
     );
     // Straight back into the scan they were trying to do, rather than making
@@ -732,8 +824,7 @@ class _ErrorOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final canWatch =
-        outOfScans && ref.watch(adsServiceProvider).rewardedReady;
+    final canWatch = outOfScans && ref.watch(adsServiceProvider).rewardedReady;
     final busy = ref.watch(rewardControllerProvider).isLoading;
 
     return ColoredBox(
@@ -785,7 +876,7 @@ class _ErrorOverlay extends ConsumerWidget {
                     label: AdConfig.scansPerRewardedAd == 1
                         ? 'Or watch an ad for 1 scan'
                         : 'Or watch an ad for '
-                            '${AdConfig.scansPerRewardedAd} scans',
+                              '${AdConfig.scansPerRewardedAd} scans',
                     onPressed: busy ? null : () => _watchAd(context, ref),
                   ),
                 ),
@@ -898,8 +989,10 @@ class _ProgressBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('${(percent * 100).round()}%',
-                style: AppTypography.meta(color: AppColors.ink)),
+            Text(
+              '${(percent * 100).round()}%',
+              style: AppTypography.meta(color: AppColors.ink),
+            ),
             Text('100%', style: AppTypography.meta(color: AppColors.ink)),
           ],
         ),
@@ -1003,8 +1096,9 @@ class _FoodItemCard extends StatelessWidget {
               height: 19,
               child: Row(
                 children: [
-                  for (final (i, part)
-                      in NutritionFormat.macroRow(food.nutrition).indexed) ...[
+                  for (final (i, part) in NutritionFormat.macroRow(
+                    food.nutrition,
+                  ).indexed) ...[
                     if (i > 0) ...[
                       const SizedBox(width: 8),
                       const SizedBox(
@@ -1067,11 +1161,16 @@ class _CheckThisChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 12, color: AppColors.accentOrange),
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 12,
+            color: AppColors.accentOrange,
+          ),
           const SizedBox(width: 4),
-          Text('Check this',
-              style: AppTypography.divider(color: AppColors.accentOrange)),
+          Text(
+            'Check this',
+            style: AppTypography.divider(color: AppColors.accentOrange),
+          ),
         ],
       ),
     );
@@ -1081,11 +1180,7 @@ class _CheckThisChip extends StatelessWidget {
 /// One step of the portion control, in the segmented control's own language:
 /// the selected step is filled #FF5A16 with white copy, the rest outlined.
 class _PortionChip extends StatelessWidget {
-  const _PortionChip({
-    required this.label,
-    required this.selected,
-    this.onTap,
-  });
+  const _PortionChip({required this.label, required this.selected, this.onTap});
 
   final String label;
   final bool selected;

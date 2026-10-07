@@ -12,7 +12,12 @@ import 'widgets/premium_widgets.dart';
 /// The only frame in the flow with a close button rather than a back button,
 /// and the only one offering a way past the paywall ("Skip").
 class PremiumOfferScreen extends StatelessWidget {
-  const PremiumOfferScreen({super.key, this.onClose, this.onUpgrade, this.onSkip});
+  const PremiumOfferScreen({
+    super.key,
+    this.onClose,
+    this.onUpgrade,
+    this.onSkip,
+  });
 
   final VoidCallback? onClose;
   final VoidCallback? onUpgrade;
@@ -70,13 +75,25 @@ class PremiumOfferScreen extends StatelessWidget {
               width: 318,
               height: 199,
             ),
+            // Full content width, no fixed height, and it starts higher.
+            //
+            // The artboard's 322 x 42 box held "50% OFF Your First Year" — the
+            // line that had to go, because there is no introductory offer
+            // behind it. The replacement is longer, wraps to two lines at 28pt,
+            // and the 42pt box is exactly one line tall, so the second line was
+            // clipped: the screen read "Everything, without the" and stopped.
+            // A sentence that ends mid-phrase on the paywall is worse than the
+            // claim it replaced.
+            //
+            // It sizes to its own content now. The gap between the artwork
+            // (ends y=565) and the button (y=693) is 128pt, which is three
+            // lines of room for a two-line sentence.
             Positioned(
-              left: 53,
-              top: 619,
-              width: 322,
-              height: 42,
+              left: 20,
+              top: 597,
+              width: 388,
               child: Text(
-                '50% OFF Your First Year',
+                'Everything, without the limits',
                 style: AppTypography.authTitle(),
                 textAlign: TextAlign.center,
               ),

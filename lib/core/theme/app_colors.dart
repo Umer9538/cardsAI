@@ -39,6 +39,13 @@ abstract final class AppColors {
   static const Color error = Color(0xFFC93838);
 
   /// Premium plan card fill.
+  /// The blue from the splash collage's card artwork.
+  ///
+  /// An exact Figma fill like the rest, taken from the one place the design
+  /// uses a blue — water needed a colour and inventing one would have been
+  /// the first value in this file that came from nowhere.
+  static const Color accentBlue = Color(0xFF1894E0);
+
   static const Color planYellow = Color(0xFFF5F378);
 
   /// Disabled / de-emphasised action label ("Skip").

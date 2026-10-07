@@ -98,10 +98,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(profile?.name ?? '',
-                                  style: AppTypography.cardHeading()),
+                                  style: AppTypography.cardHeading(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 4),
+                              // One line each. The card is a fixed artboard
+                              // height, and a long address wrapped to a
+                              // second line and overflowed it by 21px.
                               Text(profile?.email ?? '',
-                                  style: AppTypography.label()),
+                                  style: AppTypography.label(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
                             ],
                           ),
                         ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -66,7 +67,7 @@ class CameraSession extends AsyncNotifier<CameraController?> {
         'CameraAccessDeniedWithoutPrompt' ||
         'AudioAccessDenied' ||
         'cameraPermission' =>
-          'Carbsai needs camera access to scan a meal. You can turn it on in '
+          'Carbs AI needs camera access to scan a meal. You can turn it on in '
               'Settings.',
         'CameraAccessRestricted' =>
           'Camera access is restricted on this device.',
@@ -111,6 +112,40 @@ class CameraSession extends AsyncNotifier<CameraController?> {
     }
   }
 }
+
+/// The photo camera's light.
+///
+/// Separate from [CameraSession] because the torch is a *setting* on a
+/// controller rather than part of what the session resolves to, and because it
+/// has to reset when the controller does: a new controller starts with the
+/// light off, so a flag that outlived the session would claim the torch was on
+/// over a camera that is dark.
+class CameraTorch extends Notifier<bool> {
+  @override
+  bool build() {
+    // Rebuilt — and so reset to off — whenever the session is.
+    ref.watch(cameraSessionProvider);
+    return false;
+  }
+
+  Future<void> toggle() async {
+    final controller = ref.read(cameraSessionProvider).value;
+    if (controller == null || !controller.value.isInitialized) return;
+    final next = !state;
+    try {
+      await controller.setFlashMode(next ? FlashMode.torch : FlashMode.off);
+      state = next;
+    } on CameraException catch (e) {
+      // A device with no light, or one that refuses while the camera is
+      // reconfiguring. Leaving the flag alone is what keeps the button
+      // honest about what the hardware is actually doing.
+      debugPrint('torch unavailable: ${e.code}');
+    }
+  }
+}
+
+final cameraTorchProvider =
+    NotifierProvider<CameraTorch, bool>(CameraTorch.new);
 
 final cameraSessionProvider =
     AsyncNotifierProvider<CameraSession, CameraController?>(CameraSession.new);

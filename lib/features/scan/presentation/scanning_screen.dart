@@ -4,10 +4,13 @@ import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/ads/ads_providers.dart';
+import '../../../core/app_config.dart';
+import '../../../core/providers/providers.dart';
 import '../../../core/design/design_canvas.dart';
 import '../../../core/repositories/repositories.dart';
 import '../../../core/theme/app_colors.dart';
@@ -17,6 +20,7 @@ import 'barcode_scanner_view.dart';
 import 'camera_session.dart';
 import 'widgets/barcode_entry_sheet.dart';
 import 'widgets/item_edit_sheet.dart';
+import '../../../core/design/app_toast.dart';
 
 /// Capture modes offered above the shutter.
 enum ScanMode {
@@ -121,6 +125,27 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
   /// mention — it is deliberate, not latency to be optimised away.
   bool _switching = false;
 
+  /// The barcode reader's controller, while one exists.
+  ///
+  /// Owned by [BarcodeScannerView] — it is created and disposed with that
+  /// widget, because two packages cannot hold the camera at once. This is a
+  /// borrowed reference, held only so the torch button can reach it, and
+  /// nulled the moment the view lets go.
+  MobileScannerController? _scanner;
+
+  void _onScannerController(MobileScannerController? controller) {
+    // Deferred to after the frame, because both ends of this land inside our
+    // own build: the view reports its controller from `initState`, which runs
+    // while this widget is still building the Positioned that contains it, and
+    // reports null from `dispose`, which runs during the teardown of the same
+    // build. Calling setState from either is the "called during build"
+    // assertion.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _scanner == controller) return;
+      setState(() => _scanner = controller);
+    });
+  }
+
   static const Duration _handoff = Duration(milliseconds: 350);
 
   /// Held so it can be cancelled. A bare `Future.delayed` outlives the widget,
@@ -161,13 +186,27 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
         return;
       }
 
+      // A camera that has not finished opening is not a failure, and it is
+      // certainly not a reason to analyse the stand-in photograph at the cost
+      // of a scan — which is what a shutter tap in the first second used to
+      // do.
+      // Only where a scan costs something. On the local backend there is no
+      // camera in a test or a simulator and the stand-in photograph is the
+      // point of that backend.
+      final session = ref.read(cameraSessionProvider);
+      if (session.isLoading && ref.read(backendProvider) != AppBackend.local) {
+        if (!mounted) return;
+        showToast(context, 'The camera is still starting…');
+        return;
+      }
+
       final path = await _takePhoto();
       if (!mounted) return;
       widget.onCaptured?.call(_mode, path, _hint);
     } on RepositoryException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+          .showSnackBar(appToast(e.message, tone: ToastTone.error));
     } catch (error, stack) {
       // A shutter tap that does nothing at all is the worst failure this screen
       // has: there is no message, nothing to retry against, and no way to tell
@@ -177,10 +216,10 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
       // PlatformException out of the compressor does.
       debugPrint('capture failed: $error\n$stack');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('That photo could not be taken. Try again.'),
-        ),
+      showToast(
+        context,
+        'That photo could not be taken. Try again.',
+        tone: ToastTone.error,
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -284,12 +323,14 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
     } on RepositoryException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+          .showSnackBar(appToast(e.message, tone: ToastTone.error));
     } catch (error, stack) {
       debugPrint('pick failed: $error\n$stack');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('That photo could not be opened.')),
+      showToast(
+        context,
+        'That photo could not be opened.',
+        tone: ToastTone.error,
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -367,7 +408,10 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
             // mistake the [_WindowCutout] comment warns about.
             if (_mode == ScanMode.barcode && !_switching)
               Positioned.fill(
-                child: BarcodeScannerView(onDetected: _onDetected),
+                child: BarcodeScannerView(
+                  onDetected: _onDetected,
+                  onController: _onScannerController,
+                ),
               ),
 
             // Black at 50% over the scrim blur, then the same preview redrawn
@@ -407,6 +451,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
                 sweeping: _mode == ScanMode.barcode,
                 waking: _switching,
                 confirmed: _confirmed,
+                wash: _mode != ScanMode.barcode,
               ),
             ),
 
@@ -448,6 +493,30 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
               height: 36,
               child: Text(_mode.label, style: AppTypography.topBarTitle()),
             ),
+            // The torch, beside the close button, in both camera modes.
+            //
+            // A barcode is read off a printed label and a plate is
+            // photographed wherever it was cooked — both are exactly what a
+            // dim kitchen defeats. It is 52 to the left of the close button,
+            // the same spacing the header on Home uses between its two.
+            //
+            // Gallery has no camera of its own, so no light to offer.
+            if (_mode == ScanMode.barcode && _scanner != null)
+              Positioned(
+                left: 316,
+                top: 71,
+                width: 40,
+                height: 40,
+                child: _ScannerTorch(controller: _scanner!),
+              )
+            else if (_mode == ScanMode.camera)
+              const Positioned(
+                left: 316,
+                top: 71,
+                width: 40,
+                height: 40,
+                child: _CameraTorch(),
+              ),
             Positioned(
               left: 368,
               top: 71,
@@ -807,11 +876,29 @@ class _Viewfinder extends StatefulWidget {
     this.sweeping = false,
     this.waking = false,
     this.confirmed = false,
+    this.wash = true,
   });
 
   final bool sweeping;
   final bool waking;
   final bool confirmed;
+
+  /// The artboard's white gradient over the lower half of the window.
+  ///
+  /// It belongs to the camera, where it separates the plate from the controls
+  /// under it. In barcode mode it is actively harmful, which is what "the
+  /// corners look wrong" turned out to be: the gradient ends at exactly the
+  /// window's bottom edge at its brightest stop, so a hard 50%-white-to-dark
+  /// boundary traced the whole bottom edge and both bottom corners and read as
+  /// a solid white border — straight across the 155pt centre gap the brackets
+  /// deliberately leave open. The bottom brackets are white too, so on that
+  /// field they lost all contrast and stopped reading as corners at all, while
+  /// the top pair sat on the dark surround and looked right. The brackets
+  /// themselves are drawn by one path and are exactly symmetric.
+  ///
+  /// It also covers the lower third of the frame, which is where a barcode
+  /// usually is.
+  final bool wash;
 
   @override
   State<_Viewfinder> createState() => _ViewfinderState();
@@ -874,27 +961,34 @@ class _ViewfinderState extends State<_Viewfinder>
         // Figma: white 20% -> 100%, with the whole fill at 50% opacity, so the
         // effective alpha runs 0.1 -> 0.5. Taking the stops at face value
         // washes the bottom of the window to pure white.
-        Positioned(
-          left: 0,
-          top: 207,
-          right: 0,
-          height: 205,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(32),
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.white.withValues(alpha: 0.1),
-                  AppColors.white.withValues(alpha: 0.5),
-                ],
+        if (widget.wash)
+          Positioned(
+            left: 0,
+            top: 207,
+            right: 0,
+            height: 205,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(32),
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.white.withValues(alpha: 0.1),
+                    // Was 0.5 flat to the edge, which put a hard bright line
+                    // along the bottom of the window. It peaks just inside and
+                    // falls away again, so the fill has no visible boundary
+                    // and the bottom brackets keep their contrast.
+                    AppColors.white.withValues(alpha: 0.42),
+                    AppColors.white.withValues(alpha: 0.06),
+                  ],
+                  stops: const [0, 0.78, 1],
+                ),
               ),
             ),
           ),
-        ),
         Positioned.fill(
           child: AnimatedBuilder(
             animation: _controller,
@@ -1305,6 +1399,14 @@ class _NoteSheetState extends State<_NoteSheet> {
                   controller: _controller,
                   autofocus: true,
                   maxLines: 3,
+                  // The Worker clamps the hint too — an unbounded string is an
+                  // unbounded bill — but there is no reason to send it first.
+                  maxLength: 200,
+                  buildCounter: (_, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => null,
                   textCapitalization: TextCapitalization.sentences,
                   style: AppTypography.body(),
                   cursorColor: AppColors.primary,
@@ -1358,4 +1460,136 @@ class _NoteSheetState extends State<_NoteSheet> {
       ),
     );
   }
+}
+
+/// The flashlight, for reading a label in a dim room.
+///
+/// Rebuilt from the controller rather than from local state: the torch can be
+/// turned off by the platform — another app taking the camera, the phone
+/// getting hot — and a button that keeps claiming it is on is worse than no
+/// button. `TorchState.unavailable` draws nothing at all, because most tablets
+/// and all front cameras have no light to offer.
+/// The flashlight, for reading a label or a plate in a dim room.
+///
+/// A plain on/off button. The two scan modes run two different camera
+/// packages — `camera` for the photo, `mobile_scanner` for the barcode — and
+/// neither exposes the other's torch, so the *state* comes from whichever one
+/// is live and only the drawing is shared.
+@visibleForTesting
+class TorchButton extends StatelessWidget {
+  const TorchButton({super.key, required this.on, required this.onTap});
+
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      toggled: on,
+      label: on ? 'Turn the flashlight off' : 'Turn the flashlight on',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: on ? AppColors.white : AppColors.ink.withValues(alpha: 0.45),
+            border: Border.all(
+              color: on ? AppColors.white : AppColors.outline,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: CustomPaint(
+            size: const Size(18, 18),
+            // Drawn rather than an `Icon`: Material's icon font is tree-shaken
+            // in release and not loaded under `flutter test` at all, so a glyph
+            // here is a tofu box in every render test.
+            painter: _Bolt(on ? AppColors.ink : AppColors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The barcode reader's torch.
+///
+/// Rebuilt from the controller rather than from local state: the torch can be
+/// turned off by the platform — another app taking the camera, the phone
+/// getting hot — and a button that keeps claiming it is on is worse than no
+/// button. `TorchState.unavailable` draws nothing, because most tablets and
+/// every front camera have no light to offer.
+class _ScannerTorch extends StatelessWidget {
+  const _ScannerTorch({required this.controller});
+
+  final MobileScannerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<MobileScannerState>(
+      valueListenable: controller,
+      builder: (context, state, _) {
+        if (!state.isInitialized ||
+            state.torchState == TorchState.unavailable) {
+          return const SizedBox.shrink();
+        }
+        return TorchButton(
+          on: state.torchState == TorchState.on,
+          // Best effort: the platform refuses while the camera is stopping,
+          // and an unhandled async error over a working scanner is worse than
+          // a tap that did nothing.
+          onTap: () =>
+              unawaited(controller.toggleTorch().catchError((Object _) {})),
+        );
+      },
+    );
+  }
+}
+
+/// The photo camera's torch.
+///
+/// The `camera` package has no "does this device have a light" query, so this
+/// cannot hide itself the way the scanner's can; [CameraTorch.toggle] swallows
+/// the refusal and leaves the flag alone instead, so the button never claims
+/// a light the hardware did not switch on.
+class _CameraTorch extends ConsumerWidget {
+  const _CameraTorch();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ready = ref.watch(cameraSessionProvider).value != null;
+    if (!ready) return const SizedBox.shrink();
+    return TorchButton(
+      on: ref.watch(cameraTorchProvider),
+      onTap: () => unawaited(ref.read(cameraTorchProvider.notifier).toggle()),
+    );
+  }
+}
+
+/// A lightning bolt, in a unit box.
+class _Bolt extends CustomPainter {
+  const _Bolt(this.colour);
+
+  final Color colour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    canvas.drawPath(
+      Path()
+        ..moveTo(w * 0.56, h * 0.04)
+        ..lineTo(w * 0.20, h * 0.56)
+        ..lineTo(w * 0.46, h * 0.56)
+        ..lineTo(w * 0.42, h * 0.96)
+        ..lineTo(w * 0.80, h * 0.42)
+        ..lineTo(w * 0.53, h * 0.42)
+        ..close(),
+      Paint()..color = colour,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Bolt old) => old.colour != colour;
 }

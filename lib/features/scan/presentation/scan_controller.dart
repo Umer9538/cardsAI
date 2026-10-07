@@ -66,6 +66,21 @@ class ScanController extends AsyncNotifier<ScanResult?> {
   String? _lastHint;
   String? _lastDescription;
 
+  /// The photograph currently being analysed, while one is.
+  ///
+  /// The result screen cannot take this from `state.value`: assigning a bare
+  /// `AsyncLoading()` on an `AsyncNotifier` **keeps the previous value**, so
+  /// throughout a new scan `state.value` is still the *last* result. The hero
+  /// and the progress overlay both read `scan?.photoPath` and therefore showed
+  /// the previous meal's photograph — a tester photographed their lunch and
+  /// watched "Estimating portions" sweep over a picture of someone at a desk,
+  /// then scanned a packet and watched it sweep over the previous product.
+  ///
+  /// Null for barcode and describe: neither has a local photograph, and the
+  /// honest answer there is no picture rather than a stale one.
+  String? get pendingPhotoPath => _pendingPhotoPath;
+  String? _pendingPhotoPath;
+
   /// Results already produced this session, keyed by image and note.
   ///
   /// The model samples, so asking it twice about one photograph gives two
@@ -88,6 +103,7 @@ class ScanController extends AsyncNotifier<ScanResult?> {
 
   Future<void> analyzePhoto(String imagePath, {String? hint}) {
     _lastImagePath = imagePath;
+    _pendingPhotoPath = imagePath;
     _lastHint = hint;
     _lastDescription = null;
     return _analyze(imagePath, hint: hint);
@@ -97,6 +113,7 @@ class ScanController extends AsyncNotifier<ScanResult?> {
     // Recorded here too, or `retryLast` after a gallery scan has nothing to
     // retry — which is exactly the path a rewarded ad hands back to.
     _lastImagePath = imagePath;
+    _pendingPhotoPath = imagePath;
     _lastHint = hint;
     _lastDescription = null;
     return _analyze(imagePath, hint: hint, input: ScanInput.gallery);
@@ -116,11 +133,9 @@ class ScanController extends AsyncNotifier<ScanResult?> {
     }
 
     return _run(() async {
-      final result = await ref.read(scanRepositoryProvider).analyzePhoto(
-            imagePath: imagePath,
-            hint: hint,
-            input: input,
-          );
+      final result = await ref
+          .read(scanRepositoryProvider)
+          .analyzePhoto(imagePath: imagePath, hint: hint, input: input);
       _seen[_key(imagePath, hint)] = result;
       return result;
     });
@@ -129,7 +144,10 @@ class ScanController extends AsyncNotifier<ScanResult?> {
   Future<void> describe(String description) {
     _lastDescription = description;
     _lastImagePath = null;
-    return _run(() => ref.read(scanRepositoryProvider).analyzeText(description));
+    _pendingPhotoPath = null;
+    return _run(
+      () => ref.read(scanRepositoryProvider).analyzeText(description),
+    );
   }
 
   /// Barcode goes to the food database, not the model.
@@ -138,6 +156,9 @@ class ScanController extends AsyncNotifier<ScanResult?> {
   /// would be both worse and billable. A product the database has never seen is
   /// a normal outcome, and says so.
   Future<void> scanBarcode(String barcode) async {
+    _lastImagePath = null;
+    _lastDescription = null;
+    _pendingPhotoPath = null;
     state = const AsyncLoading();
     _portions.clear();
 
@@ -236,9 +257,9 @@ class ScanController extends AsyncNotifier<ScanResult?> {
   }
 
   void renameItem(String itemId, String name) => _edit(
-        (item) =>
-            item.id == itemId ? item.copyWith(name: name, userEdited: true) : item,
-      );
+    (item) =>
+        item.id == itemId ? item.copyWith(name: name, userEdited: true) : item,
+  );
 
   /// Replaces one item's name, weight and figures with what the user typed.
   ///
@@ -311,11 +332,50 @@ class ScanController extends AsyncNotifier<ScanResult?> {
         code: 'no-result',
       );
     }
+    // One tap, one meal. The write is a round trip and the button stays live
+    // through it, so a double tap — or "Add to My Diet" followed by the
+    // favourite heart — used to put the same plate in the diary twice and
+    // double the day's total.
+    if (_logging != null) return _logging!;
 
+    // A plate the model found nothing in has nothing to log. The heart
+    // bypassed the disabled CTA and wrote an empty meal.
+    if (current.items.isEmpty) {
+      throw const RepositoryException(
+        'There is no food to log from that one.',
+        code: 'no-items',
+      );
+    }
+
+    final future = _log(current, eatenAt: eatenAt, favourite: favourite);
+    _logging = future;
+    try {
+      return await future;
+    } finally {
+      _logging = null;
+    }
+  }
+
+  /// In-flight [logMeal], so a second tap joins the first rather than writing
+  /// a second meal.
+  Future<Meal>? _logging;
+
+  Future<Meal> _log(
+    ScanResult current, {
+    DateTime? eatenAt,
+    bool favourite = false,
+  }) async {
     final diary = ref.read(diaryRepositoryProvider);
-    final meal =
-        current.toMeal(id: _uuid.v4(), eatenAt: eatenAt, favourite: favourite);
+    final meal = current.toMeal(
+      id: _uuid.v4(),
+      eatenAt: eatenAt,
+      favourite: favourite,
+    );
     await diary.addMeal(meal);
+    // Today's reminder for this slot now has nothing to ask for, and the
+    // median it is derived from has moved. Not awaited: the meal is already
+    // written and the caller is waiting to navigate.
+    unawaited(ref.read(mealRemindersProvider).mealLogged());
     state = const AsyncData(null);
 
     final localPath = meal.photoPath;

@@ -209,7 +209,18 @@ class FeatureRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(text, style: AppTypography.body()),
+          // Flexible, not fixed: a `Row` holding a bare `Text` overflows the
+          // moment the copy is longer than the artboard's example — which is
+          // exactly what happened when the feature list was rewritten to name
+          // real features.
+          Expanded(
+            child: Text(
+              text,
+              style: AppTypography.body(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );

@@ -78,13 +78,13 @@ function emailBody(code: string): { text: string; html: string } {
   const spaced = code.split("").join(" ");
   return {
     text:
-      `Your Carbsai verification code is ${code}.\n\n` +
+      `Your Carbs AI verification code is ${code}.\n\n` +
       `It expires in ${RULES.ttlMinutes} minutes. ` +
       "If you did not ask for this, you can ignore this email.",
     html: `
 <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:420px;margin:0 auto;padding:32px 24px;color:#121212">
   <h1 style="font-size:20px;margin:0 0 8px">Verify your email</h1>
-  <p style="margin:0 0 24px;color:#555;font-size:15px">Enter this code in Carbsai to finish setting up your account.</p>
+  <p style="margin:0 0 24px;color:#555;font-size:15px">Enter this code in Carbs AI to finish setting up your account.</p>
   <div style="font-size:32px;font-weight:600;letter-spacing:8px;background:#F5F3F0;border-radius:12px;padding:20px;text-align:center">${spaced}</div>
   <p style="margin:24px 0 0;color:#777;font-size:13px">Expires in ${RULES.ttlMinutes} minutes. If you did not ask for this, ignore this email.</p>
 </div>`.trim(),
@@ -154,7 +154,7 @@ export async function sendEmailOtp(
   try {
     await sendEmail(env, {
       to: user.email,
-      subject: `${code} is your Carbsai verification code`,
+      subject: `${code} is your Carbs AI verification code`,
       text,
       html,
     });

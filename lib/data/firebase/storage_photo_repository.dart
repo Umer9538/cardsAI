@@ -40,7 +40,11 @@ class StoragePhotoRepository implements PhotoRepository {
           cacheControl: 'public, max-age=31536000, immutable',
         ),
       );
-      return ref.getDownloadURL();
+      // Awaited, not returned. An unawaited Future escapes its own catch, so
+      // a `getDownloadURL` that failed threw a raw FirebaseException past the
+      // block whose entire job is to turn one into a sentence a person can
+      // read — and the caller got the error this screen exists to prevent.
+      return await ref.getDownloadURL();
     } on FirebaseException catch (e) {
       // A failed upload must not lose the meal — the numbers are the point and
       // they are already saved. The diary keeps the local path.

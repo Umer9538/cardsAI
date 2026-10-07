@@ -52,12 +52,16 @@ class SubscriptionPlan {
       name: 'Monthly Plan',
       price: 4.99,
       period: BillingPeriod.monthly,
+      // Every line is something the app does today. The previous list
+      // promised weekly AI progress reports and exclusive diet programs,
+      // neither of which exists — selling a feature that is not there is an
+      // Apple 2.3.1 rejection and, worse, a refund request.
       features: [
-        'AI-Powered Meal Suggestions',
-        'Advanced Nutrient Breakdown',
-        'Access to All Premium Diets',
-        'Unlimited Saved Foods & Meals',
-        'Weekly AI Progress Reports',
+        '300 AI meal scans a month',
+        'Meal plans built around your taste',
+        'No ads, anywhere',
+        'Photo, barcode and text logging',
+        'Full macro and fibre breakdown',
       ],
     ),
     SubscriptionPlan(
@@ -66,11 +70,11 @@ class SubscriptionPlan {
       price: 29.99,
       period: BillingPeriod.annual,
       features: [
-        'AI-Powered Meal Suggestions',
-        'Full Nutrient Analysis',
-        'Exclusive Diet Programs',
-        'Unlimited Saved Foods & Meals',
-        'Weekly AI Progress Reports',
+        '300 AI meal scans a month',
+        'Meal plans built around your taste',
+        'No ads, anywhere',
+        'Photo, barcode and text logging',
+        'Two months free vs monthly',
       ],
     ),
   ];

@@ -8,7 +8,8 @@ rules_version = '2';
 // by a more specific deny underneath it. With a wildcard, a user could write
 // their own quota document and hand themselves unlimited scans.
 //
-// Client-writable:  meals, plans, notifications, prefs
+// Client-writable:  meals, plans, weights, water, activity, notifications,
+//                   prefs
 // Server-only:      scans, quota   (written by Cloud Functions via the Admin
 //                                   SDK, which bypasses these rules entirely)
 //
@@ -31,6 +32,21 @@ service cloud.firestore {
       // The weight log. Client-writable like the diary: it is the user's own
       // measurement of themselves, and nothing on the server depends on it.
       match /weights/{day} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Water and exercise. Client-writable for the same reason as the
+      // weight log: they are the person's own record of themselves, nothing
+      // on the server reads them, and no money or quota depends on them.
+      //
+      // Without these blocks both fall through to the catch-all deny below,
+      // which is not a loud failure — the offline cache accepts the write and
+      // serves it back, so the app looks right until the next cold start.
+      match /water/{entryId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /activity/{entryId} {
         allow read, write: if isOwner(userId);
       }
 

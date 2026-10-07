@@ -24,31 +24,48 @@ void main() {
     );
     await tester.pump();
 
+    // Swept over the activity count too, because the card above the diary now
+    // grows with the day's bouts — so the shift is a function, and a constant
+    // there would draw the diary over a second logged walk.
     for (var meals = 0; meals <= 4; meals++) {
-      // The section starts at a fixed y and grows downward; the card follows
-      // it. Both are computed from the same constants the screen uses, so this
-      // asserts the relationship rather than restating the arithmetic.
-      final sectionTop = HomeScreen.mealsTop;
-      final sectionBottom = sectionTop + HomeScreen.mealsHeight(meals);
-      final cardTop = HomeScreen.dietCardTop(meals);
+      for (var bouts = 0; bouts <= 4; bouts++) {
+        // The section starts at a computed y and grows downward; the card
+        // follows it. Both come from the same functions the screen uses, so
+        // this asserts the relationship rather than restating the arithmetic.
+        final sectionTop = HomeScreen.mealsTop(bouts);
+        final sectionBottom = sectionTop + HomeScreen.mealsHeight(meals);
+        final cardTop = HomeScreen.dietCardTop(meals, bouts);
 
-      expect(
-        cardTop,
-        greaterThanOrEqualTo(sectionBottom),
-        reason: 'with $meals meals the plan card is drawn over the diary',
-      );
+        expect(
+          cardTop,
+          greaterThanOrEqualTo(sectionBottom),
+          reason: 'with $meals meals and $bouts bouts the plan card is drawn '
+              'over the diary',
+        );
+      }
     }
   });
 
   test('the canvas is tall enough to hold everything it positions', () {
     for (var meals = 0; meals <= 6; meals++) {
-      final lastRowBottom = HomeScreen.dietCardTop(meals) + 220 + 46;
-      expect(
-        HomeScreen.contentHeightFor(meals),
-        greaterThan(lastRowBottom),
-        reason: 'with $meals meals the plan card runs past the canvas',
-      );
+      for (var bouts = 0; bouts <= 4; bouts++) {
+        final lastRowBottom = HomeScreen.dietCardTop(meals, bouts) + 220 + 46;
+        expect(
+          HomeScreen.contentHeightFor(meals, bouts),
+          greaterThan(lastRowBottom),
+          reason: 'with $meals meals and $bouts bouts the plan card runs past '
+              'the canvas',
+        );
+      }
     }
+  });
+
+  test('one more bout moves everything below it down by one row', () {
+    final step = HomeScreen.mealsTop(2) - HomeScreen.mealsTop(1);
+    expect(step, greaterThan(0));
+    expect(HomeScreen.mealsTop(3) - HomeScreen.mealsTop(2), step);
+    // And the diary and the plan card move together with it.
+    expect(HomeScreen.dietCardTop(1, 2) - HomeScreen.dietCardTop(1, 1), step);
   });
 
   test('one more meal moves the card down by exactly one card', () {

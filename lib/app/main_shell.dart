@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/models.dart';
+import '../core/app_config.dart';
 import '../core/providers/providers.dart';
 import '../core/repositories/repositories.dart';
 import '../core/theme/app_colors.dart';
@@ -12,18 +14,21 @@ import '../features/app/presentation/widgets/bottom_nav.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/diets/presentation/diet_detail_screen.dart';
 import '../features/diets/presentation/diets_screen.dart';
-import '../features/diets/presentation/plan_builder_screen.dart';
+import '../features/diets/presentation/taste_quiz_screen.dart';
+import '../features/onboarding/presentation/onboarding_quiz_screen.dart';
 import '../features/favorites/presentation/favorites_screen.dart';
 import '../features/premium/presentation/plan_detail_screen.dart';
 import '../features/premium/presentation/premium_offer_screen.dart';
 import '../features/premium/presentation/premium_plans_screen.dart';
 import '../features/premium/presentation/review_summary_screen.dart';
+import '../features/premium/presentation/subscription_controller.dart';
 import '../features/scan/presentation/camera_session.dart';
 import '../features/scan/presentation/describe_meal_screen.dart';
 import '../features/scan/presentation/food_search_screen.dart';
 import '../features/scan/presentation/scan_controller.dart';
 import '../features/scan/presentation/scan_result_screen.dart';
 import '../features/scan/presentation/scanning_screen.dart';
+import '../features/scan/presentation/widgets/ai_disclosure.dart';
 import '../features/settings/presentation/change_password_screen.dart';
 import '../features/settings/presentation/legal_page_screen.dart';
 import '../features/settings/presentation/more_screen.dart';
@@ -31,6 +36,7 @@ import '../features/settings/presentation/notification_settings_screen.dart';
 import '../features/settings/presentation/payment_method_screen.dart';
 import '../features/settings/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../core/design/app_toast.dart';
 
 /// The signed-in application: four tabbed destinations plus a scan flow that
 /// opens over them.
@@ -76,23 +82,31 @@ class _MainShellState extends ConsumerState<MainShell>
   void _syncReminders() {
     if (!mounted) return;
     ref.read(mealRemindersProvider).refresh();
+    // The feed is derived from the diary and from the time of day — an
+    // unlogged lunch only becomes worth mentioning at 14:00 — so it is
+    // recomputed on the same beat as the reminders rather than once at start.
+    ref.invalidate(feedRefreshProvider);
   }
 
   Future<void> _push(Widget screen) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => screen),
-    );
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   void _selectTab(AppTab tab) {
     if (tab == AppTab.scan) {
-      _openScan();
+      unawaited(_openScan());
       return;
     }
     setState(() => _tab = tab);
   }
 
-  void _openScan() {
+  Future<void> _openScan() async {
+    // Told once, before anything leaves the device. Play requires the
+    // disclosure in the app and before the transfer, not only in the policy.
+    if (!await confirmAiDisclosure(context, ref)) return;
+    if (!mounted) return;
     _push(
       Builder(
         builder: (context) => ScanningScreen(
@@ -115,6 +129,18 @@ class _MainShellState extends ConsumerState<MainShell>
               builder: (c) => FoodSearchScreen(
                 onBack: () => Navigator.of(c).pop(),
                 onDone: () => _openResult(imagePath: null),
+                // Replaces the search screen rather than stacking on it: the
+                // search found nothing, so going "back" to it from describe
+                // would land on the dead end that was just escaped.
+                onDescribe: (query) => Navigator.of(c).pushReplacement(
+                  MaterialPageRoute<void>(
+                    builder: (d) => DescribeMealScreen(
+                      initialText: query,
+                      onBack: () => Navigator.of(d).pop(),
+                      onAnalysed: () => _openResult(imagePath: null),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -130,7 +156,19 @@ class _MainShellState extends ConsumerState<MainShell>
     final controller = ref.read(scanControllerProvider.notifier);
 
     // No path means no usable camera — a simulator, or a refused permission.
-    // Analysing the design's own photograph keeps the flow walkable there.
+    // Analysing the design's own photograph keeps the flow walkable there, but
+    // only where nothing is charged for it: against the real backend that is a
+    // paid scan of a stock plate, and the person is told their lunch is a
+    // salmon salad. On a device the shutter is blocked before this point; this
+    // is the second line of defence.
+    if (imagePath == null && ref.read(backendProvider) != AppBackend.local) {
+      showToast(
+        context,
+        'The camera is not ready yet. Try again in a moment.',
+        tone: ToastTone.error,
+      );
+      return;
+    }
     final path = imagePath ?? 'assets/images/app/scan_food.webp';
 
     switch (mode) {
@@ -166,7 +204,10 @@ class _MainShellState extends ConsumerState<MainShell>
             final messenger = ScaffoldMessenger.of(context);
             final meal = await controller.logMeal(favourite: true);
             messenger.showSnackBar(
-              SnackBar(content: Text('${meal.name} saved to favourites.')),
+              appToast(
+                '${meal.name} saved to favourites.',
+                tone: ToastTone.success,
+              ),
             );
             if (context.mounted) _afterLogging(context);
           },
@@ -228,6 +269,19 @@ class _MainShellState extends ConsumerState<MainShell>
         builder: (context) => PlanDetailScreen(
           plan: plan,
           onBack: () => Navigator.of(context).pop(),
+          onRestore: () => _restorePurchases(context),
+          onTerms: () => _push(
+            Builder(
+              builder: (c) =>
+                  LegalPageScreen.terms(onBack: () => Navigator.of(c).pop()),
+            ),
+          ),
+          onPrivacy: () => _push(
+            Builder(
+              builder: (c) =>
+                  LegalPageScreen.privacy(onBack: () => Navigator.of(c).pop()),
+            ),
+          ),
           onContinue: () => _push(
             Builder(
               builder: (context) => ReviewSummaryScreen(
@@ -243,38 +297,121 @@ class _MainShellState extends ConsumerState<MainShell>
     );
   }
 
+  /// Restore, from the paywall footer.
+  ///
+  /// Both stores require this: someone who reinstalled or changed device has
+  /// already paid, and without it their only route back to what they own is
+  /// paying again.
+
+  /// "Something else" on a plan someone built.
+  ///
+  /// Goes back through the quiz screen rather than generating inline, so the
+  /// sweep, the caption, the "taking longer than usual" line and the retry are
+  /// the same ones the first build used — and lands on the build step with the
+  /// stored answers already filled in, so nothing is asked twice.
+  ///
+  /// Offered only when there is something to rebuild from: a catalogue plan
+  /// was not built from anyone's answers, and a fresh install has none stored.
+  VoidCallback? _rebuildFrom(BuildContext c, DietPlan plan) {
+    final taste = ref.read(lastTasteProvider);
+    if (!plan.isMine || plan.builtFor.isEmpty || taste == null) return null;
+    return () => Navigator.of(c).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (q) => TasteQuizScreen(
+          rebuildFrom: taste,
+          onBack: () => Navigator.of(q).pop(),
+          onCreated: (next) => Navigator.of(q).pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (d) => DietDetailScreen(
+                plan: next,
+                onBack: () => Navigator.of(d).pop(),
+                onAdd: () => Navigator.of(d).pop(),
+                onRebuild: _rebuildFrom(d, next),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restorePurchases(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(appToast('Checking for previous purchases…'));
+    final ok = await ref
+        .read(subscriptionControllerProvider.notifier)
+        .restore();
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+    final premium = ref.read(isPremiumProvider);
+    messenger.showSnackBar(
+      appToast(
+        premium
+            ? 'Your subscription is active again.'
+            : ok
+            ? 'No previous purchase found on this account.'
+            : 'We could not reach the store. Try again in a moment.',
+        tone: premium
+            ? ToastTone.success
+            : ok
+            ? ToastTone.info
+            : ToastTone.error,
+      ),
+    );
+  }
+
   void _openSettingsDestination(String key) {
     switch (key) {
       case 'profile':
-        _push(Builder(
-          builder: (c) => ProfileScreen(
-            onBack: () => Navigator.of(c).pop(),
-            onSave: () => Navigator.of(c).pop(),
+        _push(
+          Builder(
+            builder: (c) => ProfileScreen(
+              onBack: () => Navigator.of(c).pop(),
+              onSave: () => Navigator.of(c).pop(),
+              // The quiz saves the profile and recomputes the targets itself;
+              // finishing it, or skipping it, just comes back here.
+              onEditGoal: () => Navigator.of(c).push(
+                MaterialPageRoute<void>(
+                  builder: (q) => OnboardingQuizScreen(
+                    onFinished: () => Navigator.of(q).pop(),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ));
+        );
       case 'password':
-        _push(Builder(
-          builder: (c) => ChangePasswordScreen(
-            onBack: () => Navigator.of(c).pop(),
-            onDone: () => Navigator.of(c).pop(),
+        _push(
+          Builder(
+            builder: (c) => ChangePasswordScreen(
+              onBack: () => Navigator.of(c).pop(),
+              onDone: () => Navigator.of(c).pop(),
+            ),
           ),
-        ));
+        );
       case 'notifications':
-        _push(Builder(
-          builder: (c) =>
-              NotificationSettingsScreen(onBack: () => Navigator.of(c).pop()),
-        ));
-      case 'payment':
-        _push(Builder(
-          builder: (c) => PaymentMethodScreen(
-            onBack: () => Navigator.of(c).pop(),
-            onUpgrade: _openPlans,
+        _push(
+          Builder(
+            builder: (c) =>
+                NotificationSettingsScreen(onBack: () => Navigator.of(c).pop()),
           ),
-        ));
+        );
+      case 'payment':
+        _push(
+          Builder(
+            builder: (c) => PaymentMethodScreen(
+              onBack: () => Navigator.of(c).pop(),
+              onUpgrade: _openPlans,
+            ),
+          ),
+        );
       case 'favorites':
-        _push(Builder(
-          builder: (c) => FavoritesScreen(onBack: () => Navigator.of(c).pop()),
-        ));
+        _push(
+          Builder(
+            builder: (c) =>
+                FavoritesScreen(onBack: () => Navigator.of(c).pop()),
+          ),
+        );
       case 'more':
         _openMore();
     }
@@ -289,10 +426,12 @@ class _MainShellState extends ConsumerState<MainShell>
           onOpen: (key) => _push(
             Builder(
               builder: (c2) => switch (key) {
-                'terms' =>
-                  LegalPageScreen.terms(onBack: () => Navigator.of(c2).pop()),
-                'privacy' =>
-                  LegalPageScreen.privacy(onBack: () => Navigator.of(c2).pop()),
+                'terms' => LegalPageScreen.terms(
+                  onBack: () => Navigator.of(c2).pop(),
+                ),
+                'privacy' => LegalPageScreen.privacy(
+                  onBack: () => Navigator.of(c2).pop(),
+                ),
                 _ => LegalPageScreen.help(onBack: () => Navigator.of(c2).pop()),
               },
             ),
@@ -338,12 +477,11 @@ class _MainShellState extends ConsumerState<MainShell>
     // the button was on.
     final error = ref.read(authControllerProvider).error;
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          error is RepositoryException
-              ? error.message
-              : 'Your account could not be deleted. Please try again.',
-        ),
+      appToast(
+        error is RepositoryException
+            ? error.message
+            : 'Your account could not be deleted. Please try again.',
+        tone: ToastTone.error,
       ),
     );
   }
@@ -369,6 +507,11 @@ class _MainShellState extends ConsumerState<MainShell>
     ) {
       _syncReminders();
     });
+
+    // Watched, not read: a FutureProvider nobody watches never runs, and the
+    // bell badge has to be right without opening the notifications screen
+    // first.
+    ref.watch(feedRefreshProvider);
 
     return PopScope(
       canPop: _tab == AppTab.home,
@@ -399,6 +542,7 @@ class _MainShellState extends ConsumerState<MainShell>
                 plan: plan,
                 onBack: () => Navigator.of(c).pop(),
                 onAdd: () => Navigator.of(c).pop(),
+                onRebuild: _rebuildFrom(c, plan),
               ),
             ),
           ),
@@ -413,27 +557,41 @@ class _MainShellState extends ConsumerState<MainShell>
         DietsScreen(
           tab: _dietsTab,
           onTabChanged: (t) => setState(() => _dietsTab = t),
-          onBuildPlan: () => _push(
-            Builder(
-              builder: (c) => PlanBuilderScreen(
-                onBack: () => Navigator.of(c).pop(),
-                onCreated: (plan) {
-                  // Replace rather than stack: going back from a plan you just
-                  // built should land on My Diets, not on the form that built
-                  // it.
-                  Navigator.of(c).pushReplacement(
-                    MaterialPageRoute<void>(
-                      builder: (c2) => DietDetailScreen(
-                        plan: plan,
-                        onBack: () => Navigator.of(c2).pop(),
-                        onAdd: () => Navigator.of(c2).pop(),
+          onBuildPlan: () async {
+            // The plan builder sends the person's targets and taste answers to
+            // the same provider, so it is behind the same one-time disclosure.
+            if (!await confirmAiDisclosure(context, ref)) return;
+            if (!mounted) return;
+            _push(
+              Builder(
+                builder: (c) => TasteQuizScreen(
+                  onBack: () => Navigator.of(c).pop(),
+                  onCreated: (plan) {
+                    // The comment below has always been the intent and the tab
+                    // was never switched, so backing out of a freshly built plan
+                    // landed on All Diets — where the catalogue is, and the new
+                    // plan is not. It reads as the build having done nothing.
+                    if (_dietsTab != DietsTab.mine) {
+                      setState(() => _dietsTab = DietsTab.mine);
+                    }
+                    // Replace rather than stack: going back from a plan you just
+                    // built should land on My Diets, not on the form that built
+                    // it.
+                    Navigator.of(c).pushReplacement(
+                      MaterialPageRoute<void>(
+                        builder: (c2) => DietDetailScreen(
+                          plan: plan,
+                          onBack: () => Navigator.of(c2).pop(),
+                          onAdd: () => Navigator.of(c2).pop(),
+                          onRebuild: _rebuildFrom(c2, plan),
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          ),
+            );
+          },
           onNavSelected: _selectTab,
           onPlanTap: (plan) => _push(
             Builder(
@@ -441,6 +599,7 @@ class _MainShellState extends ConsumerState<MainShell>
                 plan: plan,
                 onBack: () => Navigator.of(c).pop(),
                 onAdd: () => Navigator.of(c).pop(),
+                onRebuild: _rebuildFrom(c, plan),
               ),
             ),
           ),
@@ -448,8 +607,7 @@ class _MainShellState extends ConsumerState<MainShell>
         SettingsScreen(
           onNavSelected: _selectTab,
           onOpen: _openSettingsDestination,
-          onLogOut: () =>
-              ref.read(authControllerProvider.notifier).signOut(),
+          onLogOut: () => ref.read(authControllerProvider.notifier).signOut(),
         ),
       ],
     );

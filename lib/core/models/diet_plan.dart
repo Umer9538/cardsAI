@@ -18,7 +18,9 @@ class DietPlan {
     this.day = const [],
     this.isFavorite = false,
     this.isMine = false,
+    this.builtFor = const [],
     this.imageHeight = cardImageHeight,
+    this.createdAt,
   });
 
   /// Height the card reserves for its photo, in artboard points.
@@ -57,6 +59,29 @@ class DietPlan {
 
   /// Added to "My Diets".
   final bool isMine;
+
+  /// What a generated plan was built *for* — "South Asian", "No dairy",
+  /// "Under 15 min" — as short chips. Empty on every catalogue plan.
+  ///
+  /// This is `TasteProfile.summary`, frozen at generation. It is stored rather
+  /// than recomputed because the answers that produced it are not kept; the
+  /// plan is the record. A plan someone built from their own taste that looks
+  /// exactly like a catalogue card reads as another catalogue card, which is
+  /// the failure this field exists to prevent.
+  final List<String> builtFor;
+
+  /// When this plan was generated. Null for the catalogue, which has no
+  /// meaningful age.
+  ///
+  /// It exists so My Diets can put the newest plan first. Without it the two
+  /// backends disagreed about order and one of them was simply wrong: the
+  /// local store prepends, so a new plan appeared at the top, while Firestore
+  /// streamed `plans` with **no** `orderBy` and therefore returned documents
+  /// by id — `plan-mine-<uuid4>` interleaved with the catalogue's fixed ids.
+  /// A plan someone had just waited fifteen seconds for landed at a random
+  /// position in the list, under plans they had never built, which is exactly
+  /// what "the diet is not updating" looks like from the outside.
+  final DateTime? createdAt;
 
   /// Height of the artwork actually available.
   ///
@@ -121,6 +146,8 @@ class DietPlan {
     List<PlannedMeal>? day,
     bool? isFavorite,
     bool? isMine,
+    List<String>? builtFor,
+    DateTime? createdAt,
     double? imageHeight,
   }) =>
       DietPlan(
@@ -135,6 +162,8 @@ class DietPlan {
         day: day ?? this.day,
         isFavorite: isFavorite ?? this.isFavorite,
         isMine: isMine ?? this.isMine,
+        builtFor: builtFor ?? this.builtFor,
+        createdAt: createdAt ?? this.createdAt,
         imageHeight: imageHeight ?? this.imageHeight,
       );
 
@@ -150,6 +179,8 @@ class DietPlan {
         'day': [for (final meal in day) meal.toJson()],
         'isFavorite': isFavorite,
         'isMine': isMine,
+        'builtFor': builtFor,
+        'createdAt': createdAt?.toIso8601String(),
         'imageHeight': imageHeight,
       };
 
@@ -174,6 +205,10 @@ class DietPlan {
         ],
         isFavorite: json['isFavorite'] as bool? ?? false,
         isMine: json['isMine'] as bool? ?? false,
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+        builtFor: [
+          for (final v in (json['builtFor'] as List? ?? const [])) v as String,
+        ],
         imageHeight:
             (json['imageHeight'] as num?)?.toDouble() ?? cardImageHeight,
       );

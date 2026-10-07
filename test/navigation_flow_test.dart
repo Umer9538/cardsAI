@@ -135,7 +135,7 @@ void main() {
     expect(find.text('Your Smart Nutrition Companion'), findsOneWidget);
 
     await reachLogin(tester);
-    expect(find.text('Welcome Back to Carbsai'), findsOneWidget);
+    expect(find.text('Welcome Back to Carbs AI'), findsOneWidget);
   });
 
   testWidgets('credentials sign in and land on Home', (tester) async {
@@ -236,6 +236,13 @@ void main() {
       warnIfMissed: false,
     );
     await tester.pumpAndSettle();
+
+    // Play requires the AI transfer to be disclosed in the app before it
+    // happens, so the first tap on Scan opens a sheet rather than the camera.
+    expect(find.text('Before your first scan'), findsOneWidget);
+    await tester.tap(find.text('Got it'));
+    await tester.pumpAndSettle();
+
     expect(find.text('AI Camera'), findsWidgets, reason: 'camera');
 
     // Bounded pumps, not pumpAndSettle: barcode mode runs a repeating sweep
@@ -290,7 +297,7 @@ void main() {
     await tester.tap(find.text('Log Out').last);
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
-    expect(find.text('Welcome Back to Carbsai'), findsOneWidget);
+    expect(find.text('Welcome Back to Carbs AI'), findsOneWidget);
   });
 
   testWidgets('deleting the account leaves no screen behind', (tester) async {
@@ -319,7 +326,7 @@ void main() {
     // More is a pushed route, so it survives the app rebuilding from the auth
     // stream — it has to be popped explicitly. It previously stayed on top of
     // the login page.
-    expect(find.text('Welcome Back to Carbsai'), findsOneWidget);
+    expect(find.text('Welcome Back to Carbs AI'), findsOneWidget);
     expect(find.text('Delete Account'), findsNothing);
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/models/models.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -81,6 +82,7 @@ class _ItemEditSheetState extends State<ItemEditSheet> {
   /// the weight up and back down returns to where it started instead of
   /// compounding — the same reason `adjustPortion` scales from `_asAnalysed`.
   late final Nutrition _baseline = widget.food.nutrition;
+  late final String _baselineName = widget.food.name;
   late final double? _baselineGrams = widget.food.portionGrams;
 
   /// Macro fields the user has typed into. Rescaling leaves these alone.
@@ -98,8 +100,22 @@ class _ItemEditSheetState extends State<ItemEditSheet> {
       ? value.round().toString()
       : value.toStringAsFixed(1);
 
-  static double _read(TextEditingController c) =>
-      double.tryParse(c.text.trim().replaceAll(',', '.')) ?? 0;
+  /// The field's value, or [fallback] when it does not hold a number.
+  ///
+  /// It used to fall back to **0**, which is the worst possible answer here: a
+  /// typo in the Calories field wrote a 0 kcal food into the diary, silently
+  /// and permanently, and 0 is indistinguishable from a real zero-calorie
+  /// entry. Keeping what was already there means a mistyped correction leaves
+  /// the estimate alone instead of destroying it. Digits are the only thing
+  /// the field accepts now, so this is the second line of defence rather than
+  /// the first.
+  static double _read(TextEditingController c, double fallback) {
+    final value = double.tryParse(c.text.trim().replaceAll(',', '.'));
+    if (value == null || value.isNaN || value < 0) return fallback;
+    // No food has a five-figure macro. Beyond this it is a slipped decimal or
+    // a held-down key, and it would wreck the day's totals.
+    return value > 99999 ? fallback : value;
+  }
 
   void _onGramsChanged(String _) {
     final base = _baselineGrams;
@@ -125,15 +141,19 @@ class _ItemEditSheetState extends State<ItemEditSheet> {
     final grams = double.tryParse(_grams.text.trim().replaceAll(',', '.'));
     Navigator.of(context).pop(
       ItemEdit(
-        name: _name.text,
+        // Trimmed, and never empty — a blank name reached the diary from the
+        // scan result path, which did not guard it the way the meal sheet did.
+        name: _name.text.trim().isEmpty ? _baselineName : _name.text.trim(),
         grams: grams != null && grams > 0 ? grams : null,
         // Fibre and sugar are carried through untouched: the sheet does not
         // offer them, so it must not silently zero them.
+        // The baseline is what the item held before this sheet opened, so an
+        // unreadable field leaves that number exactly as it was.
         nutrition: _baseline.copyWith(
-          calories: _read(_calories),
-          protein: _read(_protein),
-          carbs: _read(_carbs),
-          fat: _read(_fat),
+          calories: _read(_calories, _baseline.calories),
+          protein: _read(_protein, _baseline.protein),
+          carbs: _read(_carbs, _baseline.carbs),
+          fat: _read(_fat, _baseline.fat),
         ),
       ),
     );
@@ -311,6 +331,14 @@ class SheetField extends StatelessWidget {
             keyboardType: numeric
                 ? const TextInputType.numberWithOptions(decimal: true)
                 : TextInputType.text,
+            // A macro field that cannot contain a letter never has to be
+            // rejected, and never silently becomes zero.
+            inputFormatters: numeric
+                ? [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    LengthLimitingTextInputFormatter(7),
+                  ]
+                : [LengthLimitingTextInputFormatter(60)],
             style: AppTypography.body(),
             cursorColor: AppColors.primary,
             decoration: InputDecoration.collapsed(

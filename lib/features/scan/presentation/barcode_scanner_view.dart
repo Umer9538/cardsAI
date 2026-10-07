@@ -16,11 +16,28 @@ import '../../../core/theme/app_typography.dart';
 /// screen releases ours before this appears. That is why switching modes takes
 /// a beat.
 class BarcodeScannerView extends StatefulWidget {
-  const BarcodeScannerView({super.key, required this.onDetected});
+  const BarcodeScannerView({
+    super.key,
+    required this.onDetected,
+    this.onController,
+  });
 
   /// Fired once, with the first barcode read. The scanner stops itself after —
   /// a reader that keeps firing turns one product into a dozen lookups.
   final ValueChanged<String> onDetected;
+
+  /// Hands the live controller up, and null again on dispose.
+  ///
+  /// The torch lives on this controller, but the button for it belongs in the
+  /// screen's chrome: everything drawn inside this widget sits *under* the
+  /// blur layer, which is cut out only over the viewfinder window, so a button
+  /// placed here would either be blurred or would have to sit in the middle of
+  /// the thing the person is trying to aim.
+  ///
+  /// The controller is still created and disposed here, which is the part that
+  /// matters — two packages cannot hold the camera at once, so its lifetime
+  /// has to be exactly this widget's.
+  final ValueChanged<MobileScannerController?>? onController;
 
   @override
   State<BarcodeScannerView> createState() => _BarcodeScannerViewState();
@@ -42,6 +59,12 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView>
   );
 
   bool _handled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.onController?.call(_controller);
+  }
 
   @override
   void didChangeDependencies() {
@@ -74,6 +97,9 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView>
   @override
   void dispose() {
     appRouteObserver.unsubscribe(this);
+    // Before the dispose, or the screen is left holding a controller it must
+    // not touch.
+    widget.onController?.call(null);
     _controller.dispose();
     super.dispose();
   }
@@ -123,7 +149,7 @@ class _ScannerError extends StatelessWidget {
   Widget build(BuildContext context) {
     final message = switch (error.errorCode) {
       MobileScannerErrorCode.permissionDenied =>
-        'Carbsai needs camera access to read a barcode. You can turn it on in '
+        'Carbs AI needs camera access to read a barcode. You can turn it on in '
             'Settings.',
       MobileScannerErrorCode.unsupported =>
         'This device cannot scan barcodes.',

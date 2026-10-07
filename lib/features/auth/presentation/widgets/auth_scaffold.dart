@@ -79,7 +79,21 @@ class AuthScaffold extends StatelessWidget {
               top: 135,
               width: 388,
               height: 42,
-              child: Text(title, style: AppTypography.authTitle()),
+              // One line, and it ellipsises rather than wrapping.
+              //
+              // 42 is exactly one line of 28/42, and the subtitle sits at 181 —
+              // 46pt below — so a second line has nowhere to go. Without the
+              // cap, `Text` wraps and the overflow is simply *cut off*: "Create
+              // Your Carbs AI Account" rendered as "Create Your Carbs AI" and
+              // the screen looked like it had bad grammar rather than a layout
+              // bug. Ellipsis makes the next too-long title obvious instead of
+              // silently dropping its last word.
+              child: Text(
+                title,
+                style: AppTypography.authTitle(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             Positioned(
               left: 20,

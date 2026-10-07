@@ -87,7 +87,7 @@ void main() {
 
     // Play states three requirements for this page, and each one is a thing a
     // reviewer looks for rather than a box to tick.
-    expect(html, contains('Carbsai'), reason: 'must name the app');
+    expect(html, contains('Carbs AI'), reason: 'must name the app');
     expect(
       accountDeletion.any((b) => b.isHeading && b.text.contains('Delete it yourself')),
       isTrue,

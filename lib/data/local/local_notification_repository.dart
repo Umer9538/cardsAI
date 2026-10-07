@@ -6,24 +6,25 @@ import 'json_store.dart';
 import 'seed_data.dart';
 
 class LocalNotificationRepository implements NotificationRepository {
-  LocalNotificationRepository(this._store, {DateTime Function()? clock})
-      : _now = clock ?? DateTime.now {
+  LocalNotificationRepository(this._store) {
     _load();
   }
 
   final JsonStore _store;
-  final DateTime Function() _now;
   final _controller = StreamController<List<AppNotification>>.broadcast();
 
   List<AppNotification> _items = const [];
   bool _loaded = false;
 
   void _load() {
+    // Starts empty. The feed is derived from the diary by `ActivityFeed` and
+    // pushed in through [upsertAll]; it used to be seeded with seven fixed
+    // strings from the artboard, so every account opened onto the same fake
+    // messages — including a hydration tip for a feature that does not exist.
     final stored = _store.readList(StoreKeys.notifications);
     _items = stored == null
-        ? SeedData.notifications(_now())
+        ? const []
         : stored.map(AppNotification.fromJson).toList();
-    if (stored == null) unawaited(_persist());
     _loaded = true;
     _controller.add(_items);
   }
@@ -66,6 +67,20 @@ class LocalNotificationRepository implements NotificationRepository {
     _items = [for (final item in _items) item.copyWith(read: true)];
     await _persist();
     _controller.add(_items);
+  }
+
+  @override
+  Future<List<AppNotification>> upsertAll(
+    List<AppNotification> entries,
+  ) async {
+    await _ready();
+    final known = {for (final item in _items) item.id};
+    final fresh = [for (final e in entries) if (!known.contains(e.id)) e];
+    if (fresh.isEmpty) return const [];
+    _items = [..._items, ...fresh];
+    await _persist();
+    _controller.add(_items);
+    return fresh;
   }
 
   @override

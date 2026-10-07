@@ -116,7 +116,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             // nodes are textAutoResize: WIDTH_AND_HEIGHT — the box is sized to
             // the text in *Figma's* cut of Space Grotesk. Ours sets ~6% wider
             // (see the font note in the project README), so honouring 321 wraps
-            // the title and drops "Carbsai". Left-aligned text does not move
+            // the title and drops "Carbs AI". Left-aligned text does not move
             // when the box grows, so both are given the artboard's full content
             // width instead.
             const Positioned(
@@ -124,7 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               top: 135,
               width: 388,
               height: 42,
-              child: _Title('Welcome Back to Carbsai'),
+              child: _Title('Welcome Back to Carbs AI'),
             ),
             const Positioned(
               left: 20,

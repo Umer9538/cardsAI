@@ -20,11 +20,21 @@ class PlanDetailScreen extends StatelessWidget {
     required this.plan,
     this.onBack,
     this.onContinue,
+    this.onRestore,
+    this.onTerms,
+    this.onPrivacy,
   });
 
   final SubscriptionPlan plan;
   final VoidCallback? onBack;
   final VoidCallback? onContinue;
+
+  /// Restore is required by both stores on the screen that sells the
+  /// subscription: someone who reinstalls, or switches device, has already
+  /// paid and must be able to say so without paying again.
+  final VoidCallback? onRestore;
+  final VoidCallback? onTerms;
+  final VoidCallback? onPrivacy;
 
   @override
   Widget build(BuildContext context) {
@@ -73,14 +83,53 @@ class PlanDetailScreen extends StatelessWidget {
                 ],
               ),
             ),
+            // Both stores require the billing period beside the price, an
+            // auto-renew statement, and a way to reach the terms, on the
+            // screen that takes the money. None of it was here.
+            Positioned(
+              left: 20,
+              top: 762,
+              width: 388,
+              height: 40,
+              child: Text(
+                '${plan.priceLabel} ${plan.periodLabel}, renewing automatically '
+                'until you cancel. Cancel any time in your store account.',
+                style: AppTypography.meta(color: AppColors.muted),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
+            ),
             Positioned(
               left: 20,
               top: 810,
               width: 388,
               height: 50,
               child: PrimaryButton(
-                label: 'Continue with ${plan.priceLabel}',
+                label: 'Subscribe · ${plan.priceLabel} ${plan.periodLabel}',
                 onPressed: onContinue,
+              ),
+            ),
+            Positioned(
+              left: 20,
+              top: 872,
+              width: 388,
+              height: 30,
+              // Three required links on one line, so at a large text scale
+              // they shrink rather than overflow — the same contained
+              // compromise the review summary card makes. Wrapping instead
+              // would take a second line the 30pt box does not have.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _FooterLink(label: 'Restore Purchases', onTap: onRestore),
+                    const _FooterDot(),
+                    _FooterLink(label: 'Terms', onTap: onTerms),
+                    const _FooterDot(),
+                    _FooterLink(label: 'Privacy', onTap: onPrivacy),
+                  ],
+                ),
               ),
             ),
           ],
@@ -88,4 +137,40 @@ class PlanDetailScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A quiet underlined action in the paywall footer.
+class _FooterLink extends StatelessWidget {
+  const _FooterLink({required this.label, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          child: Text(
+            label,
+            style: AppTypography.meta(color: AppColors.placeholder),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterDot extends StatelessWidget {
+  const _FooterDot();
+
+  @override
+  Widget build(BuildContext context) => Text(
+        ' · ',
+        style: AppTypography.meta(color: AppColors.outline),
+      );
 }
