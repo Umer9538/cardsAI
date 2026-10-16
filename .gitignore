@@ -73,8 +73,13 @@ android/*.p12
 android/*.keystore
 
 # goldie store assets (generated)
-goldie/out/
-goldie/goldie.design.json
+#
+# Wildcarded over the variant directories — goldie/, goldie-all/, goldie-ipad/
+# — because the output is ~140 MB of rendered screenshots that git would carry
+# forever, and it is reproducible from the config beside it. The config, the
+# refresh script and the flow list ARE committed: those are the source.
+goldie*/out/
+goldie*/goldie.design.json
 goldie-ipad/out/
 goldie-ipad/goldie.design.json
 
