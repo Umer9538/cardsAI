@@ -62,7 +62,12 @@ tool/release.env
 
 # Release signing. Losing these means never being able to publish an update to
 # an app already on Play under this key — back them up off this machine.
+# Release signing. These are the app's identity on Play: a key in the
+# repository is a key that has been published. They are also NOT recoverable
+# and do NOT travel with a git clone — see android/README-signing.md, which is
+# committed and says which files a handover has to carry separately.
 android/key.properties
+android/SIGNING-CREDENTIALS.md
 android/*.jks
 android/*.p12
 android/*.keystore
@@ -70,6 +75,8 @@ android/*.keystore
 # goldie store assets (generated)
 goldie/out/
 goldie/goldie.design.json
+goldie-ipad/out/
+goldie-ipad/goldie.design.json
 
 # Local tooling scratch
 .argent/
