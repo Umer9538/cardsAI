@@ -24,6 +24,7 @@ These were attacked and did not give:
 | **Backup / data extraction** | `backup_rules.xml` and `data_extraction_rules.xml` both exclude `com.google.firebase.auth.api.Store.xml`, the databases and the files directory, for cloud backup *and* device transfer. A restored backup does not carry a signed-in session onto a new device. |
 | **Deep links** | `MainActivity` is exported with `MAIN`/`LAUNCHER` only — no `VIEW`, no `BROWSABLE`, no custom scheme. There is no intent surface to fuzz. |
 | **Transport / debug** | Not `debuggable`. No `usesCleartextTraffic` (so false on API 28+). No network security config overriding CA pinning. |
+| **Patching the APK for premium** | Gets you an ad-free app and nothing else. `isPremiumProvider` reads `users/{uid}/subscription/current`, which clients cannot write — and more importantly the **Worker never takes the client's word for it**: `quotaBucket()` calls `isPremium(db, uid)`, which reads that same document server-side under the uid from the verified token. So a patched client still gets `freeScanLimit: 3`. The only thing forcing the flag buys is suppressing ads for that one device, which is true of every client-side ad integration and is not fixable. |
 | **Spend limiter** | Fails closed — refuses when it cannot read the counter, and `dailySpendCapUsd: 0` means stop rather than "unset". |
 
 ---
