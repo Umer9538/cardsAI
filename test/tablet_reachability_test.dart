@@ -1,10 +1,13 @@
 import 'package:carbsai/core/design/design_canvas.dart';
+import 'package:carbsai/features/app/presentation/widgets/bottom_nav.dart';
+import 'package:carbsai/features/auth/presentation/widgets/auth_widgets.dart';
 import 'package:carbsai/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:carbsai/features/scan/presentation/scanning_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/design_render.dart';
+import 'support/screens.dart';
 
 /// `DesignFit.cover` screens must keep their controls on screen.
 ///
@@ -60,7 +63,8 @@ void _expectOnScreen(
         topLeft.dx >= -0.5 &&
         right <= viewport.width + 0.5,
     isTrue,
-    reason: '$what is off-screen: '
+    reason:
+        '$what is off-screen: '
         'x=${topLeft.dx.toStringAsFixed(1)} '
         'y=${topLeft.dy.toStringAsFixed(1)} '
         '${box.size.width.toStringAsFixed(1)}x'
@@ -70,8 +74,9 @@ void _expectOnScreen(
 }
 
 void main() {
-  testWidgets('onboarding Next stays reachable on every viewport',
-      (tester) async {
+  testWidgets('onboarding Next stays reachable on every viewport', (
+    tester,
+  ) async {
     addTearDown(tester.view.reset);
     final scope = await designScopeBuilder();
 
@@ -80,10 +85,12 @@ void main() {
       tester.view.physicalSize = size;
 
       await tester.pumpWidget(
-        scope(const MaterialApp(
-          debugShowCheckedModeBanner: false,
-          home: OnboardingScreen(),
-        )),
+        scope(
+          const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: OnboardingScreen(),
+          ),
+        ),
       );
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -91,8 +98,9 @@ void main() {
     }
   });
 
-  testWidgets('the scanning shutter and its strip stay reachable',
-      (tester) async {
+  testWidgets('the scanning shutter and its strip stay reachable', (
+    tester,
+  ) async {
     addTearDown(tester.view.reset);
     final scope = await designScopeBuilder();
 
@@ -101,10 +109,12 @@ void main() {
       tester.view.physicalSize = size;
 
       await tester.pumpWidget(
-        scope(const MaterialApp(
-          debugShowCheckedModeBanner: false,
-          home: ScanningScreen(),
-        )),
+        scope(
+          const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: ScanningScreen(),
+          ),
+        ),
       );
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -139,8 +149,84 @@ void main() {
   test('cover tells callers how much of the artboard a viewport can show', () {
     // The arithmetic the table in this file's doc comment states, so the table
     // cannot drift away from the implementation.
-    expect(DesignCanvas.coverVisibleHeight(const Size(428, 926)), closeTo(926, 0.5));
-    expect(DesignCanvas.coverVisibleHeight(const Size(375, 667)), closeTo(761, 0.5));
-    expect(DesignCanvas.coverVisibleHeight(const Size(1032, 1376)), closeTo(571, 0.5));
+    expect(
+      DesignCanvas.coverVisibleHeight(const Size(428, 926)),
+      closeTo(926, 0.5),
+    );
+    expect(
+      DesignCanvas.coverVisibleHeight(const Size(375, 667)),
+      closeTo(761, 0.5),
+    );
+    expect(
+      DesignCanvas.coverVisibleHeight(const Size(1032, 1376)),
+      closeTo(571, 0.5),
+    );
   });
+
+  // Every screen, every control that has to be pressable, at every size the
+  // app now ships to.
+  //
+  // The two tests above cover the screens that were *known* to be broken. This
+  // one exists because iPad was switched on (TARGETED_DEVICE_FAMILY "1,2")
+  // while only those two had ever been looked at there — twenty-four others
+  // went to the store unexamined on a display none of them was drawn for.
+  //
+  // A control counts as reachable if it is inside the viewport, or if the
+  // screen scrolls and scrolling brings it in. That second clause is the whole
+  // difference between `fit` and `cover`: `fit` degrades to a scroll, so a CTA
+  // below the fold is fine, while `cover` crops, so one below the fold is gone.
+  for (final (deviceName, size) in const [
+    ('iPad mini', Size(744, 1133)),
+    ('iPad Pro 11"', Size(834, 1194)),
+    ('iPad Pro 13"', Size(1032, 1376)),
+  ]) {
+    testWidgets('every control is reachable on $deviceName', (tester) async {
+      addTearDown(tester.view.reset);
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = size;
+      final scope = await designScopeBuilder();
+
+      for (final (screenName, screen) in appScreens()) {
+        await tester.pumpWidget(
+          scope(MaterialApp(debugShowCheckedModeBanner: false, home: screen)),
+        );
+        await tester.pump(const Duration(milliseconds: 400));
+        tester.takeException(); // overflow is responsive_overflow_test's job
+
+        final controls = <String, Finder>{
+          'primary button': find.byType(PrimaryButton),
+          'tab bar': find.byType(AppBottomNav),
+        };
+
+        for (final entry in controls.entries) {
+          final found = entry.value.evaluate();
+          if (found.isEmpty) continue;
+
+          for (var i = 0; i < found.length; i++) {
+            final one = entry.value.at(i);
+            final scrollable = find.byType(Scrollable);
+            if (scrollable.evaluate().isNotEmpty) {
+              try {
+                await tester.scrollUntilVisible(
+                  one,
+                  200,
+                  scrollable: scrollable.first,
+                );
+                await tester.pump();
+              } catch (_) {
+                // Already visible, or not in that scrollable. The bounds
+                // assertion below is the one that decides either way.
+              }
+            }
+            _expectOnScreen(
+              tester,
+              one,
+              size,
+              '$deviceName / $screenName: ${entry.key} ${i + 1}/${found.length}',
+            );
+          }
+        }
+      }
+    });
+  }
 }
