@@ -25,6 +25,7 @@ These were attacked and did not give:
 | **Deep links** | `MainActivity` is exported with `MAIN`/`LAUNCHER` only — no `VIEW`, no `BROWSABLE`, no custom scheme. There is no intent surface to fuzz. |
 | **Transport / debug** | Not `debuggable`. No `usesCleartextTraffic` (so false on API 28+). No network security config overriding CA pinning. |
 | **Patching the APK for premium** | Gets you an ad-free app and nothing else. `isPremiumProvider` reads `users/{uid}/subscription/current`, which clients cannot write — and more importantly the **Worker never takes the client's word for it**: `quotaBucket()` calls `isPremium(db, uid)`, which reads that same document server-side under the uid from the verified token. So a patched client still gets `freeScanLimit: 3`. The only thing forcing the flag buys is suppressing ads for that one device, which is true of every client-side ad integration and is not fixable. |
+| **App Check verification** (`appcheck.ts`) | The verifier itself is correct: RS256 pinned, `kid` matched against Firebase App Check's own JWKS (a different key set from ID tokens), `aud` matched on `projects/<id>`, `iss` prefix and `exp` checked, `sub` required. It is called before dispatch on every callable and on `/photos`. It is not yet *enforcing* — see finding #2. |
 | **Spend limiter** | Fails closed — refuses when it cannot read the counter, and `dailySpendCapUsd: 0` means stop rather than "unset". |
 
 ---
@@ -58,46 +59,61 @@ service-account key achieves nothing — the old one keeps working.
 
 Nothing else in this document matters as much as this does.
 
-### 2. App Check is dead code, so the free tier is a scriptable DoS — HIGH
+### 2. App Check is wired but not enforced, so the free tier is a scriptable DoS until it is — HIGH
 
-`workers/src/appcheck.ts` exports `requireAppCheck`. **Nothing imports it.** Grep the
-whole of `workers/src/` and it is never called. So App Check is not enforced — and it
-is not even *verifying and logging*, which means the rollout plan written in that
-file's own header ("deploy this, watch the verified share, then enforce") cannot
-begin, because no metrics are being produced.
+**A correction to an earlier draft of this document, which claimed App Check was
+dead code. It is not.** That claim came from `grep -rn 'from "./appcheck"'`,
+which matches nothing because the real import carries the extension —
+`from "./appcheck.js"`. Both halves have been wired since commit `1af4e55`:
+`index.ts` calls `requireAppCheck` before dispatch on every callable *and* on
+`/photos`, and `main.dart` activates Play Integrity on Android and App Attest
+with a Device Check fallback on iOS. It was verified on a device at the time:
+the log line "app check token rejected" is the Worker correctly refusing an
+unregistered debug token while, unenforced, letting the scan through.
 
-The attack is cheap and needs no reverse engineering beyond one `unzip`:
+So the verification path exists and produces metrics. What remains is the
+**console registration and the switch**, which is step 5 of the readiness list
+in `CLAUDE.md` rather than a code gap. Until `APP_CHECK_ENFORCED = "1"`, a
+missing token is logged and the request proceeds — deliberately, because some
+real devices genuinely cannot attest and enforcing before measuring locks those
+people out silently.
 
-1. Pull the Firebase Android API key out of `resources.arsc`. It took one command,
-   and that is fine — Google documents these as public identifiers. The boundary is
-   supposed to be App Check.
-2. `POST identitytoolkit.googleapis.com/v1/accounts:signUp?key=…` in a loop. No App
-   Check, no CAPTCHA by default. Each response is a real uid with a real ID token
-   that `auth.ts` will verify correctly, because it *is* valid.
-3. Each fresh account carries `freeScanLimit: 3`, plus up to `maxAdsPerDay: 5` more
-   via `grantBonusScans` — 8 scans per account per day.
+The exposure while it stays unenforced is real, and needs no reverse
+engineering beyond one `unzip`:
+
+1. Pull the Firebase Android API key out of `resources.arsc`. It took one
+   command, and that is fine — Google documents these as public identifiers.
+   The boundary is supposed to be App Check.
+2. `POST identitytoolkit.googleapis.com/v1/accounts:signUp?key=...` in a loop.
+   Unenforced App Check does not stop this, and there is no CAPTCHA by default.
+   Each response is a real uid with a real ID token that `auth.ts` will verify
+   correctly, because it *is* valid.
+3. Each fresh account carries `freeScanLimit: 3`, plus up to `maxAdsPerDay: 5`
+   more via `grantBonusScans` — 8 scans per account per day.
 
 At `$0.0012` a scan against `dailySpendCapUsd: 20`:
 
 ```
 16,666 scans exhausts the day's budget
-16,666 / 8  ≈  2,100 throwaway accounts
+16,666 / 8  =~  2,100 throwaway accounts
 ```
 
 **~2,100 scripted signups and the AI feature is off for every real user until
-midnight.** The spend cap is doing its job — it bounds the money to $20 — but it
-converts a billing attack into a denial-of-service one, and the core feature of the
-app is what goes down.
+midnight.** The spend cap is doing its job — it bounds the money to $20 — but
+it converts a billing attack into a denial-of-service one, and the core feature
+of the app is what goes down.
 
-The same accounts burn the Firestore free tier from the other side: 20,000 writes a
-day, and every signup writes a profile document. That one breaks the whole app, not
-just scanning.
+The same accounts burn the Firestore free tier from the other side: 20,000
+writes a day, and every signup writes a profile document. That one breaks the
+whole app, not just scanning.
 
-**Fix:** import `requireAppCheck` and call it in `index.ts` before dispatch. Deploy
-with `APP_CHECK_ENFORCED` unset first — it logs and lets requests through — register
-Play Integrity and DeviceCheck in the Firebase console, watch the verified share
-settle, then set `APP_CHECK_ENFORCED = "1"`. That rollout is already designed; it
-just was never wired up.
+**Fix:** register the Android app with Play Integrity and the iOS app with App
+Attest in the Firebase console, watch the verified share in App Check metrics
+until it settles, then `wrangler secret put APP_CHECK_ENFORCED` as `"1"`. No
+code change is needed — with one exception, now fixed: `/photos` is a plain
+POST rather than a callable, so the Functions SDK was not attaching the token
+to it and enforcement would have broken photo upload while every other route
+kept working. `R2PhotoRepository` attaches it explicitly now.
 
 ### 3. Restrict the Firebase API key — MEDIUM
 

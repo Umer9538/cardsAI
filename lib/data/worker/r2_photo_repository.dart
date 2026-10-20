@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/app_config.dart';
@@ -23,15 +25,53 @@ import '../../core/repositories/repositories.dart';
 /// takes the bytes directly and the person may never keep the meal, so
 /// uploading first would spend bandwidth on photos that get thrown away.
 class R2PhotoRepository implements PhotoRepository {
-  R2PhotoRepository(this._auth, {http.Client? client})
-      : _client = client ?? http.Client();
+  R2PhotoRepository(
+    this._auth, {
+    http.Client? client,
+    Future<String?> Function()? appCheckToken,
+  })  : _client = client ?? http.Client(),
+        _appCheckToken = appCheckToken ?? _instanceAppCheckToken;
 
   final fb.FirebaseAuth _auth;
   final http.Client _client;
 
+  /// Injectable so this repository can be exercised without a live Firebase —
+  /// it is the only dependency here that cannot be faked through [http.Client].
+  final Future<String?> Function() _appCheckToken;
+
+  static Future<String?> _instanceAppCheckToken() =>
+      FirebaseAppCheck.instance.getToken();
+
   /// Generous next to a 150-300KB capture, and short enough that a stalled
   /// upload does not sit behind the meal it has already saved.
   static const Duration _timeout = Duration(seconds: 30);
+
+  /// The headers every `/photos` request carries.
+  ///
+  /// **`/photos` is the one route the Functions SDK is not in front of.** It is
+  /// a plain POST because there is no callable shape for a binary body, which
+  /// also means nothing attaches the App Check token for us the way it does on
+  /// every callable. The Worker calls `requireAppCheck` on this route exactly
+  /// as it does on the others, so without this header the day
+  /// `APP_CHECK_ENFORCED` is set is the day photo upload starts failing — and
+  /// it would fail as "your meal was saved, but the photo could not be
+  /// uploaded", which names neither the cause nor the fix.
+  ///
+  /// A device that cannot attest still uploads. A null or throwing token is
+  /// omitted rather than fatal, which mirrors the Worker's own fail-open
+  /// behaviour and keeps a phone with no Play Services usable.
+  Future<Map<String, String>> _headers(String token) async {
+    final headers = {'authorization': 'Bearer $token'};
+    try {
+      final attestation = await _appCheckToken();
+      if (attestation != null && attestation.isNotEmpty) {
+        headers['x-firebase-appcheck'] = attestation;
+      }
+    } catch (error) {
+      debugPrint('App Check token unavailable for a photo request: $error');
+    }
+    return headers;
+  }
 
   @override
   Future<String?> upload(String localPath, {required String mealId}) async {
@@ -56,7 +96,7 @@ class R2PhotoRepository implements PhotoRepository {
           .post(
             AppConfig.workerUri('photos'),
             headers: {
-              'authorization': 'Bearer $token',
+              ...await _headers(token),
               'content-type': 'image/jpeg',
               'x-meal-id': mealId,
             },
@@ -99,7 +139,7 @@ class R2PhotoRepository implements PhotoRepository {
         AppConfig.workerUri('photos').replace(
           queryParameters: {'mealId': mealId},
         ),
-        headers: {'authorization': 'Bearer $token'},
+        headers: await _headers(token),
       ).timeout(_timeout);
     } catch (_) {
       // Already gone, or never uploaded. Nothing depends on this.
