@@ -45,6 +45,12 @@ class FavouriteButton extends StatelessWidget {
 
     return Semantics(
       button: true,
+      // A nullable callback must not render as a live control. These are
+      // always wired in the app, but a screen that forgot to pass one would
+      // otherwise ship a button that looks and announces exactly like a
+      // working one and does nothing — which is the failure
+      // `no_dead_controls_test` exists to make impossible.
+      enabled: onTap != null,
       label: saved ? 'Saved to favourites' : 'Save to favourites',
       // Declared here, not only on the child: `excludeSemantics` drops the
       // child's own tap action, so without this the control announced itself

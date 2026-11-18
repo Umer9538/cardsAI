@@ -456,6 +456,10 @@ class _OutlineIconButton extends StatelessWidget {
         // near them, so for a screen reader the badge does not otherwise
         // exist.
         label: badge > 0 ? '$label, $badge unread' : label,
+        // A nullable callback must not render as a live control — see the same
+        // note on the tab bar. The crown and the bell are the two controls in
+        // the app with nothing but a glyph, so a dead one is completely silent.
+        enabled: onTap != null,
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,

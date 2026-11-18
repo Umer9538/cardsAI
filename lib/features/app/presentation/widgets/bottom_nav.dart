@@ -91,6 +91,12 @@ class _NavButton extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
+      // A nullable callback must not render as a live control. The shell always
+      // wires these, but a screen that forgot to pass `onSelect` would ship a
+      // tab bar that looks and announces exactly like a working one and goes
+      // nowhere — the failure `no_dead_controls_test` exists to make
+      // impossible.
+      enabled: onTap != null,
       label: tab.label,
       child: GestureDetector(
         onTap: onTap,
