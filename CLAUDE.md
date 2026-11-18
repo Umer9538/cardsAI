@@ -304,6 +304,15 @@ because a limiter that opens under failure is not one. Spend is counted in **mic
 the Firestore increment transform here writes `integerValue`, so storing $0.0012 as dollars
 would round to zero every call and the counter would sit at zero while the bill grew.
 
+It is also **spread over 16 shard documents**, summed through one `batchGet`: a single
+Firestore document sustains about one write a second and this one is written on every scan and
+every plan, so one document was a ceiling on the whole app that paying Google would not have
+lifted — contention would have shown up in the low tens of thousands of daily users. The shard
+is picked at random per *call* rather than per uid, because by uid one heavy account owns one
+shard and the ceiling comes straight back. The old single-document path is still summed in, so
+a deploy landing mid-day cannot reset the fuse to zero. Raising `SHARDS` is backwards
+compatible; **lowering it silently stops counting that day's spend.** See `CAPACITY.md`.
+
 **A photo is checked before it is paid for.** `looksLikeImage()` in `scan.ts` decodes the
 first sixteen bytes and refuses anything that is not a JPEG, PNG, WebP, GIF or HEIC with
 "That photo could not be read", before the quota and before the model. Without it a junk file

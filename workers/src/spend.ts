@@ -30,7 +30,39 @@ const DEFAULT_DAILY_LIMIT_USD = 20;
  */
 const MICROS = 1_000_000;
 
-const path = (day: string): string => `config/spend-${day}`;
+/**
+ * How many documents the day's total is spread across.
+ *
+ * **This is not tuning, it is a hard Firestore limit.** A single document
+ * sustains about one write a second, and `recordSpend` runs on every scan and
+ * every plan — so one document put a ceiling on the app that no amount of
+ * paying Google would lift. At a couple of scans each, contention becomes
+ * visible in the low tens of thousands of daily users, and it fails as
+ * transaction aborts on the critical path of the app's core feature.
+ *
+ * Sixteen shards buys 16x that, which is several hundred thousand daily users
+ * — well past anything else in the system. The cost is that reading the total
+ * is 16 document reads instead of 1, taken in a single `batchGet` round trip,
+ * which is the right trade: the read is cheap and the write is the thing that
+ * fails under load.
+ *
+ * Raising this is safe and backwards compatible — a shard that has never been
+ * written reads as zero. **Lowering it is not**: today's spend already sitting
+ * in a shard above the new count would stop being counted, and the fuse would
+ * read low for the rest of the day.
+ */
+const SHARDS = 16;
+
+/** The legacy single-document path, still read so nothing is lost mid-day. */
+const legacyPath = (day: string): string => `config/spend-${day}`;
+
+const shardPath = (day: string, shard: number): string =>
+  `config/spend-${day}-${shard}`;
+
+const allPaths = (day: string): string[] => [
+  legacyPath(day),
+  ...Array.from({ length: SHARDS }, (_, i) => shardPath(day, i)),
+];
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -52,8 +84,15 @@ export async function assertUnderDailyCap(db: Firestore, limitUsd?: number): Pro
 
   let spent: number;
   try {
-    const doc = await db.get(path(today()));
-    spent = Number(doc?.micros ?? 0) / MICROS;
+    // Every shard plus the legacy document, in one round trip. The legacy path
+    // is included so a deploy that lands mid-day does not reset the fuse to
+    // zero and hand out a second $20 of model calls.
+    const docs = await db.batchGet(allPaths(today()));
+    const micros = docs.reduce<number>((sum, doc) => {
+      const value = Number(doc?.micros ?? 0);
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+    spent = micros / MICROS;
     if (!Number.isFinite(spent)) spent = 0;
   } catch (error) {
     // Fail closed. See the note above: this exists for the moments when
@@ -86,7 +125,11 @@ export async function assertUnderDailyCap(db: Firestore, limitUsd?: number): Pro
 export async function recordSpend(db: Firestore, usd: number): Promise<void> {
   if (!Number.isFinite(usd) || usd <= 0) return;
   try {
-    await db.set(path(today()), {
+    // A random shard. Spreading by uid would look tidier and would be wrong:
+    // one heavy account would then own one shard and hit the same per-document
+    // ceiling the sharding exists to escape.
+    const shard = Math.floor(Math.random() * SHARDS);
+    await db.set(shardPath(today(), shard), {
       micros: increment(Math.round(usd * MICROS)),
       updatedAt: serverTimestamp(),
     });

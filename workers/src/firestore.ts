@@ -169,6 +169,53 @@ export class Firestore {
     return decodeFields(doc.fields as Record<string, FirestoreValue> | undefined);
   }
 
+  /**
+   * Several documents in **one** round trip.
+   *
+   * `:batchGet` rather than N `get()` calls, because the one caller that needs
+   * this — the sharded spend counter — sits on the critical path of every model
+   * call, and ten sequential reads there would be ten times the latency for a
+   * number that is read and immediately discarded.
+   *
+   * Missing documents are returned as nulls at their own index, so the result
+   * lines up with [paths] and a shard that has never been written is a zero
+   * rather than a hole.
+   */
+  async batchGet(
+    paths: string[],
+  ): Promise<Array<Record<string, unknown> | null>> {
+    if (paths.length === 0) return [];
+
+    const body = (await this.call(`${this.root}:batchGet`, {
+      method: "POST",
+      body: { documents: paths.map((p) => `${this.root}/${p}`) },
+    })) as unknown as Array<{
+      found?: { name: string; fields?: Record<string, FirestoreValue> };
+      missing?: string;
+    }>;
+
+    // An unexpected shape throws rather than reading as an empty result. The
+    // one caller is a spend fuse that fails closed on an exception, and
+    // returning "nothing found" for a malformed response would instead read as
+    // zero spent — opening the fuse at exactly the moment something is wrong.
+    if (!Array.isArray(body)) {
+      throw new Error("Firestore batchGet returned a non-array response");
+    }
+
+    // The response is in arbitrary order, so it is indexed by name rather than
+    // by position. Reading it positionally would silently attribute one shard's
+    // total to another — which for a spend fuse means a wrong number that still
+    // looks plausible.
+    const byName = new Map<string, Record<string, unknown>>();
+    for (const entry of body) {
+      if (entry.found) {
+        byName.set(entry.found.name, decodeFields(entry.found.fields) ?? {});
+      }
+    }
+
+    return paths.map((p) => byName.get(`${this.root}/${p}`) ?? null);
+  }
+
   /** Writes one document. Field transforms in [data] are applied server-side. */
   async set(path: string, data: Record<string, unknown>, merge = true): Promise<void> {
     await this.commit([{ path, data, merge }]);
