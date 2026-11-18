@@ -265,7 +265,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                       : 'Results come from USDA FoodData Central, the '
                             'lab-analysed reference database. Packaged products '
                             'are easier to find by barcode.',
-                  style: AppTypography.meta(color: AppColors.muted),
+                  style: AppTypography.meta(color: AppColors.textSecondary),
                 ),
               ),
 
@@ -308,7 +308,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                           'These databases are strongest on packaged and '
                           'Western foods. For a home-cooked dish, describe it '
                           'instead — that goes to the AI, which knows it.',
-                          style: AppTypography.meta(color: AppColors.muted),
+                          style: AppTypography.meta(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 14),
                         _DescribeInstead(
@@ -455,6 +455,10 @@ class _DescribeInstead extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Describe this meal instead',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
@@ -514,6 +518,10 @@ class _Suggestions extends StatelessWidget {
               Semantics(
                 button: true,
                 label: 'Search $term',
+                // Declared here, not only on the child: `excludeSemantics` drops the
+                // child's own tap action, so without this the control announced itself
+                // as a button that a screen reader then could not activate.
+                onTap: () => onPick(term),
                 excludeSemantics: true,
                 child: GestureDetector(
                   onTap: () => onPick(term),

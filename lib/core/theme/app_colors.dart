@@ -49,7 +49,39 @@ abstract final class AppColors {
   static const Color planYellow = Color(0xFFF5F378);
 
   /// Disabled / de-emphasised action label ("Skip").
+  ///
+  /// **This is a fill, not a text colour, and it is only legible on a light
+  /// surface.** It survives on the week strip, where the ground is [lilac] or
+  /// the calendar card; on the app's own dark ground it lands at 2.0:1. Reach
+  /// for [textSecondary] or [controlMuted] for anything on a dark surface.
   static const Color muted = Color(0xFF474747);
+
+  /// Secondary copy on dark surfaces — captions, explanatory lines, the body
+  /// of a sheet, the items under a planned meal.
+  ///
+  /// **Not a Figma fill, and the only colour here that is not.** The design
+  /// file names no secondary text colour for its dark surfaces, so [muted] was
+  /// pressed into the role — and [muted] is a *disabled control* value, which
+  /// puts body copy at 2.0:1 on [background] and 1.7:1 on an [inkMuted] sheet.
+  /// Testers reported the AI disclosure and a plan's meal lines as unreadable
+  /// and they were right: WCAG AA asks 4.5:1 of body text and those were a
+  /// third of it.
+  ///
+  /// This clears the bar on every surface the app actually draws — 6.99:1 on
+  /// [background], 6.36:1 on a card, 5.93:1 on the lightest sheet — while
+  /// staying visibly dimmer than [white], so the hierarchy the design intended
+  /// survives the fix. `colour_contrast_test.dart` holds it to those numbers.
+  static const Color textSecondary = Color(0xFF9E9E9E);
+
+  /// Hairline rules, sheet drag handles, and the outline of an *unselected*
+  /// control — the portion chips on a scanned food, for one.
+  ///
+  /// Also not a Figma fill, and for the same reason: WCAG asks 3:1 of the
+  /// boundary of a UI component, which is what makes a control findable, and
+  /// [muted] gives 1.8:1 on a sheet. Non-text, so 3:1 rather than 4.5:1 is the
+  /// bar; this clears it everywhere (3.67:1 on [background], 3.12:1 on a
+  /// sheet) without pulling a hairline up to the weight of real content.
+  static const Color controlMuted = Color(0xFF6E6E6E);
 
   static const Color white = Color(0xFFFFFFFF);
 }

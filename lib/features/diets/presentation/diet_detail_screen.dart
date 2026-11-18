@@ -641,7 +641,7 @@ class _PlannedMealCardState extends ConsumerState<_PlannedMealCard> {
           const SizedBox(height: 4),
           Text(
             meal.items.map((i) => i.name).join(' · '),
-            style: AppTypography.meta(color: AppColors.muted),
+            style: AppTypography.meta(color: AppColors.textSecondary),
             maxLines: _PlannedMealCard.itemLines,
             overflow: TextOverflow.ellipsis,
           ),
@@ -764,6 +764,10 @@ class _SomethingElseButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Build a different plan from the same answers',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,

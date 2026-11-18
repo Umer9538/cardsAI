@@ -60,14 +60,14 @@ class _Sheet extends StatelessWidget {
               'description you type — is sent to our AI provider, OpenRouter, '
               'which routes it to OpenAI. The same happens with your targets '
               'and your answers when you build a meal plan.',
-              style: AppTypography.body(color: AppColors.muted),
+              style: AppTypography.body(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 10),
             Text(
               'Your name, your email and your account are never sent with it. '
               'Nothing is used to train AI models. Barcode, search and typing '
               'a food in by hand never leave anything with the AI provider.',
-              style: AppTypography.body(color: AppColors.muted),
+              style: AppTypography.body(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 18),
             SizedBox(

@@ -971,7 +971,7 @@ class _SecondaryMacros extends StatelessWidget {
           const SizedBox(
             width: 1,
             height: 14,
-            child: ColoredBox(color: AppColors.muted),
+            child: ColoredBox(color: AppColors.controlMuted),
           ),
           Expanded(
             child: _Pair(

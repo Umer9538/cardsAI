@@ -94,7 +94,7 @@ class PlanDetailScreen extends StatelessWidget {
               child: Text(
                 '${plan.priceLabel} ${plan.periodLabel}, renewing automatically '
                 'until you cancel. Cancel any time in your store account.',
-                style: AppTypography.meta(color: AppColors.muted),
+                style: AppTypography.meta(color: AppColors.textSecondary),
                 textAlign: TextAlign.center,
                 maxLines: 2,
               ),
@@ -171,6 +171,6 @@ class _FooterDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         ' · ',
-        style: AppTypography.meta(color: AppColors.outline),
+        style: AppTypography.meta(color: AppColors.controlMuted),
       );
 }

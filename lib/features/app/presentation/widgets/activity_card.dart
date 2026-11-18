@@ -119,6 +119,12 @@ class _ActivityRow extends StatelessWidget {
       label:
           '${entry.name}, ${entry.minutes} minutes, '
           '${entry.kcal.round()} kilocalories',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: interactive
+          ? () => showActivitySheet(context, existing: entry)
+          : null,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -162,6 +168,10 @@ class _AddButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Log activity',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: onTap,
       excludeSemantics: true,
       child: Material(
         color: AppColors.outline,

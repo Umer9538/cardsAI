@@ -118,7 +118,7 @@ class PremiumOfferScreen extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 child: Text(
                   'Skip',
-                  style: AppTypography.buttonLabel(color: AppColors.muted),
+                  style: AppTypography.buttonLabel(color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
               ),

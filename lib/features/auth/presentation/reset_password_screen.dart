@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/auth/password_strength.dart';
 import 'auth_controller.dart';
 import 'widgets/auth_scaffold.dart';
 import 'widgets/auth_widgets.dart';
@@ -41,6 +42,19 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   String? _confirmError;
   late bool _showSuccess = widget.showSuccessInitially;
 
+  /// Rebuilds the guide on every keystroke, like Sign Up.
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(() => setState(() {}));
+  }
+
+  /// The same rules Sign Up applies. Neither a name nor an email is on this
+  /// screen, so the personal-words rule simply has nothing to match — which is
+  /// why [PasswordCheck.of] takes both as optional rather than forcing a
+  /// second, looser copy of the rules to exist.
+  PasswordCheck get _check => PasswordCheck.of(_password.text);
+
   @override
   void dispose() {
     _password.dispose();
@@ -52,7 +66,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     setState(() {
       _passwordError = _password.text.isEmpty
           ? 'Please enter a new password'
-          : null;
+          : _check.error;
       _confirmError = _confirm.text != _password.text
           ? 'Passwords do not match'
           : (_confirm.text.isEmpty ? 'Please confirm your password' : null);
@@ -87,31 +101,44 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
           ? _PasswordChangedDialog(onLogIn: widget.onLogIn)
           : null,
       children: [
+        // One auto-layout column, like Sign Up, rather than the two fixed
+        // `Positioned` boxes the artboard implies. The artboard puts New
+        // Password at y=279 and Confirm at y=378 — a 99pt pitch, which is
+        // exactly the 79pt field group plus a 20pt gap, so this reproduces it
+        // while letting an inline message *or* the strength guide push Confirm
+        // down instead of drawing through it. Two overlapping `Positioned`
+        // children throw nothing, so that bug would have shipped looking fine.
         Positioned(
           left: 20,
           top: 279,
           width: 388,
-          child: AuthTextField(
-            label: 'New Password',
-            hint: 'Enter New Password',
-            controller: _password,
-            errorText: _passwordError,
-            obscure: true,
-            textInputAction: TextInputAction.next,
-          ),
-        ),
-        Positioned(
-          left: 20,
-          top: 378,
-          width: 388,
-          child: AuthTextField(
-            label: 'Confirm Password',
-            hint: 'Enter Confirm Password',
-            controller: _confirm,
-            errorText: _confirmError,
-            obscure: true,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AuthTextField(
+                label: 'New Password',
+                hint: 'Enter New Password',
+                controller: _password,
+                errorText: _passwordError,
+                obscure: true,
+                textInputAction: TextInputAction.next,
+              ),
+              if (_password.text.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                PasswordStrengthGuide(check: _check),
+              ],
+              const SizedBox(height: 20),
+              AuthTextField(
+                label: 'Confirm Password',
+                hint: 'Enter Confirm Password',
+                controller: _confirm,
+                errorText: _confirmError,
+                obscure: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submit(),
+              ),
+            ],
           ),
         ),
         Positioned(

@@ -1104,7 +1104,7 @@ class _FoodItemCard extends StatelessWidget {
                       const SizedBox(
                         width: 1,
                         height: 16,
-                        child: ColoredBox(color: AppColors.muted),
+                        child: ColoredBox(color: AppColors.controlMuted),
                       ),
                       const SizedBox(width: 8),
                     ],
@@ -1196,7 +1196,7 @@ class _PortionChip extends StatelessWidget {
           color: selected ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.muted,
+            color: selected ? AppColors.primary : AppColors.controlMuted,
           ),
         ),
         alignment: Alignment.center,

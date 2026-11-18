@@ -151,7 +151,7 @@ class _MealSheetState extends ConsumerState<_MealSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.muted,
+                    color: AppColors.controlMuted,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

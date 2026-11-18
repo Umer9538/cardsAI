@@ -186,7 +186,7 @@ class _ItemEditSheetState extends State<ItemEditSheet> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: AppColors.muted,
+                      color: AppColors.controlMuted,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -215,7 +215,7 @@ class _ItemEditSheetState extends State<ItemEditSheet> {
                   const SizedBox(height: 6),
                   Text(
                     'Changing the weight rescales the numbers below.',
-                    style: AppTypography.meta(color: AppColors.muted),
+                    style: AppTypography.meta(color: AppColors.textSecondary),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -343,7 +343,7 @@ class SheetField extends StatelessWidget {
             cursorColor: AppColors.primary,
             decoration: InputDecoration.collapsed(
               hintText: hint ?? '',
-              hintStyle: AppTypography.body(color: AppColors.muted),
+              hintStyle: AppTypography.body(color: AppColors.placeholder),
             ),
           ),
         ),

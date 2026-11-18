@@ -170,6 +170,10 @@ class _QuickAdd extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Add $label of water',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: onTap,
       excludeSemantics: true,
       child: Material(
         color: AppColors.outline,
@@ -199,6 +203,10 @@ class _Undo extends StatelessWidget {
       button: true,
       enabled: enabled,
       label: 'Undo last drink',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: enabled ? onTap : null,
       excludeSemantics: true,
       child: Material(
         color: Colors.transparent,

@@ -176,7 +176,7 @@ class _ReminderRow extends ConsumerWidget {
                 shown,
                 maxLines: 1,
                 style: AppTypography.body(
-                  color: enabled ? AppColors.accentGreen : AppColors.muted,
+                  color: enabled ? AppColors.accentGreen : AppColors.textSecondary,
                 ),
               ),
             ),

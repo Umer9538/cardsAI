@@ -617,7 +617,7 @@ class _ScanningScreenState extends ConsumerState<ScanningScreen> {
                 children: [
                   _TextAction(label: 'Describe it', onTap: widget.onDescribe),
                   const SizedBox(width: 12),
-                  Text('·', style: AppTypography.body(color: AppColors.muted)),
+                  Text('·', style: AppTypography.body(color: AppColors.textSecondary)),
                   const SizedBox(width: 12),
                   _TextAction(label: 'Search foods', onTap: widget.onSearch),
                 ],
@@ -1367,7 +1367,7 @@ class _NoteSheetState extends State<_NoteSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.muted,
+                    color: AppColors.controlMuted,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1412,7 +1412,7 @@ class _NoteSheetState extends State<_NoteSheet> {
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration.collapsed(
                     hintText: 'Grilled, no oil…',
-                    hintStyle: AppTypography.body(color: AppColors.muted),
+                    hintStyle: AppTypography.body(color: AppColors.placeholder),
                   ),
                 ),
               ),

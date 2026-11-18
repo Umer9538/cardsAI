@@ -89,7 +89,7 @@ class _BarcodeEntrySheetState extends State<BarcodeEntrySheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.muted,
+                    color: AppColors.controlMuted,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -123,7 +123,7 @@ class _BarcodeEntrySheetState extends State<BarcodeEntrySheet> {
                   },
                   decoration: InputDecoration.collapsed(
                     hintText: '5000112637922',
-                    hintStyle: AppTypography.body(color: AppColors.muted),
+                    hintStyle: AppTypography.body(color: AppColors.placeholder),
                   ),
                 ),
               ),

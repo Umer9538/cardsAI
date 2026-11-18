@@ -104,6 +104,10 @@ class _CountChip extends StatelessWidget {
       button: true,
       selected: selected,
       label: '$value water reminders a day',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

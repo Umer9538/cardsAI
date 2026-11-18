@@ -130,7 +130,7 @@ class WeightCard extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   _caption(trend, goal, units),
-                  style: AppTypography.meta(color: AppColors.muted),
+                  style: AppTypography.meta(color: AppColors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -305,7 +305,7 @@ class _WeightSheetState extends ConsumerState<_WeightSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.muted,
+                    color: AppColors.controlMuted,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -346,7 +346,7 @@ class _WeightSheetState extends ConsumerState<_WeightSheet> {
                         onSubmitted: (_) => _save(),
                         decoration: InputDecoration.collapsed(
                           hintText: units.isMetric ? '80.5' : '177',
-                          hintStyle: AppTypography.body(color: AppColors.muted),
+                          hintStyle: AppTypography.body(color: AppColors.placeholder),
                         ),
                       ),
                     ),

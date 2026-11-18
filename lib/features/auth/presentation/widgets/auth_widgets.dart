@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/auth/password_strength.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
@@ -67,6 +68,13 @@ class AuthTextField extends StatefulWidget {
 class _AuthTextFieldState extends State<AuthTextField> {
   final FocusNode _focus = FocusNode();
 
+  /// Whether the characters are currently hidden.
+  ///
+  /// Starts at [AuthTextField.obscure] and is only ever reachable on a field
+  /// that asked to be obscured, so the toggle cannot be used to hide an
+  /// ordinary field.
+  late bool _hidden = widget.obscure;
+
   @override
   void initState() {
     super.initState();
@@ -109,35 +117,47 @@ class _AuthTextFieldState extends State<AuthTextField> {
           ),
           // Field text sits at x=40 on an artboard where the field starts at
           // x=20, so 20 minus the 1pt border.
-          padding: const EdgeInsets.symmetric(horizontal: 19),
+          // The right inset yields to the reveal toggle when there is one, so
+          // the glyph sits where the 19pt gutter was rather than outside it.
+          padding: EdgeInsets.only(left: 19, right: widget.obscure ? 4 : 19),
           alignment: Alignment.center,
-          child: TextField(
-            controller: widget.controller,
-            focusNode: _focus,
-            readOnly: widget.readOnly,
-            inputFormatters: widget.inputFormatters,
-            onTap: widget.onTap,
-            // No caret and no keyboard on a read-only field: a caret that
-            // blinks in a box nothing can change is an invitation.
-            showCursor: !widget.readOnly,
-            enableInteractiveSelection: !widget.readOnly,
-            obscureText: widget.obscure,
-            keyboardType: widget.keyboardType,
-            textInputAction: widget.textInputAction,
-            onSubmitted: widget.onSubmitted,
-            cursorColor: AppColors.white,
-            cursorWidth: 1,
-            style: AppTypography.body(
-              color: widget.readOnly && widget.onTap == null
-                  ? AppColors.placeholder
-                  : AppColors.white,
-            ),
-            decoration: InputDecoration(
-              isCollapsed: true,
-              border: InputBorder.none,
-              hintText: widget.hint,
-              hintStyle: AppTypography.body(color: AppColors.placeholder),
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: _focus,
+                  readOnly: widget.readOnly,
+                  inputFormatters: widget.inputFormatters,
+                  onTap: widget.onTap,
+                  // No caret and no keyboard on a read-only field: a caret that
+                  // blinks in a box nothing can change is an invitation.
+                  showCursor: !widget.readOnly,
+                  enableInteractiveSelection: !widget.readOnly,
+                  obscureText: _hidden,
+                  keyboardType: widget.keyboardType,
+                  textInputAction: widget.textInputAction,
+                  onSubmitted: widget.onSubmitted,
+                  cursorColor: AppColors.white,
+                  cursorWidth: 1,
+                  style: AppTypography.body(
+                    color: widget.readOnly && widget.onTap == null
+                        ? AppColors.placeholder
+                        : AppColors.white,
+                  ),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    hintText: widget.hint,
+                    hintStyle: AppTypography.body(color: AppColors.placeholder),
+                  ),
+                ),
+              ),
+              if (widget.obscure) _RevealToggle(
+                hidden: _hidden,
+                onTap: () => setState(() => _hidden = !_hidden),
+              ),
+            ],
           ),
         ),
         if (error != null) ...[
@@ -148,6 +168,154 @@ class _AuthTextFieldState extends State<AuthTextField> {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The meter and checklist under a password someone is choosing.
+///
+/// Shown only once there is something to judge, so a freshly opened Sign Up is
+/// still the artboard. That makes it the same shape as `ReminderTimesCard` —
+/// invisible on a default render, therefore invisible to any test that does not
+/// ask for it — so it takes the same [preview] escape hatch, and
+/// `password_strength_test` renders it at the 1.15x text ceiling. A screen whose
+/// full state no test can reach is how the search result row shipped 2pt over.
+///
+/// The checklist is the point rather than the bar. A bar says *no*; three rules
+/// with ticks against them say what to do next, and the person can see the
+/// first two land as they type.
+class PasswordStrengthGuide extends StatelessWidget {
+  const PasswordStrengthGuide({super.key, required this.check});
+
+  final PasswordCheck check;
+
+  /// Renders the guide for a made-up password, for tests and previews.
+  static Widget preview() =>
+      PasswordStrengthGuide(check: PasswordCheck.of('walnut-bridge-92'));
+
+  Color get _meterColour => switch (check.strength) {
+        PasswordStrength.unusable || PasswordStrength.weak => AppColors.error,
+        PasswordStrength.fair => AppColors.accentOrange,
+        PasswordStrength.good || PasswordStrength.strong => AppColors.accentGreen,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                // A bare box with no child inside a Row gets loose vertical
+                // constraints and collapses to zero — the bug this codebase
+                // has shipped three times. The height is explicit here, and
+                // the test asserts it rendered.
+                child: SizedBox(
+                  height: 4,
+                  child: Stack(
+                    children: [
+                      const Positioned.fill(
+                        child: ColoredBox(color: AppColors.controlMuted),
+                      ),
+                      FractionallySizedBox(
+                        widthFactor: check.strength.fraction,
+                        heightFactor: 1,
+                        child: ColoredBox(color: _meterColour),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              check.strength.label,
+              style: AppTypography.meta(color: _meterColour),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        for (final rule in check.rules) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  rule.met ? Icons.check_circle : Icons.circle_outlined,
+                  size: 14,
+                  color: rule.met
+                      ? AppColors.accentGreen
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    rule.label,
+                    style: AppTypography.meta(
+                      color: rule.met
+                          ? AppColors.accentGreen
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The eye on a password field.
+///
+/// **Not in the design file** — the artboards draw a password as a row of dots
+/// and stop there. Testers reported it missing, and they are describing the
+/// thing every password field has had for a decade: without it the only way to
+/// find a typo is to clear the field and start again, on a phone keyboard,
+/// which is why people pick shorter passwords than they otherwise would.
+///
+/// A [Semantics] label rather than a bare glyph, because an icon with no text
+/// near it does not exist to a screen reader — and it names the *action*
+/// ("Show password"), not the state, since that is what a button's label is
+/// for. 44pt square: the field is 50 tall, so this is the largest touch target
+/// that fits inside it, and it is Apple's minimum rather than a coincidence.
+class _RevealToggle extends StatelessWidget {
+  const _RevealToggle({required this.hidden, required this.onTap});
+
+  final bool hidden;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: hidden ? 'Show password' : 'Hide password',
+      // The action has to be declared on the node that carries the label.
+      // `excludeSemantics` drops the GestureDetector's own tap action, so
+      // without this the toggle announced itself as a button and then could
+      // not be activated by anyone using a screen reader — a control that
+      // describes itself and does nothing.
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(
+            hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+            size: 20,
+            color: AppColors.placeholder,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -179,6 +347,12 @@ class PrimaryButton extends StatelessWidget {
       // Spoken instead of the child, so a spinner is announced as "working"
       // rather than as nothing at all.
       label: busy ? '$label, working' : label,
+      // Declared here, not only on the InkWell: `excludeSemantics` drops the
+      // child's own tap action, so every primary CTA in the app — Log In,
+      // Sign Up, Got it, Add to My Diet — announced itself as a button and
+      // then could not be activated with TalkBack or VoiceOver. The glyphs
+      // had labels; the buttons had no actions.
+      onTap: busy ? null : onPressed,
       excludeSemantics: true,
       child: SizedBox(
         height: 50,

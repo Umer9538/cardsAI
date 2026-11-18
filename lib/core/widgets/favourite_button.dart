@@ -46,6 +46,10 @@ class FavouriteButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: saved ? 'Saved to favourites' : 'Save to favourites',
+      // Declared here, not only on the child: `excludeSemantics` drops the
+      // child's own tap action, so without this the control announced itself
+      // as a button that a screen reader then could not activate.
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,

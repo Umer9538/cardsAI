@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/password_strength.dart';
 import 'auth_controller.dart';
 
 import 'widgets/auth_scaffold.dart';
@@ -34,6 +35,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   String? _emailError;
   String? _passwordError;
 
+  /// Rebuilds the guide on every keystroke. A strength meter that only moves
+  /// when the form is submitted is a verdict, not guidance.
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(() => setState(() {}));
+  }
+
+  /// The live verdict, judged against the name and email on this same form —
+  /// so "Does not contain your name or email" means the one they just typed.
+  PasswordCheck get _check => PasswordCheck.of(
+        _password.text,
+        name: _name.text,
+        email: _email.text,
+      );
+
   @override
   void dispose() {
     _name.dispose();
@@ -50,9 +67,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       _emailError = _email.text.trim().isEmpty
           ? 'Please enter your email'
           : null;
+      // Checked here rather than left to Firebase: Firebase enforces six
+      // characters and nothing else, and it only says so after a round trip.
       _passwordError = _password.text.isEmpty
           ? 'Please enter a password'
-          : null;
+          : _check.error;
     });
     if (_nameError != null || _emailError != null || _passwordError != null) {
       return;
@@ -133,6 +152,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _submit(),
               ),
+              // Only once there is something to judge, so a freshly opened
+              // Sign Up is still the artboard.
+              if (_password.text.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                PasswordStrengthGuide(check: _check),
+              ],
             ],
           ),
         ),

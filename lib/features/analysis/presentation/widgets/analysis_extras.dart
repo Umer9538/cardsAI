@@ -85,9 +85,14 @@ class ConsistencyCard extends StatelessWidget {
                   Expanded(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
+                        // The unfilled pips are the denominator — they are how
+                        // "0 of 7" is legible as a bar at all — so they are a
+                        // graphical object carrying information rather than
+                        // decoration. At `outline` they sat at 1.19:1 on this
+                        // sheet and the row read as empty space.
                         color: i < days
                             ? AppColors.accentGreen
-                            : AppColors.outline,
+                            : AppColors.controlMuted,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
