@@ -385,6 +385,39 @@ Security properties, none of which are optional:
 
 Two revenue paths, both gated on one flag: `isPremiumProvider`.
 
+**The free tier renews daily, and that is a deliberate launch decision.** It was
+`freeScanLimit: 3` against a bucket whose id was the literal string `free`, so the free tier
+was three scans *for the lifetime of the account* — not enough to produce even one "day with
+a full picture", which is the app's own measure of whether anyone is tracking. It is now
+**five a day**, in `free-YYYY-MM-DD`, so the allowance comes back every morning. A normal
+person logging two or three meals never reaches it, which is the point: the free tier reads
+as unlimited while a free account's cost stays bounded at five scans a day.
+
+The alternative that was considered and rejected was launching *completely* free — no
+paywall, no ads — and monetising later. Three reasons it loses: `dailySpendCapUsd` is a
+single global fuse that fails closed, so an unbounded free tier turns one good day of press
+into "the service is at capacity" for **everyone at once**; Firestore's write quota stops the
+app at roughly 1,400 DAU regardless, and does it by silently losing diaries rather than
+erroring; and retrofitting a paywall onto a product people already had for free is the
+highest-friction move in a category where the review research says friction, not accuracy,
+decides a one-star. A renewing allowance gets the growth without the retrofit — premium then
+only ever *adds*.
+
+Two numbers must stay in step with it, and `scan_quota_test.dart` enforces both: `rewards.ts`
+pays bonus scans into the *same* bucket the scan reserves against (both go through
+`quota.ts`, because naming `quota/free` directly meant the advert played and the count did
+not move), and `monthlyQuota` must beat `freeScanLimit × 28` or the subscription is a
+downgrade someone paid for — which it literally was at 100 a month.
+
+**Ads ship off.** `AdConfig.enabled` is `bool.fromEnvironment('ADS_ENABLED')`, so a plain
+build has no adverts at all and `tool/build_release.sh` drops its ad-id gates to match —
+which is what lets a release build run today without real AdMob units. Turn them on with
+`--dart-define=ADS_ENABLED=true` only once **SSV exists** and real AdMob figures say an
+impression pays for the scan it buys; at the ~$1 Tier-2 eCPM it does not. Off is the default
+rather than on because the two failure directions are not symmetric: adverts that should
+have shown and did not cost a little revenue, and adverts that should not have and did
+cannot be recalled from the people who saw them.
+
 **Ads stay, but they cannot be shipped carelessly.** The launch research argued for
 deleting AdMob outright; that was overruled, and the four things that made ads a launch
 blocker are fixed instead:

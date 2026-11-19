@@ -11,10 +11,15 @@ import 'ads_service.dart';
 
 /// Whether this build shows ads at all.
 ///
+/// Two conditions, and both have to hold. [AdConfig.enabled] is the launch
+/// switch and is **off** unless a build asks for it — the reasoning is written
+/// out there. The backend check is the older one: on `BACKEND=local` there is
+/// no account and nothing to meter.
+///
 /// Overridden to false in tests: `google_mobile_ads` has no platform side
 /// there, so every call would throw.
 final adsEnabledProvider = Provider<bool>(
-  (ref) => AppConfig.backend == AppBackend.firebase,
+  (ref) => AdConfig.enabled && AppConfig.backend == AppBackend.firebase,
 );
 
 /// The ad network, or a no-op.

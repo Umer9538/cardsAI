@@ -42,7 +42,7 @@ abstract final class LegalOperator {
 
   /// Shown at the top of both documents. Update whenever the copy changes —
   /// a policy whose date predates the practices it describes reads as stale.
-  static const String updated = '3 September 2026';
+  static const String updated = '19 November 2026';
 }
 
 /// One block of a legal page. [isHeading] blocks are the 17pt section titles;
@@ -137,13 +137,14 @@ const List<LegalBlock> termsAndConditions = [
 
   LegalBlock('6. Free scans, ads and rewards', isHeading: true),
   LegalBlock(
-    'Free accounts get a fixed allowance of AI scans — three at the time of '
-    'writing — which does not renew, and up to three AI meal plans a day. You '
-    'can earn extra scans by watching a rewarded advert, up to a daily limit. '
-    'Searching the food database, scanning a barcode, describing a meal in '
-    'words and entering food by hand are unlimited and always free. Premium '
-    'accounts get a monthly scan allowance and see no adverts at all. We may '
-    'change these allowances; the app always shows what you have left.',
+    'Free accounts get a daily allowance of AI scans — five a day at the time '
+    'of writing — which resets every day, and up to three AI meal plans a '
+    'day. Searching the food database, scanning a barcode, describing a meal '
+    'in words and entering food by hand are unlimited and always free. '
+    'Premium accounts get a much larger monthly allowance and see no adverts. '
+    'Where adverts are shown you can earn extra scans by watching one, up to '
+    'a daily limit — this release shows no adverts at all. We may change '
+    'these allowances; the app always shows what you have left.',
   ),
 
   LegalBlock('7. Acceptable use', isHeading: true),

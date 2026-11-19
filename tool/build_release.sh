@@ -77,28 +77,56 @@ case "$TARGET" in
   *) fail "unknown target '$TARGET' — expected appbundle, apk, ipa or ios" ;;
 esac
 
+# Adverts are opt-in, and the build is only held to the ad gates when they are
+# actually on. `AdConfig.enabled` defaults to false for the reasons written out
+# there — at a Tier-2 eCPM a rewarded impression earns less than the scan it
+# buys — so the launch build ships without them and never has to name a real
+# ad unit. Set ADS_ENABLED=true in the env file to turn them back on, and the
+# full set of gates below returns with them.
+ADS_ENABLED="${ADS_ENABLED:-false}"
+case "$ADS_ENABLED" in
+  true|1|yes) ADS_ON=1 ;;
+  false|0|no|"") ADS_ON=0 ;;
+  *) fail "ADS_ENABLED must be true or false, not '$ADS_ENABLED'." ;;
+esac
+
 REWARDED_VAR="ADMOB_REWARDED_${AD_SUFFIX}"
 APP_OPEN_VAR="ADMOB_APP_OPEN_${AD_SUFFIX}"
-require "$REWARDED_VAR"
-require "$APP_OPEN_VAR"
+AD_DEFINES=()
 
-# Google's test publisher id. Shipping it is the failure this script exists to
-# prevent, and it is not caught by the emptiness check above.
-TEST_PUBLISHER='ca-app-pub-3940256099942544'
-for var in "$REWARDED_VAR" "$APP_OPEN_VAR"; do
-  if [[ "${!var}" == *"$TEST_PUBLISHER"* ]]; then
-    store_gate "$var is still Google's TEST unit. A release with it earns nothing."
+if (( ADS_ON )); then
+  require "$REWARDED_VAR"
+  require "$APP_OPEN_VAR"
+
+  # Google's test publisher id. Shipping it is the failure this script exists
+  # to prevent, and it is not caught by the emptiness check above.
+  TEST_PUBLISHER='ca-app-pub-3940256099942544'
+  for var in "$REWARDED_VAR" "$APP_OPEN_VAR"; do
+    if [[ "${!var}" == *"$TEST_PUBLISHER"* ]]; then
+      store_gate "$var is still Google's TEST unit. A release with it earns nothing."
+    fi
+  done
+
+  # The AdMob *application* id lives in the manifest and plist rather than a
+  # define, and the app crashes at start-up without it — so it cannot be
+  # defaulted away, only got wrong.
+  if grep -q "$TEST_PUBLISHER" android/app/src/main/AndroidManifest.xml; then
+    store_gate "AndroidManifest.xml still holds the test AdMob application id."
   fi
-done
+  if grep -q "$TEST_PUBLISHER" ios/Runner/Info.plist; then
+    store_gate "Info.plist still holds the test AdMob application id (GADApplicationIdentifier)."
+  fi
 
-# The AdMob *application* id lives in the manifest and plist rather than a
-# define, and the app crashes at start-up without it — so it cannot be defaulted
-# away, only got wrong.
-if grep -q "$TEST_PUBLISHER" android/app/src/main/AndroidManifest.xml; then
-  store_gate "AndroidManifest.xml still holds the test AdMob application id."
-fi
-if grep -q "$TEST_PUBLISHER" ios/Runner/Info.plist; then
-  store_gate "Info.plist still holds the test AdMob application id (GADApplicationIdentifier)."
+  AD_DEFINES=(
+    --dart-define="ADS_ENABLED=true"
+    --dart-define="$REWARDED_VAR=${!REWARDED_VAR}"
+    --dart-define="$APP_OPEN_VAR=${!APP_OPEN_VAR}"
+  )
+else
+  printf '  adverts: OFF for this build (ADS_ENABLED is not true).\n' >&2
+  # Nothing is passed rather than ADS_ENABLED=false, because
+  # `bool.fromEnvironment` already defaults to false and a define that only
+  # restates the default is one more place for the two to disagree.
 fi
 
 # The privacy policy and terms are shipped inside the binary, and both stores
@@ -150,5 +178,4 @@ exec flutter build "$TARGET" --release \
   --obfuscate \
   --split-debug-info=build/symbols \
   --dart-define="WORKER_URL=$WORKER_URL" \
-  --dart-define="$REWARDED_VAR=${!REWARDED_VAR}" \
-  --dart-define="$APP_OPEN_VAR=${!APP_OPEN_VAR}"
+  ${AD_DEFINES[@]+"${AD_DEFINES[@]}"}

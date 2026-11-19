@@ -27,6 +27,28 @@ import 'package:flutter/foundation.dart';
 /// Verify these strings against the AdMob docs before shipping — Google has
 /// changed test unit ids before.
 abstract final class AdConfig {
+  /// Whether this build shows adverts at all. **Off unless asked for.**
+  ///
+  /// Not a tidy-up: at launch, adverts in this app's markets are a cost rather
+  /// than revenue. A rewarded impression earns roughly $0.001 at the ~$1 eCPM
+  /// Pakistan and India see, against a scan that costs ~$0.0012 — so every
+  /// rewarded view loses money, and it spends the user's patience to do it.
+  /// Shipping them on day one buys a worse first impression *and* a smaller
+  /// bank balance, at exactly the point where reviews decide whether anyone
+  /// else installs the app.
+  ///
+  /// Turn them on with `--dart-define=ADS_ENABLED=true` once two things are
+  /// true: AdMob **Server-Side Verification** exists, so `grantBonusScans` no
+  /// longer takes the client's word for an impression, and real AdMob figures
+  /// — not the unsourced Tier-2 proxy above — say an impression pays for the
+  /// scan it buys.
+  ///
+  /// Off by default rather than on, because the failure directions are not
+  /// symmetric: a build that should have shown adverts and did not costs a
+  /// little revenue, and a build that should not have and did cannot be
+  /// recalled from the people who already saw it.
+  static const bool enabled = bool.fromEnvironment('ADS_ENABLED');
+
   static const String _testRewardedAndroid =
       'ca-app-pub-3940256099942544/5224354917';
   static const String _testRewardedIos =

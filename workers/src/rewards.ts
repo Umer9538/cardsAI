@@ -1,6 +1,7 @@
 import { HttpsError } from "./callable.js";
 import type { Env } from "./env.js";
 import { Firestore, increment, serverTimestamp } from "./firestore.js";
+import { freeBucketId, quotaPath } from "./quota.js";
 
 /**
  * Bonus scans, earned by watching a rewarded ad.
@@ -75,10 +76,16 @@ export async function grantBonusScans(
     return RULES.scansPerAd;
   });
 
-  // Free accounts count against the lifetime "free" bucket, so that is where
-  // the bonus has to land for it to be usable. Premium accounts do not see
-  // rewarded ads at all.
-  await db.set(`users/${uid}/quota/free`, {
+  // Into *today's* free bucket, through the same function the scan reserves
+  // against — `quota.ts` exists so these two cannot drift. This used to name
+  // the lifetime `free` document directly, and once the allowance started
+  // renewing daily that would have put every bonus in a document nothing
+  // reads: the advert plays, the grant is reported, and the scan count does
+  // not move. Premium accounts do not see rewarded adverts at all.
+  //
+  // The bonus now expires with the day, which is the behaviour the daily cap
+  // always implied — five a day was never meant to be bankable forever.
+  await db.set(quotaPath(uid, freeBucketId()), {
     bonus: increment(granted),
     updatedAt: serverTimestamp(),
   });

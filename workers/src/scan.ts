@@ -3,6 +3,7 @@ import { assertUnderDailyCap, recordSpend } from "./spend.js";
 import type { Env } from "./env.js";
 import { Firestore, documentId, increment, serverTimestamp } from "./firestore.js";
 import { PROMPT_VERSION, SYSTEM_PROMPT, describePrompt, photoPrompt } from "./prompt.js";
+import { freeBucketId, premiumBucketId, quotaPath } from "./quota.js";
 import { MEAL_ANALYSIS_SCHEMA, sanitize, type MealAnalysis } from "./schema.js";
 import { isPremium } from "./subscription.js";
 
@@ -61,15 +62,39 @@ const DEFAULTS = {
    */
   inputPricePerMTok: 0.2,
   outputPricePerMTok: 1.2,
-  monthlyQuota: 100,
+  /**
+   * Premium scans a month. High enough to read as "unlimited" to a person and
+   * low enough to still be a fuse.
+   *
+   * It was 100, which is barely three a day — *less* than the free allowance
+   * below once that renewed daily, so premium would have been a downgrade you
+   * paid for. At 1500 a subscriber would have to scan fifty meals a day every
+   * day to notice it, while a runaway client is still stopped. The margin
+   * holds either way: 1500 scans cost about $1.80 against a $5 subscription.
+   */
+  monthlyQuota: 1500,
   /**
    * USD per day across the whole app before the model is refused. A fuse, not
    * accounting — see `spend.ts`. Server-side config, so it can be raised
    * without a deploy the moment real traffic justifies it.
    */
   dailySpendCapUsd: 20,
-  /** Free scans in total, ever — the bucket never resets. */
-  freeScanLimit: 3,
+  /**
+   * Free scans **per day**. The bucket resets at midnight UTC — see
+   * `quota.ts` for why it is a day rather than a lifetime.
+   *
+   * Five, because most people log two or three meals: a normal user never
+   * reaches it, so the free tier reads as unlimited while the cost of a free
+   * account stays bounded at 5 × ~$0.0012 = $0.006 a day. Three lifetime
+   * scans, the old value, could not produce a single complete logged day.
+   *
+   * This is server config, so it is a live dial: raise it while growing,
+   * lower it if inference starts to bite, neither needing an app release.
+   * Raising it does move the Firestore write ceiling, though — a scan costs
+   * three writes, so a user who actually spends all five costs ~25 writes a
+   * day against the free tier's 20,000. See `CAPACITY.md`.
+   */
+  freeScanLimit: 5,
   /** Portion estimation depends on the texture downsampling destroys. */
   imageDetail: "high",
 };
@@ -102,11 +127,6 @@ export async function loadConfig(db: Firestore): Promise<ScanConfig> {
   }
 }
 
-/** YYYY-MM, the premium quota bucket. */
-function currentPeriod(): string {
-  return new Date().toISOString().slice(0, 7);
-}
-
 interface Bucket {
   id: string;
   limit: number;
@@ -115,8 +135,8 @@ interface Bucket {
 
 async function quotaBucket(db: Firestore, uid: string, config: ScanConfig): Promise<Bucket> {
   return (await isPremium(db, uid))
-    ? { id: currentPeriod(), limit: config.monthlyQuota, premium: true }
-    : { id: "free", limit: config.freeScanLimit, premium: false };
+    ? { id: premiumBucketId(), limit: config.monthlyQuota, premium: true }
+    : { id: freeBucketId(), limit: config.freeScanLimit, premium: false };
 }
 
 /**
@@ -127,7 +147,7 @@ async function quotaBucket(db: Firestore, uid: string, config: ScanConfig): Prom
  * reservation is refunded when the call fails, so a timeout costs nobody a scan.
  */
 async function reserveQuota(db: Firestore, uid: string, bucket: Bucket): Promise<void> {
-  const path = `users/${uid}/quota/${bucket.id}`;
+  const path = quotaPath(uid, bucket.id);
 
   await db.transaction(async (tx) => {
     const doc = await tx.get(path);
@@ -140,7 +160,11 @@ async function reserveQuota(db: Firestore, uid: string, bucket: Bucket): Promise
         "resource-exhausted",
         bucket.premium
           ? `You have used all ${limit} scans this month. Describe and search still work.`
-          : `You have used your ${limit} free scans. Upgrade for more.`,
+          : // Say that it comes back. The old copy — "you have used your 3
+            // free scans" — was the literal truth of a lifetime bucket and
+            // read as the end of the app; someone who thinks the free tier is
+            // spent has no reason to open it tomorrow.
+            `That is today's ${limit} free scans. You get ${limit} more tomorrow, or upgrade for an unlimited day.`,
       );
     }
     tx.set(path, { used: increment(1), updatedAt: serverTimestamp() });

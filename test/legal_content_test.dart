@@ -24,7 +24,11 @@ void main() {
     expect(text, contains('plan builder'));
     expect(text, contains('Plan records'));
     expect(text, contains('cook'));
-    expect(text, contains('three at the time of writing'));
+    expect(text, contains('five a day at the time of writing'));
+    // The free tier renews. It used to be three scans for the lifetime of the
+    // account, and a policy that still said so would be describing a product
+    // that no longer exists — which is this test's whole subject.
+    expect(text, isNot(contains('which does not renew')));
     // Photos are not uploaded; the policy claimed R2 stored them.
     expect(text, isNot(contains('Cloudflare R2 stores meal')));
     // Backups we do not run.
